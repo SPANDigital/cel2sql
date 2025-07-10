@@ -26,18 +26,25 @@ type FieldSchema struct {
 // PostgreSQL table schema
 type Schema []FieldSchema
 
+// TypeProvider interface for PostgreSQL type providers
+type TypeProvider interface {
+	ref.TypeProvider
+	LoadTableSchema(ctx context.Context, tableName string) error
+	Close()
+}
+
 type typeProvider struct {
 	schemas map[string]Schema
 	pool    *pgxpool.Pool
 }
 
 // NewTypeProvider creates a new PostgreSQL type provider with pre-defined schemas
-func NewTypeProvider(schemas map[string]Schema) *typeProvider {
+func NewTypeProvider(schemas map[string]Schema) TypeProvider {
 	return &typeProvider{schemas: schemas}
 }
 
 // NewTypeProviderWithConnection creates a new PostgreSQL type provider that can introspect database schemas
-func NewTypeProviderWithConnection(ctx context.Context, connectionString string) (*typeProvider, error) {
+func NewTypeProviderWithConnection(ctx context.Context, connectionString string) (TypeProvider, error) {
 	pool, err := pgxpool.New(ctx, connectionString)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create connection pool: %w", err)

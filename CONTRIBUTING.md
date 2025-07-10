@@ -73,6 +73,65 @@ func TestNewFeature(t *testing.T) {
 }
 ```
 
+#### Integration Testing with PostgreSQL Testcontainers
+
+For integration tests that require a real PostgreSQL database, use testcontainers:
+
+```go
+func TestLoadTableSchema_WithPostgresContainer(t *testing.T) {
+    ctx := context.Background()
+
+    // Create a PostgreSQL container
+    container, err := postgres.Run(ctx, 
+        "postgres:15",
+        postgres.WithDatabase("testdb"),
+        postgres.WithUsername("testuser"),
+        postgres.WithPassword("testpass"),
+        postgres.WithInitScripts("create_test_table.sql"),
+        testcontainers.WithWaitStrategy(
+            wait.ForLog("database system is ready to accept connections").
+                WithOccurrence(2).
+                WithStartupTimeout(time.Second * 60),
+        ),
+    )
+    require.NoError(t, err)
+    defer container.Terminate(ctx)
+
+    // Get connection string
+    connStr, err := container.ConnectionString(ctx, "sslmode=disable")
+    require.NoError(t, err)
+
+    // Create type provider with database connection
+    provider, err := pg.NewTypeProviderWithConnection(ctx, connStr)
+    require.NoError(t, err)
+    defer provider.Close()
+
+    // Test LoadTableSchema
+    err = provider.LoadTableSchema(ctx, "users")
+    require.NoError(t, err)
+
+    // Verify the schema was loaded correctly
+    foundType, found := provider.FindType("users")
+    assert.True(t, found)
+    assert.NotNil(t, foundType)
+}
+```
+
+Required imports for testcontainer tests:
+```go
+import (
+    "context"
+    "testing"
+    "time"
+
+    "github.com/stretchr/testify/assert"
+    "github.com/stretchr/testify/require"
+    "github.com/testcontainers/testcontainers-go"
+    "github.com/testcontainers/testcontainers-go/modules/postgres"
+    "github.com/testcontainers/testcontainers-go/wait"
+)
+```
+
 ### Adding New CEL Functions
 
 1. Add the function mapping in `cel2sql.go`
@@ -123,7 +182,13 @@ cel2sql/
 ├── sqltypes/           # Custom SQL types
 │   └── types.go        # CEL type definitions
 ├── examples/           # Usage examples
-│   └── postgresql_example.go
+│   ├── basic/          # Basic usage example
+│   │   ├── main.go
+│   │   └── README.md
+│   ├── load_table_schema/ # Dynamic schema loading example
+│   │   ├── main.go
+│   │   └── README.md
+│   └── README.md       # Examples overview
 └── test/               # Test utilities
     └── testdata.go     # Test schemas
 ```

@@ -43,6 +43,72 @@ sqlCondition, _ := cel2sql.Convert(ast)
 fmt.Println(sqlCondition) // `employee`.`name` = "John Doe" AND `employee`.`hired_at` >= CURRENT_TIMESTAMP - INTERVAL '1 DAY'
 ```
 
+## Dynamic Schema Loading
+
+cel2sql supports dynamically loading table schemas from a PostgreSQL database:
+
+```go
+import (
+    "context"
+    "fmt"
+    
+    "github.com/spandigital/cel2sql"
+    "github.com/spandigital/cel2sql/pg"
+    "github.com/spandigital/cel2sql/sqltypes"
+    "github.com/google/cel-go/cel"
+    "github.com/google/cel-go/checker/decls"
+)
+
+func main() {
+    ctx := context.Background()
+    
+    // Create a type provider with database connection
+    provider, err := pg.NewTypeProviderWithConnection(ctx, "postgres://user:pass@localhost/mydb?sslmode=disable")
+    if err != nil {
+        panic(err)
+    }
+    defer provider.Close()
+    
+    // Load table schema dynamically from database
+    err = provider.LoadTableSchema(ctx, "employees")
+    if err != nil {
+        panic(err)
+    }
+    
+    // Use the loaded schema in CEL environment
+    env, err := cel.NewEnv(
+        cel.CustomTypeProvider(provider),
+        sqltypes.SQLTypeDeclarations,
+        cel.Declarations(
+            decls.NewVar("employee", decls.NewObjectType("employees")),
+        ),
+    )
+    if err != nil {
+        panic(err)
+    }
+    
+    // Convert CEL to SQL using the dynamically loaded schema
+    ast, issues := env.Compile(`employee.name == "John Doe" && employee.age > 30`)
+    if issues != nil && issues.Err() != nil {
+        panic(issues.Err())
+    }
+    
+    sqlCondition, err := cel2sql.Convert(ast)
+    if err != nil {
+        panic(err)
+    }
+    
+    fmt.Println(sqlCondition)
+    // Output: `employee`.`name` = 'John Doe' AND `employee`.`age` > 30
+}
+```
+
+This approach is particularly useful when:
+- Database schemas change frequently
+- You want to avoid manually defining schemas
+- Working with multiple tables with different structures
+- Building dynamic query builders
+
 ## Type Conversion
 
 CEL Type    | PostgreSQL Data Type
