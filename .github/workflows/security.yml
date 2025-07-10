@@ -23,7 +23,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.23.x'  # Use stable version for security scans
+          go-version: '1.24.x'  # Use version that matches code requirements
           cache: true
           check-latest: true
 
@@ -44,7 +44,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.23.x'  # Use stable version for security scans
+          go-version: '1.24.x'  # Use version that matches code requirements
           cache: true
           check-latest: true
 
@@ -52,6 +52,6 @@ jobs:
         run: go list -json -deps ./... > go.list
 
       - name: Nancy
-        uses: sonatypecommunity/nancy-github-action@main
+        uses: sonatypecommunity/nancy-github-action@v1.0.3
         with:
           nancyCommand: sleuth --path go.list
