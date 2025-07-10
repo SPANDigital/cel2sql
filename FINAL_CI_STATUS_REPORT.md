@@ -16,9 +16,9 @@ The CI/CD pipeline for the cel2sql project has been successfully **modernized, f
 
 | Workflow | Status | Last Run | Comments |
 |----------|---------|----------|----------|
-| **CI** | ✅ **PASSING** | Run #14 | Tests, builds, and codecov upload working |
-| **golangci-lint** | ✅ **PASSING** | Run #14 | All linting issues resolved |
-| **Security** | ⚠️ **FIXED** | Run #11 | Updated Go version and Nancy action |
+| **CI** | ✅ **PASSING** | Run #15 | Tests, builds, and codecov upload working |
+| **golangci-lint** | ✅ **PASSING** | Run #15 | All linting issues resolved |
+| **Security** | ✅ **PASSING** | Run #12 | Go version and Nancy action fixed |
 | **Release** | ✅ **READY** | N/A | Modernized with latest actions |
 | **Dependency Update** | ✅ **READY** | N/A | Smart PR creation logic |
 
