@@ -33,5 +33,5 @@ jobs:
       - name: golangci-lint
         uses: golangci/golangci-lint-action@v8
         with:
-          version: v1.62.2  # Use specific version instead of latest
+          version: v2.4.0  # Use v2.x version compatible with action v8
           args: --timeout=5m --out-format=github-actions
