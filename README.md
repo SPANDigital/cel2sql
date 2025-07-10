@@ -1,7 +1,7 @@
 # cel2sql
 
 cel2sql converts [CEL (Common Expression Language)](https://opensource.google/projects/cel) to SQL condition.
-It is specifically targeting BigQuery standard SQL.
+It is specifically targeting PostgreSQL standard SQL.
 
 ## Usage
 
@@ -10,22 +10,25 @@ import (
     "context"
     "fmt"
     
-    "cloud.google.com/go/bigquery"
     "github.com/cockscomb/cel2sql"
-    "github.com/cockscomb/cel2sql/bq"
+    "github.com/cockscomb/cel2sql/pg"
     "github.com/cockscomb/cel2sql/sqltypes"
     "github.com/google/cel-go/cel"
     "github.com/google/cel-go/checker/decls"
 )
 
-// BigQuery table metadata
-var client *bigquery.Client = ...
-tableMetadata, _ := client.Dataset("your_dataset").Table("employees").Metadata(context.TODO())
+// PostgreSQL table schema definition
+employeeSchema := pg.Schema{
+    {Name: "name", Type: "text", Repeated: false},
+    {Name: "hired_at", Type: "timestamp with time zone", Repeated: false},
+    {Name: "age", Type: "integer", Repeated: false},
+    {Name: "active", Type: "boolean", Repeated: false},
+}
 
 // Prepare CEL environment
 env, _ := cel.NewEnv(
-    cel.CustomTypeProvider(bq.NewTypeProvider(map[string]bigquery.Schema{
-        "Employee": tableMetadata.Schema,
+    cel.CustomTypeProvider(pg.NewTypeProvider(map[string]pg.Schema{
+        "Employee": employeeSchema,
     })),
     sqltypes.SQLTypeDeclarations,
     cel.Declarations(
@@ -37,23 +40,23 @@ env, _ := cel.NewEnv(
 ast, _ := env.Compile(`employee.name == "John Doe" && employee.hired_at >= current_timestamp() - duration("24h")`)
 sqlCondition, _ := cel2sql.Convert(ast)
 
-fmt.Println(sqlCondition) // `employee`.`name` = "John Doe" AND `employee`.`hired_at` >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 1 DAY)
+fmt.Println(sqlCondition) // `employee`.`name` = "John Doe" AND `employee`.`hired_at` >= CURRENT_TIMESTAMP - INTERVAL '1 DAY'
 ```
 
 ## Type Conversion
 
-CEL Type    | BigQuery Standard SQL Data Type
+CEL Type    | PostgreSQL Data Type
 ----------- | ----------------------------------
-`int`       | `INT64`
-`uint`      | Unsupported but treated as `INT64`
-`double`    | `FLOAT64`
-`bool`      | `BOOL`
-`string`    | `STRING`
-`bytes`     | `BYTES`
+`int`       | `bigint`
+`uint`      | Unsupported but treated as `bigint`
+`double`    | `double precision`
+`bool`      | `boolean`
+`string`    | `text`
+`bytes`     | `bytea`
 `list`      | `ARRAY`
-`map`       | `STRUCT`
+`map`       | `JSONB` (for complex objects)
 `null_type` | `NULL`
-`timestamp` | `TIMESTAMP`
+`timestamp` | `timestamp with time zone`
 `duration`  | `INTERVAL` 
 
 ## Supported CEL Operators/Functions

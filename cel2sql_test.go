@@ -3,23 +3,22 @@ package cel2sql_test
 import (
 	"testing"
 
-	"cloud.google.com/go/bigquery"
 	"github.com/google/cel-go/cel"
 	"github.com/google/cel-go/checker/decls"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/cockscomb/cel2sql"
-	"github.com/cockscomb/cel2sql/bq"
+	"github.com/cockscomb/cel2sql/pg"
 	"github.com/cockscomb/cel2sql/sqltypes"
 	"github.com/cockscomb/cel2sql/test"
 )
 
 func TestConvert(t *testing.T) {
 	env, err := cel.NewEnv(
-		cel.CustomTypeProvider(bq.NewTypeProvider(map[string]bigquery.Schema{
-			"trigrams":  test.NewTrigramsTableMetadata().Schema,
-			"wikipedia": test.NewWikipediaTableMetadata().Schema,
+		cel.CustomTypeProvider(pg.NewTypeProvider(map[string]pg.Schema{
+			"trigrams":  test.NewTrigramsTableSchema(),
+			"wikipedia": test.NewWikipediaTableSchema(),
 		})),
 		sqltypes.SQLTypeDeclarations,
 		cel.Declarations(

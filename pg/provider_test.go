@@ -1,22 +1,21 @@
-package bq_test
+package pg_test
 
 import (
 	"testing"
 
-	"cloud.google.com/go/bigquery"
 	"github.com/google/cel-go/checker/decls"
 	"github.com/google/cel-go/common/types/ref"
 	"github.com/stretchr/testify/assert"
 	exprpb "google.golang.org/genproto/googleapis/api/expr/v1alpha1"
 
-	"github.com/cockscomb/cel2sql/bq"
+	"github.com/cockscomb/cel2sql/pg"
 	"github.com/cockscomb/cel2sql/test"
 )
 
 func Test_typeProvider_FindType(t *testing.T) {
-	typeProvider := bq.NewTypeProvider(map[string]bigquery.Schema{
-		"trigrams":  test.NewTrigramsTableMetadata().Schema,
-		"wikipedia": test.NewWikipediaTableMetadata().Schema,
+	typeProvider := pg.NewTypeProvider(map[string]pg.Schema{
+		"trigrams":  test.NewTrigramsTableSchema(),
+		"wikipedia": test.NewWikipediaTableSchema(),
 	})
 
 	type args struct {
@@ -57,18 +56,10 @@ func Test_typeProvider_FindType(t *testing.T) {
 			wantFound: true,
 		},
 		{
-			name: "trigrams.cell.value",
-			args: args{typeName: "trigrams.cell.value"},
-			want: &exprpb.Type{
-				TypeKind: &exprpb.Type_Type{
-					Type: &exprpb.Type{
-						TypeKind: &exprpb.Type_MessageType{
-							MessageType: "trigrams.cell.value",
-						},
-					},
-				},
-			},
-			wantFound: true,
+			name:      "trigrams.cell.value",
+			args:      args{typeName: "trigrams.cell.value"},
+			want:      nil,
+			wantFound: false, // value is a primitive field, not a composite type
 		},
 		{
 			name:      "not_exists",
@@ -94,9 +85,9 @@ func Test_typeProvider_FindType(t *testing.T) {
 }
 
 func Test_typeProvider_FindFieldType(t *testing.T) {
-	typeProvider := bq.NewTypeProvider(map[string]bigquery.Schema{
-		"trigrams":  test.NewTrigramsTableMetadata().Schema,
-		"wikipedia": test.NewWikipediaTableMetadata().Schema,
+	typeProvider := pg.NewTypeProvider(map[string]pg.Schema{
+		"trigrams":  test.NewTrigramsTableSchema(),
+		"wikipedia": test.NewWikipediaTableSchema(),
 	})
 
 	type args struct {
