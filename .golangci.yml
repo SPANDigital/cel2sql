@@ -69,8 +69,7 @@ linters-settings:
       - prefix(github.com/spandigital/cel2sql)
   goimports:
     local-prefixes: github.com/spandigital/cel2sql
-  govet:
-    # Default govet checks are sufficient - shadow check removed due to v1.64.8 compatibility
+  govet: {}
   misspell:
     locale: US
   revive:
