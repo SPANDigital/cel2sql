@@ -70,7 +70,7 @@ jobs:
           check-latest: true
 
       - name: Install gosec
-        run: go install github.com/securecodewarrior/gosec/v2/cmd/gosec@latest
+        run: go install github.com/securego/gosec/v2/cmd/gosec@latest
 
       - name: Run gosec Security Scanner
         run: gosec -fmt sarif -out results.sarif ./...
