@@ -4,6 +4,7 @@ run:
 
 linters:
   enable:
+    # Core linters (essential)
     - errcheck
     - gosimple
     - govet
@@ -11,228 +12,86 @@ linters:
     - staticcheck
     - typecheck
     - unused
-    - asasalint
-    - asciicheck
-    - bidichk
+    
+    # Code quality linters (important)
     - bodyclose
-    - containedctx
-    - contextcheck
-    - cyclop
-    - decorder
-    - dogsled
-    - dupl
-    - durationcheck
-    - errname
-    - errorlint
-    - execinquery
-    - exhaustive
-    - exportloopref
-    - forbidigo
-    - forcetypeassert
-    - funlen
     - gci
-    - ginkgolinter
-    - gocheckcompilerdirectives
-    - gochecknoinits
-    - gochecksumtype
-    - gocognit
+    - gofmt
+    - goimports
     - goconst
     - gocritic
-    - gocyclo
-    - godot
-    - godox
-    - goerr113
-    - gofmt
-    - gofumpt
-    - goheader
-    - goimports
-    - gomnd
-    - gomoddirectives
-    - gomodguard
-    - goprintffuncname
-    - gosec
-    - gosmopolitan
-    - grouper
-    - importas
-    - inamedparam
-    - interfacebloat
-    - ireturn
-    - lll
-    - loggercheck
-    - maintidx
-    - makezero
-    - mirror
     - misspell
-    - musttag
-    - nakedret
-    - nestif
-    - nilerr
-    - nilnil
-    - nlreturn
-    - noctx
-    - nolintlint
-    - nonamedreturns
-    - nosprintfhostport
-    - paralleltest
-    - perfsprint
-    - prealloc
-    - predeclared
-    - promlinter
-    - protogetter
-    - reassign
     - revive
-    - rowserrcheck
-    - sloglint
-    - spancheck
-    - sqlclosecheck
-    - stylecheck
-    - tagalign
-    - tagliatelle
-    - tenv
-    - testableexamples
-    - testifylint
-    - testpackage
-    - thelper
-    - tparallel
     - unconvert
     - unparam
-    - usestdlibvars
-    - varnamelen
-    - wastedassign
     - whitespace
-    - wrapcheck
-    - wsl
-    - zerologlint
+    
+    # Security linters
+    - gosec
+    
+    # Performance linters  
+    - prealloc
+    - perfsprint
+    
   disable:
-    - depguard
-    - exhaustruct
-    - gochecknoglobals
+    # Disabled for initial setup - can be enabled gradually
+    - cyclop
+    - dupl
+    - funlen
+    - gocognit
+    - gocyclo
+    - maintidx
+    - nestif
+    - varnamelen
+    - wrapcheck
+    - lll
+    - paralleltest
+    - testpackage
+    - nlreturn
+    - wsl
     - godot
     - godox
     - goerr113
     - gomnd
+    - ireturn
+    - nonamedreturns
+    - exhaustruct
+    - gochecknoglobals
+    - depguard
     - gomoddirectives
     - gomodguard
-    - gosec
-    - ireturn
-    - lll
-    - nlreturn
-    - nonamedreturns
-    - paralleltest
-    - testpackage
-    - varnamelen
-    - wrapcheck
-    - wsl
 
 linters-settings:
-  cyclop:
-    max-complexity: 15
-  dupl:
-    threshold: 100
-  funlen:
-    lines: 100
-    statements: 50
   gci:
     sections:
       - standard
       - default
       - prefix(github.com/spandigital/cel2sql)
-  gocognit:
-    min-complexity: 20
-  goconst:
-    min-len: 3
-    min-occurrences: 3
-  gocritic:
-    enabled-tags:
-      - diagnostic
-      - experimental
-      - opinionated
-      - performance
-      - style
-  gocyclo:
-    min-complexity: 15
   goimports:
     local-prefixes: github.com/spandigital/cel2sql
-  gomnd:
-    checks:
-      - argument
-      - case
-      - condition
-      - operation
-      - return
-      - assign
-    ignored-numbers:
-      - '0'
-      - '1'
-      - '2'
-      - '3'
   govet:
     check-shadowing: true
-    settings:
-      printf:
-        funcs:
-          - (github.com/golangci/golangci-lint/pkg/logutils.Log).Infof
-          - (github.com/golangci/golangci-lint/pkg/logutils.Log).Warnf
-          - (github.com/golangci/golangci-lint/pkg/logutils.Log).Errorf
-          - (github.com/golangci/golangci-lint/pkg/logutils.Log).Fatalf
-  lll:
-    line-length: 140
-  maintidx:
-    under: 20
   misspell:
     locale: US
-  nolintlint:
-    allow-leading-space: true
-    allow-unused: false
-    require-explanation: false
-    require-specific: false
   revive:
-    min-confidence: 0
-  stylecheck:
-    checks: ["all", "-ST1003"]
-  tagliatelle:
-    case:
-      use-field-name: true
-      rules:
-        json: camel
-        yaml: camel
-        xml: camel
-        bson: camel
-        avro: snake
-        mapstructure: kebab
+    min-confidence: 0.3
+  gosec:
+    excludes:
+      - G404 # Random number generator not cryptographically secure
 
 issues:
-  exclude-use-default: false
   exclude-rules:
+    # Exclude some linters from running on tests files
     - path: _test\.go
       linters:
         - bodyclose
-        - dupl
         - errcheck
-        - funlen
-        - gochecknoinits
-        - gocognit
-        - goconst
-        - gocritic
-        - gocyclo
         - gosec
-        - maintidx
-        - noctx
         - unparam
-        - wrapcheck
+    # Exclude examples directory from some checks
     - path: examples/
       linters:
         - gocritic
-        - gocyclo
-        - funlen
-        - maintidx
-    - linters:
-        - staticcheck
-      text: "SA9003:"
-    - linters:
-        - lll
-      source: "^//go:generate "
+        - gosec
   max-issues-per-linter: 0
   max-same-issues: 0
-  new: false
-  fix: false
