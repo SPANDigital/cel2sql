@@ -92,5 +92,15 @@ issues:
       linters:
         - gocritic
         - gosec
+    # Temporarily exclude staticcheck deprecation warnings for CEL API
+    - text: "SA1019.*cel.Declarations is deprecated"
+      linters:
+        - staticcheck
+    - text: "SA1019.*ref.FieldType is deprecated"
+      linters:
+        - staticcheck
+    - text: "SA1019.*ref.TypeProvider is deprecated"
+      linters:
+        - staticcheck
   max-issues-per-linter: 0
   max-same-issues: 0
