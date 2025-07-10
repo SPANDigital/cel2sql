@@ -70,11 +70,11 @@ linters-settings:
   goimports:
     local-prefixes: github.com/spandigital/cel2sql
   govet:
-    check-shadowing: true
+    shadow: true  # Use shadow instead of check-shadowing
   misspell:
     locale: US
   revive:
-    min-confidence: 0.3
+    confidence: 0.3  # Use confidence instead of min-confidence
   gosec:
     excludes:
       - G404 # Random number generator not cryptographically secure
