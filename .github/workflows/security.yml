@@ -33,10 +33,10 @@ jobs:
       - name: Run govulncheck
         run: govulncheck ./...
 
-  nancy:
-    name: Nancy Security Scan
+  osv-scanner:
+    name: OSV Security Scan
     runs-on: ubuntu-latest
-    continue-on-error: true  # Nancy can be flaky, don't fail the whole pipeline
+    continue-on-error: true  # Security scanners can be flaky, don't fail the whole pipeline
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -48,10 +48,34 @@ jobs:
           cache: true
           check-latest: true
 
-      - name: WriteGoList
-        run: go list -json -deps ./... > go.list
+      - name: Install OSV Scanner
+        run: go install github.com/google/osv-scanner/cmd/osv-scanner@latest
 
-      - name: Nancy
-        uses: sonatypecommunity/nancy-github-action@v1.0.3
+      - name: Run OSV Scanner
+        run: osv-scanner --lockfile=go.mod .
+
+  gosec:
+    name: Go Security Analysis
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
         with:
-          nancyCommand: sleuth --path go.list
+          go-version: '1.24.x'
+          cache: true
+          check-latest: true
+
+      - name: Install gosec
+        run: go install github.com/securecodewarrior/gosec/v2/cmd/gosec@latest
+
+      - name: Run gosec
+        run: gosec -fmt sarif -out results.sarif ./...
+
+      - name: Upload SARIF file
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: results.sarif
+        if: always()
