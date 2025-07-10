@@ -70,7 +70,7 @@ linters-settings:
   goimports:
     local-prefixes: github.com/spandigital/cel2sql
   govet:
-    shadow: true  # Use shadow instead of check-shadowing
+    # Default govet checks are sufficient - shadow check removed due to v1.64.8 compatibility
   misspell:
     locale: US
   revive:
