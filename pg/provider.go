@@ -2,6 +2,7 @@ package pg
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -51,7 +52,7 @@ func NewTypeProviderWithConnection(ctx context.Context, connectionString string)
 // LoadTableSchema loads schema information for a table from the database
 func (p *typeProvider) LoadTableSchema(ctx context.Context, tableName string) error {
 	if p.pool == nil {
-		return fmt.Errorf("no database connection available")
+		return errors.New("no database connection available")
 	}
 
 	query := `

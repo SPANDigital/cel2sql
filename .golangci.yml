@@ -51,8 +51,8 @@ linters:
     - wsl
     - godot
     - godox
-    - goerr113
-    - gomnd
+    - err113
+    - mnd
     - ireturn
     - nonamedreturns
     - exhaustruct

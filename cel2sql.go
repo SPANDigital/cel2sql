@@ -1,6 +1,7 @@
 package cel2sql
 
 import (
+	"errors"
 	"fmt"
 	"regexp"
 	"strconv"
@@ -299,9 +300,9 @@ func (con *converter) callContains(target *exprpb.Expr, args []*exprpb.Expr) err
 	return nil
 }
 
-func (con *converter) callDuration(target *exprpb.Expr, args []*exprpb.Expr) error {
+func (con *converter) callDuration(_ *exprpb.Expr, args []*exprpb.Expr) error {
 	if len(args) != 1 {
-		return fmt.Errorf("arguments must be single")
+		return errors.New("arguments must be single")
 	}
 	arg := args[0]
 	var durationString string
@@ -341,7 +342,7 @@ func (con *converter) callDuration(target *exprpb.Expr, args []*exprpb.Expr) err
 	return nil
 }
 
-func (con *converter) callInterval(target *exprpb.Expr, args []*exprpb.Expr) error {
+func (con *converter) callInterval(_ *exprpb.Expr, args []*exprpb.Expr) error {
 	con.str.WriteString("INTERVAL ")
 	if err := con.visit(args[0]); err != nil {
 		return err
@@ -393,7 +394,7 @@ func (con *converter) callExtractFromTimestamp(function string, target *exprpb.E
 	return nil
 }
 
-func (con *converter) callCasting(function string, target *exprpb.Expr, args []*exprpb.Expr) error {
+func (con *converter) callCasting(function string, _ *exprpb.Expr, args []*exprpb.Expr) error {
 	arg := args[0]
 	if function == overloads.TypeConvertInt && isTimestampType(con.getType(arg)) {
 		con.str.WriteString("UNIX_SECONDS(")
