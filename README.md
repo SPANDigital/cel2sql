@@ -1049,3 +1049,7 @@ cel2sql contains time related functions bellow.
 - `current_datetime()`
 - `current_timestamp()`
 - `interval(N, date_part)`
+
+## Acknowledgments
+
+This project is based on the excellent work by [@cockscomb](https://github.com/cockscomb) at [cockscomb/cel2sql](https://github.com/cockscomb/cel2sql). We thank the original author for creating the foundation that made this PostgreSQL-focused implementation possible.

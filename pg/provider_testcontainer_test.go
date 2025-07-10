@@ -18,7 +18,7 @@ func TestLoadTableSchema_WithPostgresContainer(t *testing.T) {
 	ctx := context.Background()
 
 	// Create a PostgreSQL container
-	container, err := postgres.Run(ctx, 
+	container, err := postgres.Run(ctx,
 		"postgres:15",
 		postgres.WithDatabase("testdb"),
 		postgres.WithUsername("testuser"),
@@ -27,7 +27,7 @@ func TestLoadTableSchema_WithPostgresContainer(t *testing.T) {
 		testcontainers.WithWaitStrategy(
 			wait.ForLog("database system is ready to accept connections").
 				WithOccurrence(2).
-				WithStartupTimeout(time.Second * 60),
+				WithStartupTimeout(time.Second*60),
 		),
 	)
 	require.NoError(t, err)
@@ -84,7 +84,7 @@ func TestLoadTableSchema_WithArrayTypes(t *testing.T) {
 	ctx := context.Background()
 
 	// Create a PostgreSQL container with array types
-	container, err := postgres.Run(ctx, 
+	container, err := postgres.Run(ctx,
 		"postgres:15",
 		postgres.WithDatabase("testdb"),
 		postgres.WithUsername("testuser"),
@@ -93,7 +93,7 @@ func TestLoadTableSchema_WithArrayTypes(t *testing.T) {
 		testcontainers.WithWaitStrategy(
 			wait.ForLog("database system is ready to accept connections").
 				WithOccurrence(2).
-				WithStartupTimeout(time.Second * 60),
+				WithStartupTimeout(time.Second*60),
 		),
 	)
 	require.NoError(t, err)
@@ -132,7 +132,7 @@ func TestLoadTableSchema_NonExistentTable(t *testing.T) {
 	ctx := context.Background()
 
 	// Create a PostgreSQL container
-	container, err := postgres.Run(ctx, 
+	container, err := postgres.Run(ctx,
 		"postgres:15",
 		postgres.WithDatabase("testdb"),
 		postgres.WithUsername("testuser"),
@@ -140,7 +140,7 @@ func TestLoadTableSchema_NonExistentTable(t *testing.T) {
 		testcontainers.WithWaitStrategy(
 			wait.ForLog("database system is ready to accept connections").
 				WithOccurrence(2).
-				WithStartupTimeout(time.Second * 60),
+				WithStartupTimeout(time.Second*60),
 		),
 	)
 	require.NoError(t, err)
