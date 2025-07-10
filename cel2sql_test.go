@@ -4,38 +4,71 @@ import (
 	"testing"
 
 	"github.com/google/cel-go/cel"
-	"github.com/google/cel-go/checker/decls"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/spandigital/cel2sql"
-	"github.com/spandigital/cel2sql/pg"
 	"github.com/spandigital/cel2sql/sqltypes"
-	"github.com/spandigital/cel2sql/test"
 )
 
 func TestConvert(t *testing.T) {
 	env, err := cel.NewEnv(
-		cel.CustomTypeProvider(pg.NewTypeProvider(map[string]pg.Schema{
-			"trigrams":  test.NewTrigramsTableSchema(),
-			"wikipedia": test.NewWikipediaTableSchema(),
-		})),
-		sqltypes.SQLTypeDeclarations,
-		cel.Declarations(
-			decls.NewVar("name", decls.String),
-			decls.NewVar("age", decls.Int),
-			decls.NewVar("adult", decls.Bool),
-			decls.NewVar("height", decls.Double),
-			decls.NewVar("string_list", decls.NewListType(decls.String)),
-			decls.NewVar("string_int_map", decls.NewMapType(decls.String, decls.Int)),
-			decls.NewVar("null_var", decls.Null),
-			decls.NewVar("birthday", sqltypes.Date),
-			decls.NewVar("fixed_time", sqltypes.Time),
-			decls.NewVar("scheduled_at", sqltypes.DateTime),
-			decls.NewVar("created_at", decls.Timestamp),
-			decls.NewVar("trigram", decls.NewObjectType("trigrams")),
-			decls.NewVar("page", decls.NewObjectType("wikipedia")),
+		cel.Types(
+			// Custom abstract types
+			sqltypes.Date, sqltypes.Time, sqltypes.DateTime, sqltypes.Interval, sqltypes.DatePart,
 		),
+		cel.Variable("name", cel.StringType),
+		cel.Variable("age", cel.IntType),
+		cel.Variable("adult", cel.BoolType),
+		cel.Variable("height", cel.DoubleType),
+		cel.Variable("string_list", cel.ListType(cel.StringType)),
+		cel.Variable("string_int_map", cel.MapType(cel.StringType, cel.IntType)),
+		cel.Variable("null_var", cel.NullType),
+		cel.Variable("birthday", cel.ObjectType("DATE")),
+		cel.Variable("fixed_time", cel.ObjectType("TIME")),
+		cel.Variable("scheduled_at", cel.ObjectType("DATETIME")),
+		cel.Variable("created_at", cel.TimestampType),
+		cel.Variable("page", cel.MapType(cel.StringType, cel.StringType)), // simplified version
+		cel.Variable("trigram", cel.MapType(cel.StringType, cel.DynType)), // simplified version
+		// Date part constants
+		cel.Variable("YEAR", cel.ObjectType("date_part")),
+		cel.Variable("MONTH", cel.ObjectType("date_part")),
+		cel.Variable("DAY", cel.ObjectType("date_part")),
+		cel.Variable("HOUR", cel.ObjectType("date_part")),
+		cel.Variable("MINUTE", cel.ObjectType("date_part")),
+		cel.Variable("SECOND", cel.ObjectType("date_part")),
+		// SQL functions
+		cel.Function("date", 
+			cel.Overload("date_string", []*cel.Type{cel.StringType}, cel.ObjectType("DATE")),
+			cel.Overload("date_int_int_int", []*cel.Type{cel.IntType, cel.IntType, cel.IntType}, cel.ObjectType("DATE"))),
+		cel.Function("time", cel.Overload("time_string", []*cel.Type{cel.StringType}, cel.ObjectType("TIME"))),
+		cel.Function("datetime", 
+			cel.Overload("datetime_string", []*cel.Type{cel.StringType}, cel.ObjectType("DATETIME")),
+			cel.Overload("datetime_date_time", []*cel.Type{cel.ObjectType("DATE"), cel.ObjectType("TIME")}, cel.ObjectType("DATETIME"))),
+		cel.Function("interval", cel.Overload("interval_int_datepart", []*cel.Type{cel.IntType, cel.ObjectType("date_part")}, cel.ObjectType("INTERVAL"))),
+		cel.Function("current_date", cel.Overload("current_date", []*cel.Type{}, cel.ObjectType("DATE"))),
+		cel.Function("current_datetime", cel.Overload("current_datetime_string", []*cel.Type{cel.StringType}, cel.ObjectType("DATETIME"))),
+		// Date/Time arithmetic operators
+		cel.Function("_+_", 
+			cel.Overload("date_add_interval", []*cel.Type{cel.ObjectType("DATE"), cel.ObjectType("INTERVAL")}, cel.ObjectType("DATE")),
+			cel.Overload("date_add_int", []*cel.Type{cel.ObjectType("DATE"), cel.IntType}, cel.ObjectType("DATE")),
+			cel.Overload("time_add_interval", []*cel.Type{cel.ObjectType("TIME"), cel.ObjectType("INTERVAL")}, cel.ObjectType("TIME")),
+			cel.Overload("datetime_add_interval", []*cel.Type{cel.ObjectType("DATETIME"), cel.ObjectType("INTERVAL")}, cel.ObjectType("DATETIME"))),
+		cel.Function("_-_", 
+			cel.Overload("date_sub_interval", []*cel.Type{cel.ObjectType("DATE"), cel.ObjectType("INTERVAL")}, cel.ObjectType("DATE")),
+			cel.Overload("time_sub_interval", []*cel.Type{cel.ObjectType("TIME"), cel.ObjectType("INTERVAL")}, cel.ObjectType("TIME")),
+			cel.Overload("datetime_sub_interval", []*cel.Type{cel.ObjectType("DATETIME"), cel.ObjectType("INTERVAL")}, cel.ObjectType("DATETIME"))),
+		// Date/Time comparison operators
+		cel.Function("_>_", 
+			cel.Overload("date_gt_date", []*cel.Type{cel.ObjectType("DATE"), cel.ObjectType("DATE")}, cel.BoolType)),
+		// Date/Time methods
+		cel.Function("getFullYear", cel.MemberOverload("date_getFullYear", []*cel.Type{cel.ObjectType("DATE")}, cel.IntType)),
+		cel.Function("getMonth", cel.MemberOverload("datetime_getMonth", []*cel.Type{cel.ObjectType("DATETIME")}, cel.IntType)),
+		cel.Function("getDayOfMonth", cel.MemberOverload("datetime_getDayOfMonth", []*cel.Type{cel.ObjectType("DATETIME")}, cel.IntType)),
+		cel.Function("getMinutes", cel.MemberOverload("time_getMinutes", []*cel.Type{cel.ObjectType("TIME")}, cel.IntType)),
+		// Cast functions
+		cel.Function("bool", cel.Overload("bool_from_int", []*cel.Type{cel.IntType}, cel.BoolType)),
+		cel.Function("int", cel.Overload("int_from_bool", []*cel.Type{cel.BoolType}, cel.IntType)),
 	)
 	require.NoError(t, err)
 	type args struct {

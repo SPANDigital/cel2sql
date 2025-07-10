@@ -42,9 +42,7 @@ env, err := cel.NewEnv(
         "Employee": employeeSchema,
     })),
     sqltypes.SQLTypeDeclarations,
-    cel.Declarations(
-        decls.NewVar("employee", decls.NewObjectType("Employee")),
-    ),
+    cel.Variable("employee", cel.ObjectType("Employee")),
 )
 ```
 

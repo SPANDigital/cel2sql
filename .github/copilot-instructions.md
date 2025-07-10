@@ -73,7 +73,7 @@ provider := pg.NewTypeProvider(map[string]pg.Schema{"TableName": schema})
 env, err := cel.NewEnv(
     cel.CustomTypeProvider(provider),
     sqltypes.SQLTypeDeclarations,
-    cel.Declarations(decls.NewVar("table", decls.NewObjectType("TableName"))),
+    cel.Variable("table", cel.ObjectType("TableName")),
 )
 ```
 

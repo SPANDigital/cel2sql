@@ -5,11 +5,8 @@ import (
 	"log"
 
 	"github.com/google/cel-go/cel"
-	"github.com/google/cel-go/checker/decls"
-
 	"github.com/spandigital/cel2sql"
 	"github.com/spandigital/cel2sql/pg"
-	"github.com/spandigital/cel2sql/sqltypes"
 )
 
 func main() {
@@ -27,10 +24,7 @@ func main() {
 		cel.CustomTypeProvider(pg.NewTypeProvider(map[string]pg.Schema{
 			"Employee": employeeSchema,
 		})),
-		sqltypes.SQLTypeDeclarations,
-		cel.Declarations(
-			decls.NewVar("employee", decls.NewObjectType("Employee")),
-		),
+		cel.Variable("employee", cel.ObjectType("Employee")),
 	)
 	if err != nil {
 		log.Fatal(err)

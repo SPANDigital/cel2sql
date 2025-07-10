@@ -14,7 +14,6 @@ import (
     "github.com/spandigital/cel2sql/pg"
     "github.com/spandigital/cel2sql/sqltypes"
     "github.com/google/cel-go/cel"
-    "github.com/google/cel-go/checker/decls"
 )
 
 // PostgreSQL table schema definition
@@ -31,9 +30,7 @@ env, _ := cel.NewEnv(
         "Employee": employeeSchema,
     })),
     sqltypes.SQLTypeDeclarations,
-    cel.Declarations(
-        decls.NewVar("employee", decls.NewObjectType("Employee")),
-    ),
+    cel.Variable("employee", cel.ObjectType("Employee")),
 )
 
 // Convert CEL to SQL
@@ -56,7 +53,6 @@ import (
     "github.com/spandigital/cel2sql/pg"
     "github.com/spandigital/cel2sql/sqltypes"
     "github.com/google/cel-go/cel"
-    "github.com/google/cel-go/checker/decls"
 )
 
 func main() {
@@ -79,9 +75,7 @@ func main() {
     env, err := cel.NewEnv(
         cel.CustomTypeProvider(provider),
         sqltypes.SQLTypeDeclarations,
-        cel.Declarations(
-            decls.NewVar("employee", decls.NewObjectType("employees")),
-        ),
+        cel.Variable("employee", cel.ObjectType("employees")),
     )
     if err != nil {
         panic(err)

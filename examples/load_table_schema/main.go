@@ -6,7 +6,6 @@ import (
 	"log"
 
 	"github.com/google/cel-go/cel"
-	"github.com/google/cel-go/checker/decls"
 	"github.com/spandigital/cel2sql"
 	"github.com/spandigital/cel2sql/pg"
 	"github.com/spandigital/cel2sql/sqltypes"
@@ -46,9 +45,7 @@ func exampleWithPredefinedSchema() {
 	env, err := cel.NewEnv(
 		cel.CustomTypeProvider(provider),
 		sqltypes.SQLTypeDeclarations,
-		cel.Declarations(
-			decls.NewVar("user", decls.NewObjectType("users")),
-		),
+		cel.Variable("user", cel.ObjectType("users")),
 	)
 	if err != nil {
 		log.Fatal(err)
@@ -105,9 +102,7 @@ func exampleWithDynamicSchema(ctx context.Context) {
 	env, err := cel.NewEnv(
 		cel.CustomTypeProvider(provider),
 		sqltypes.SQLTypeDeclarations,
-		cel.Declarations(
-			decls.NewVar("user", decls.NewObjectType(tableName)),
-		),
+		cel.Variable("user", cel.ObjectType(tableName)),
 	)
 	if err != nil {
 		log.Fatal(err)
