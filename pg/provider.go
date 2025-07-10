@@ -11,14 +11,14 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	exprpb "google.golang.org/genproto/googleapis/api/expr/v1alpha1"
 
-	"github.com/cockscomb/cel2sql/sqltypes"
+	"github.com/spandigital/cel2sql/sqltypes"
 )
 
 // PostgreSQL field type representation
 type FieldSchema struct {
 	Name     string
-	Type     string // PostgreSQL type name (text, integer, boolean, etc.)
-	Repeated bool   // true for arrays
+	Type     string        // PostgreSQL type name (text, integer, boolean, etc.)
+	Repeated bool          // true for arrays
 	Schema   []FieldSchema // for composite types
 }
 
@@ -41,7 +41,7 @@ func NewTypeProviderWithConnection(ctx context.Context, connectionString string)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create connection pool: %w", err)
 	}
-	
+
 	return &typeProvider{
 		schemas: make(map[string]Schema),
 		pool:    pool,
@@ -53,43 +53,43 @@ func (p *typeProvider) LoadTableSchema(ctx context.Context, tableName string) er
 	if p.pool == nil {
 		return fmt.Errorf("no database connection available")
 	}
-	
+
 	query := `
 		SELECT column_name, data_type, is_nullable, column_default
 		FROM information_schema.columns 
 		WHERE table_name = $1 
 		ORDER BY ordinal_position
 	`
-	
+
 	rows, err := p.pool.Query(ctx, query, tableName)
 	if err != nil {
 		return fmt.Errorf("failed to query table schema: %w", err)
 	}
 	defer rows.Close()
-	
+
 	var schema Schema
 	for rows.Next() {
 		var columnName, dataType, isNullable string
 		var columnDefault *string
-		
+
 		err := rows.Scan(&columnName, &dataType, &isNullable, &columnDefault)
 		if err != nil {
 			return fmt.Errorf("failed to scan row: %w", err)
 		}
-		
+
 		field := FieldSchema{
 			Name:     columnName,
 			Type:     dataType,
 			Repeated: strings.HasSuffix(dataType, "[]"), // PostgreSQL array notation
 		}
-		
+
 		schema = append(schema, field)
 	}
-	
+
 	if err := rows.Err(); err != nil {
 		return fmt.Errorf("error iterating rows: %w", err)
 	}
-	
+
 	p.schemas[tableName] = schema
 	return nil
 }
@@ -115,12 +115,12 @@ func (p *typeProvider) findSchema(typeName string) (Schema, bool) {
 	if !found {
 		return nil, false
 	}
-	
+
 	// For single-level types, return the schema directly
 	if len(typeNames) == 1 {
 		return schema, true
 	}
-	
+
 	// For nested types, traverse the schema hierarchy
 	for _, tn := range typeNames[1:] {
 		var s Schema
@@ -161,7 +161,7 @@ func (p *typeProvider) FindFieldType(messageType string, fieldName string) (*ref
 	if field == nil {
 		return nil, false
 	}
-	
+
 	var typ *exprpb.Type
 	switch field.Type {
 	case "text", "varchar", "char", "character varying", "character":
@@ -189,11 +189,11 @@ func (p *typeProvider) FindFieldType(messageType string, fieldName string) (*ref
 			typ = decls.String
 		}
 	}
-	
+
 	if field.Repeated {
 		typ = decls.NewListType(typ)
 	}
-	
+
 	return &ref.FieldType{
 		Type: typ,
 	}, true

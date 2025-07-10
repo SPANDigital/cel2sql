@@ -7,9 +7,9 @@ import (
 	"github.com/google/cel-go/cel"
 	"github.com/google/cel-go/checker/decls"
 
-	"github.com/cockscomb/cel2sql"
-	"github.com/cockscomb/cel2sql/pg"
-	"github.com/cockscomb/cel2sql/sqltypes"
+	"github.com/spandigital/cel2sql"
+	"github.com/spandigital/cel2sql/pg"
+	"github.com/spandigital/cel2sql/sqltypes"
 )
 
 func main() {

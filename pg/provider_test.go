@@ -8,8 +8,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	exprpb "google.golang.org/genproto/googleapis/api/expr/v1alpha1"
 
-	"github.com/cockscomb/cel2sql/pg"
-	"github.com/cockscomb/cel2sql/test"
+	"github.com/spandigital/cel2sql/pg"
+	"github.com/spandigital/cel2sql/test"
 )
 
 func Test_typeProvider_FindType(t *testing.T) {

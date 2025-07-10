@@ -1,7 +1,7 @@
 package test
 
 import (
-	"github.com/cockscomb/cel2sql/pg"
+	"github.com/spandigital/cel2sql/pg"
 )
 
 func NewTrigramsTableSchema() pg.Schema {

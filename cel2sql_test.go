@@ -8,10 +8,10 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/cockscomb/cel2sql"
-	"github.com/cockscomb/cel2sql/pg"
-	"github.com/cockscomb/cel2sql/sqltypes"
-	"github.com/cockscomb/cel2sql/test"
+	"github.com/spandigital/cel2sql"
+	"github.com/spandigital/cel2sql/pg"
+	"github.com/spandigital/cel2sql/sqltypes"
+	"github.com/spandigital/cel2sql/test"
 )
 
 func TestConvert(t *testing.T) {

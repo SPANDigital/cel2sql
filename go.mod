@@ -1,4 +1,4 @@
-module github.com/cockscomb/cel2sql
+module github.com/spandigital/cel2sql
 
 go 1.24
 
