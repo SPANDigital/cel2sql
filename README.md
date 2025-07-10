@@ -29,7 +29,6 @@ env, _ := cel.NewEnv(
     cel.CustomTypeProvider(pg.NewTypeProvider(map[string]pg.Schema{
         "Employee": employeeSchema,
     })),
-    sqltypes.SQLTypeDeclarations,
     cel.Variable("employee", cel.ObjectType("Employee")),
 )
 
@@ -74,7 +73,6 @@ func main() {
     // Use the loaded schema in CEL environment
     env, err := cel.NewEnv(
         cel.CustomTypeProvider(provider),
-        sqltypes.SQLTypeDeclarations,
         cel.Variable("employee", cel.ObjectType("employees")),
     )
     if err != nil {

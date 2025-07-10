@@ -96,7 +96,6 @@ var standardSQLBinaryOperators = map[string]string{
 	operators.LogicalAnd: "AND",
 	operators.LogicalOr:  "OR",
 	operators.Equals:     "=",
-	operators.In:         "IN",
 }
 
 func (con *converter) visitCallBinary(expr *exprpb.Expr) error {
@@ -129,10 +128,20 @@ func (con *converter) visitCallBinary(expr *exprpb.Expr) error {
 		operator = "||"
 	} else if fun == operators.Add && (isListType(lhsType) && isListType(rhsType)) {
 		operator = "||"
+	} else if fun == operators.Add && (isStringLiteral(lhs) || isStringLiteral(rhs)) {
+		// If either operand is a string literal, assume string concatenation
+		operator = "||"
 	} else if fun == operators.Equals && (isNullLiteral(rhs) || isBoolLiteral(rhs)) {
 		operator = "IS"
 	} else if fun == operators.NotEquals && (isNullLiteral(rhs) || isBoolLiteral(rhs)) {
 		operator = "IS NOT"
+	} else if fun == operators.In && isListType(rhsType) {
+		operator = "="
+	} else if fun == operators.In && isFieldAccessExpression(rhs) {
+		// In PostgreSQL, field access expressions in IN clauses are likely array membership tests
+		operator = "="
+	} else if fun == operators.In {
+		operator = "IN"
 	} else if op, found := standardSQLBinaryOperators[fun]; found {
 		operator = op
 	} else if op, found := operators.FindReverseBinaryOperator(fun); found {
@@ -143,13 +152,13 @@ func (con *converter) visitCallBinary(expr *exprpb.Expr) error {
 	con.str.WriteString(" ")
 	con.str.WriteString(operator)
 	con.str.WriteString(" ")
-	if fun == operators.In && isListType(rhsType) {
-		con.str.WriteString("UNNEST(")
+	if fun == operators.In && (isListType(rhsType) || isFieldAccessExpression(rhs)) {
+		con.str.WriteString("ANY(")
 	}
 	if err := con.visitMaybeNested(rhs, rhsParen); err != nil {
 		return err
 	}
-	if fun == operators.In && isListType(rhsType) {
+	if fun == operators.In && (isListType(rhsType) || isFieldAccessExpression(rhs)) {
 		con.str.WriteString(")")
 	}
 	return nil
@@ -195,59 +204,39 @@ func (con *converter) callTimestampOperation(fun string, lhs *exprpb.Expr, rhs *
 	lhsType := con.getType(lhs)
 	rhsType := con.getType(rhs)
 
-	var timestampType *exprpb.Type
 	var timestamp, duration *exprpb.Expr
 	var timestampParen, durationParen bool
 	switch {
 	case isTimestampRelatedType(lhsType):
-		timestampType = lhsType
 		timestamp, duration = lhs, rhs
 		timestampParen, durationParen = lhsParen, rhsParen
 	case isTimestampRelatedType(rhsType):
-		timestampType = rhsType
 		timestamp, duration = rhs, lhs
 		timestampParen, durationParen = rhsParen, lhsParen
 	default:
 		panic("lhs or rhs must be timestamp related type")
 	}
 
-	var sqlFun string
+	// PostgreSQL uses simple + and - operators for date arithmetic
+	var sqlOp string
 	switch fun {
 	case operators.Add:
-		switch {
-		case isTimeType(timestampType):
-			sqlFun = "TIME_ADD"
-		case isDateType(timestampType):
-			sqlFun = "DATE_ADD"
-		case isDateTimeType(timestampType):
-			sqlFun = "DATETIME_ADD"
-		default:
-			sqlFun = "TIMESTAMP_ADD"
-		}
+		sqlOp = "+"
 	case operators.Subtract:
-		switch {
-		case isTimeType(timestampType):
-			sqlFun = "TIME_SUB"
-		case isDateType(timestampType):
-			sqlFun = "DATE_SUB"
-		case isDateTimeType(timestampType):
-			sqlFun = "DATETIME_SUB"
-		default:
-			sqlFun = "TIMESTAMP_SUB"
-		}
+		sqlOp = "-"
 	default:
 		return fmt.Errorf("unsupported operation (%s)", fun)
 	}
-	con.str.WriteString(sqlFun)
-	con.str.WriteString("(")
+	
 	if err := con.visitMaybeNested(timestamp, timestampParen); err != nil {
 		return err
 	}
-	con.str.WriteString(", ")
+	con.str.WriteString(" ")
+	con.str.WriteString(sqlOp)
+	con.str.WriteString(" ")
 	if err := con.visitMaybeNested(duration, durationParen); err != nil {
 		return err
 	}
-	con.str.WriteString(")")
 	return nil
 }
 
@@ -532,12 +521,18 @@ func (con *converter) visitCallListIndex(expr *exprpb.Expr) error {
 	if err := con.visitMaybeNested(l, nested); err != nil {
 		return err
 	}
-	con.str.WriteString("[OFFSET(")
+	con.str.WriteString("[")
 	index := args[1]
-	if err := con.visit(index); err != nil {
-		return err
+	// PostgreSQL arrays are 1-indexed, CEL is 0-indexed, so add 1
+	if constExpr := index.GetConstExpr(); constExpr != nil {
+		con.str.WriteString(fmt.Sprintf("%d", constExpr.GetInt64Value()+1))
+	} else {
+		if err := con.visit(index); err != nil {
+			return err
+		}
+		con.str.WriteString(" + 1")
 	}
-	con.str.WriteString(")]")
+	con.str.WriteString("]")
 	return nil
 }
 
@@ -611,7 +606,7 @@ func (con *converter) visitIdent(expr *exprpb.Expr) error {
 func (con *converter) visitList(expr *exprpb.Expr) error {
 	l := expr.GetListExpr()
 	elems := l.GetElements()
-	con.str.WriteString("[")
+	con.str.WriteString("ARRAY[")
 	for i, elem := range elems {
 		err := con.visit(elem)
 		if err != nil {
@@ -843,4 +838,19 @@ func extractFieldName(node *exprpb.Expr) (string, error) {
 		return "", err
 	}
 	return fieldName, nil
+}
+
+func isFieldAccessExpression(expr *exprpb.Expr) bool {
+	// Check if this is a field access expression (like trigram.cell[0].value)
+	switch expr.GetExprKind().(type) {
+	case *exprpb.Expr_SelectExpr:
+		return true
+	case *exprpb.Expr_CallExpr:
+		// Check if it's an array index access
+		call := expr.GetCallExpr()
+		if call.GetFunction() == operators.Index {
+			return true
+		}
+	}
+	return false
 }

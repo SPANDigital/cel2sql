@@ -45,6 +45,8 @@ func TestConvert(t *testing.T) {
 		cel.Function("datetime", 
 			cel.Overload("datetime_string", []*cel.Type{cel.StringType}, cel.ObjectType("DATETIME")),
 			cel.Overload("datetime_date_time", []*cel.Type{cel.ObjectType("DATE"), cel.ObjectType("TIME")}, cel.ObjectType("DATETIME"))),
+		cel.Function("timestamp", 
+			cel.Overload("timestamp_datetime_string", []*cel.Type{cel.ObjectType("DATETIME"), cel.StringType}, cel.TimestampType)),
 		cel.Function("interval", cel.Overload("interval_int_datepart", []*cel.Type{cel.IntType, cel.ObjectType("date_part")}, cel.ObjectType("INTERVAL"))),
 		cel.Function("current_date", cel.Overload("current_date", []*cel.Type{}, cel.ObjectType("DATE"))),
 		cel.Function("current_datetime", cel.Overload("current_datetime_string", []*cel.Type{cel.StringType}, cel.ObjectType("DATETIME"))),
@@ -53,11 +55,13 @@ func TestConvert(t *testing.T) {
 			cel.Overload("date_add_interval", []*cel.Type{cel.ObjectType("DATE"), cel.ObjectType("INTERVAL")}, cel.ObjectType("DATE")),
 			cel.Overload("date_add_int", []*cel.Type{cel.ObjectType("DATE"), cel.IntType}, cel.ObjectType("DATE")),
 			cel.Overload("time_add_interval", []*cel.Type{cel.ObjectType("TIME"), cel.ObjectType("INTERVAL")}, cel.ObjectType("TIME")),
-			cel.Overload("datetime_add_interval", []*cel.Type{cel.ObjectType("DATETIME"), cel.ObjectType("INTERVAL")}, cel.ObjectType("DATETIME"))),
+			cel.Overload("datetime_add_interval", []*cel.Type{cel.ObjectType("DATETIME"), cel.ObjectType("INTERVAL")}, cel.ObjectType("DATETIME")),
+			cel.Overload("timestamp_add_interval", []*cel.Type{cel.TimestampType, cel.ObjectType("INTERVAL")}, cel.TimestampType)),
 		cel.Function("_-_", 
 			cel.Overload("date_sub_interval", []*cel.Type{cel.ObjectType("DATE"), cel.ObjectType("INTERVAL")}, cel.ObjectType("DATE")),
 			cel.Overload("time_sub_interval", []*cel.Type{cel.ObjectType("TIME"), cel.ObjectType("INTERVAL")}, cel.ObjectType("TIME")),
-			cel.Overload("datetime_sub_interval", []*cel.Type{cel.ObjectType("DATETIME"), cel.ObjectType("INTERVAL")}, cel.ObjectType("DATETIME"))),
+			cel.Overload("datetime_sub_interval", []*cel.Type{cel.ObjectType("DATETIME"), cel.ObjectType("INTERVAL")}, cel.ObjectType("DATETIME")),
+			cel.Overload("timestamp_sub_interval", []*cel.Type{cel.TimestampType, cel.ObjectType("INTERVAL")}, cel.TimestampType)),
 		// Date/Time comparison operators
 		cel.Function("_>_", 
 			cel.Overload("date_gt_date", []*cel.Type{cel.ObjectType("DATE"), cel.ObjectType("DATE")}, cel.BoolType)),
@@ -179,13 +183,13 @@ func TestConvert(t *testing.T) {
 		{
 			name:    "list",
 			args:    args{source: `[1, 2, 3][0] == 1`},
-			want:    "[1, 2, 3][OFFSET(0)] = 1",
+			want:    "ARRAY[1, 2, 3][1] = 1", // PostgreSQL arrays are 1-indexed
 			wantErr: false,
 		},
 		{
 			name:    "list_var",
 			args:    args{source: `string_list[0] == "a"`},
-			want:    "`string_list`[OFFSET(0)] = \"a\"",
+			want:    "`string_list`[1] = \"a\"", // PostgreSQL arrays are 1-indexed
 			wantErr: false,
 		},
 		{
@@ -227,7 +231,7 @@ func TestConvert(t *testing.T) {
 		{
 			name:    "concatList",
 			args:    args{source: `1 in [1] + [2, 3]`},
-			want:    "1 IN UNNEST([1] || [2, 3])",
+			want:    "1 = ANY(ARRAY[1] || ARRAY[2, 3])", // PostgreSQL array concatenation and membership
 			wantErr: false,
 		},
 		{
@@ -257,7 +261,7 @@ func TestConvert(t *testing.T) {
 		{
 			name:    "timestamp",
 			args:    args{source: `created_at - duration("60m") <= timestamp(datetime("2021-09-01 18:00:00"), "Asia/Tokyo")`},
-			want:    "TIMESTAMP_SUB(`created_at`, INTERVAL 1 HOUR) <= TIMESTAMP(DATETIME(\"2021-09-01 18:00:00\"), \"Asia/Tokyo\")",
+			want:    "`created_at` - INTERVAL 1 HOUR <= TIMESTAMP(DATETIME(\"2021-09-01 18:00:00\"), \"Asia/Tokyo\")",
 			wantErr: false,
 		},
 		{
@@ -287,49 +291,49 @@ func TestConvert(t *testing.T) {
 		{
 			name:    "date_add",
 			args:    args{source: `date("2021-09-01") + interval(1, DAY)`},
-			want:    "DATE_ADD(DATE(\"2021-09-01\"), INTERVAL 1 DAY)",
+			want:    "DATE(\"2021-09-01\") + INTERVAL 1 DAY",
 			wantErr: false,
 		},
 		{
 			name:    "date_sub",
 			args:    args{source: `current_date() - interval(1, DAY)`},
-			want:    "DATE_SUB(CURRENT_DATE(), INTERVAL 1 DAY)",
+			want:    "CURRENT_DATE() - INTERVAL 1 DAY",
 			wantErr: false,
 		},
 		{
 			name:    "time_add",
 			args:    args{source: `time("09:00:00") + interval(1, MINUTE)`},
-			want:    "TIME_ADD(TIME(\"09:00:00\"), INTERVAL 1 MINUTE)",
+			want:    "TIME(\"09:00:00\") + INTERVAL 1 MINUTE",
 			wantErr: false,
 		},
 		{
 			name:    "time_sub",
 			args:    args{source: `time("09:00:00") - interval(1, MINUTE)`},
-			want:    "TIME_SUB(TIME(\"09:00:00\"), INTERVAL 1 MINUTE)",
+			want:    "TIME(\"09:00:00\") - INTERVAL 1 MINUTE",
 			wantErr: false,
 		},
 		{
 			name:    "datetime_add",
 			args:    args{source: `datetime("2021-09-01 18:00:00") + interval(1, MINUTE)`},
-			want:    "DATETIME_ADD(DATETIME(\"2021-09-01 18:00:00\"), INTERVAL 1 MINUTE)",
+			want:    "DATETIME(\"2021-09-01 18:00:00\") + INTERVAL 1 MINUTE",
 			wantErr: false,
 		},
 		{
 			name:    "datetime_sub",
 			args:    args{source: `current_datetime("Asia/Tokyo") - interval(1, MINUTE)`},
-			want:    "DATETIME_SUB(CURRENT_DATETIME(\"Asia/Tokyo\"), INTERVAL 1 MINUTE)",
+			want:    "CURRENT_DATETIME(\"Asia/Tokyo\") - INTERVAL 1 MINUTE",
 			wantErr: false,
 		},
 		{
 			name:    "timestamp_add",
 			args:    args{source: `duration("1h") + timestamp("2021-09-01T18:00:00Z")`},
-			want:    "TIMESTAMP_ADD(TIMESTAMP(\"2021-09-01T18:00:00Z\"), INTERVAL 1 HOUR)",
+			want:    "TIMESTAMP(\"2021-09-01T18:00:00Z\") + INTERVAL 1 HOUR",
 			wantErr: false,
 		},
 		{
 			name:    "timestamp_sub",
 			args:    args{source: `created_at - interval(1, HOUR)`},
-			want:    "TIMESTAMP_SUB(`created_at`, INTERVAL 1 HOUR)",
+			want:    "`created_at` - INTERVAL 1 HOUR",
 			wantErr: false,
 		},
 		{
@@ -383,19 +387,19 @@ func TestConvert(t *testing.T) {
 		{
 			name:    "fieldSelect_add",
 			args:    args{source: `trigram.cell[0].page_count + 1`},
-			want:    "`trigram`.`cell`[OFFSET(0)].`page_count` + 1",
+			want:    "`trigram`.`cell`[1].`page_count` + 1", // PostgreSQL 1-indexed arrays
 			wantErr: false,
 		},
 		{
 			name:    "fieldSelect_concatString",
 			args:    args{source: `trigram.cell[0].sample[0].title + "test"`},
-			want:    "`trigram`.`cell`[OFFSET(0)].`sample`[OFFSET(0)].`title` || \"test\"",
+			want:    "`trigram`.`cell`[1].`sample`[1].`title` || \"test\"", // PostgreSQL syntax
 			wantErr: false,
 		},
 		{
 			name:    "fieldSelect_in",
 			args:    args{source: `"test" in trigram.cell[0].value`},
-			want:    "\"test\" IN UNNEST(`trigram`.`cell`[OFFSET(0)].`value`)",
+			want:    "\"test\" = ANY(`trigram`.`cell`[1].`value`)", // PostgreSQL array membership
 			wantErr: false,
 		},
 		{

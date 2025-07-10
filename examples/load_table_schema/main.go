@@ -8,7 +8,6 @@ import (
 	"github.com/google/cel-go/cel"
 	"github.com/spandigital/cel2sql"
 	"github.com/spandigital/cel2sql/pg"
-	"github.com/spandigital/cel2sql/sqltypes"
 )
 
 func main() {
@@ -44,7 +43,6 @@ func exampleWithPredefinedSchema() {
 	// Create CEL environment
 	env, err := cel.NewEnv(
 		cel.CustomTypeProvider(provider),
-		sqltypes.SQLTypeDeclarations,
 		cel.Variable("user", cel.ObjectType("users")),
 	)
 	if err != nil {
@@ -101,7 +99,6 @@ func exampleWithDynamicSchema(ctx context.Context) {
 	// Create CEL environment with dynamically loaded schema
 	env, err := cel.NewEnv(
 		cel.CustomTypeProvider(provider),
-		sqltypes.SQLTypeDeclarations,
 		cel.Variable("user", cel.ObjectType(tableName)),
 	)
 	if err != nil {
