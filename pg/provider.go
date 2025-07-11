@@ -64,8 +64,22 @@ func (p *typeProvider) LoadTableSchema(ctx context.Context, tableName string) er
 	}
 
 	query := `
-		SELECT column_name, data_type, is_nullable, column_default
-		FROM information_schema.columns 
+		SELECT 
+			column_name, 
+			data_type, 
+			is_nullable, 
+			column_default,
+			CASE 
+				WHEN data_type = 'ARRAY' THEN 
+					(SELECT data_type FROM information_schema.element_types 
+					 WHERE object_name = $1 
+					 AND collection_type_identifier = (
+						SELECT dtd_identifier FROM information_schema.columns 
+						WHERE table_name = $1 AND column_name = c.column_name
+					))
+				ELSE data_type
+			END as element_type
+		FROM information_schema.columns c
 		WHERE table_name = $1 
 		ORDER BY ordinal_position
 	`
@@ -80,16 +94,17 @@ func (p *typeProvider) LoadTableSchema(ctx context.Context, tableName string) er
 	for rows.Next() {
 		var columnName, dataType, isNullable string
 		var columnDefault *string
+		var elementType string
 
-		err := rows.Scan(&columnName, &dataType, &isNullable, &columnDefault)
+		err := rows.Scan(&columnName, &dataType, &isNullable, &columnDefault, &elementType)
 		if err != nil {
 			return fmt.Errorf("failed to scan row: %w", err)
 		}
 
 		field := FieldSchema{
 			Name:     columnName,
-			Type:     dataType,
-			Repeated: strings.HasSuffix(dataType, "[]"), // PostgreSQL array notation
+			Type:     elementType, // Use element type for arrays, or data_type for non-arrays
+			Repeated: dataType == "ARRAY", // PostgreSQL returns "ARRAY" for array columns
 		}
 
 		schema = append(schema, field)

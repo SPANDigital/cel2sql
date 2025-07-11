@@ -257,25 +257,25 @@ var standardSQLFunctions = map[string]string{
 }
 
 func (con *converter) callContains(target *exprpb.Expr, args []*exprpb.Expr) error {
-	con.str.WriteString("INSTR(")
-	if target != nil {
-		nested := isBinaryOrTernaryOperator(target)
-		err := con.visitMaybeNested(target, nested)
-		if err != nil {
-			return err
-		}
-		con.str.WriteString(", ")
-	}
+	con.str.WriteString("POSITION(")
 	for i, arg := range args {
 		err := con.visit(arg)
 		if err != nil {
 			return err
 		}
 		if i < len(args)-1 {
-			con.str.WriteString(", ")
+			con.str.WriteString(" IN ")
 		}
 	}
-	con.str.WriteString(") != 0")
+	if target != nil {
+		con.str.WriteString(" IN ")
+		nested := isBinaryOrTernaryOperator(target)
+		err := con.visitMaybeNested(target, nested)
+		if err != nil {
+			return err
+		}
+	}
+	con.str.WriteString(") > 0")
 	return nil
 }
 
@@ -418,6 +418,8 @@ func (con *converter) visitCallFunc(expr *exprpb.Expr) error {
 		return con.callDuration(target, args)
 	case "interval":
 		return con.callInterval(target, args)
+	case "timestamp":
+		return con.callTimestampFromString(target, args)
 	case overloads.TimeGetFullYear,
 		overloads.TimeGetMonth,
 		overloads.TimeGetDate,
@@ -448,6 +450,27 @@ func (con *converter) visitCallFunc(expr *exprpb.Expr) error {
 				sqlFun = "LENGTH"
 			case isListType(argType):
 				sqlFun = "ARRAY_LENGTH"
+				// For PostgreSQL, we need to specify the array dimension (1 for 1D arrays)
+				con.str.WriteString("ARRAY_LENGTH(")
+				if target != nil {
+					nested := isBinaryOrTernaryOperator(target)
+					err := con.visitMaybeNested(target, nested)
+					if err != nil {
+						return err
+					}
+					con.str.WriteString(", ")
+				}
+				for i, arg := range args {
+					err := con.visit(arg)
+					if err != nil {
+						return err
+					}
+					if i < len(args)-1 {
+						con.str.WriteString(", ")
+					}
+				}
+				con.str.WriteString(", 1)")
+				return nil
 			default:
 				return fmt.Errorf("unsupported type: %v", argType)
 			}
@@ -575,7 +598,13 @@ func (con *converter) visitConst(expr *exprpb.Expr) error {
 	case *exprpb.Constant_NullValue:
 		con.str.WriteString("NULL")
 	case *exprpb.Constant_StringValue:
-		con.str.WriteString(strconv.Quote(c.GetStringValue()))
+		// Use single quotes for PostgreSQL string literals
+		str := c.GetStringValue()
+		// Escape single quotes by doubling them
+		escaped := strings.ReplaceAll(str, "'", "''")
+		con.str.WriteString("'")
+		con.str.WriteString(escaped)
+		con.str.WriteString("'")
 	case *exprpb.Constant_Uint64Value:
 		ui := strconv.FormatUint(c.GetUint64Value(), 10)
 		con.str.WriteString(ui)
@@ -839,4 +868,33 @@ func isFieldAccessExpression(expr *exprpb.Expr) bool {
 		}
 	}
 	return false
+}
+
+func (con *converter) callTimestampFromString(target *exprpb.Expr, args []*exprpb.Expr) error {
+	if len(args) == 1 {
+		// For PostgreSQL, we need to cast the string to a timestamp
+		con.str.WriteString("CAST(")
+		err := con.visit(args[0])
+		if err != nil {
+			return err
+		}
+		con.str.WriteString(" AS TIMESTAMP WITH TIME ZONE)")
+		return nil
+	} else if len(args) == 2 {
+		// Handle timestamp(datetime, timezone) format
+		con.str.WriteString("TIMESTAMP(")
+		err := con.visit(args[0])
+		if err != nil {
+			return err
+		}
+		con.str.WriteString(", ")
+		err = con.visit(args[1])
+		if err != nil {
+			return err
+		}
+		con.str.WriteString(")")
+		return nil
+	}
+	
+	return fmt.Errorf("timestamp function expects 1 or 2 arguments, got %d", len(args))
 }
