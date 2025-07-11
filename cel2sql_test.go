@@ -87,91 +87,91 @@ func TestConvert(t *testing.T) {
 		{
 			name:    "startsWith",
 			args:    args{source: `name.startsWith("a")`},
-			want:    "STARTS_WITH(`name`, \"a\")",
+			want:    "STARTS_WITH(name, \"a\")",
 			wantErr: false,
 		},
 		{
 			name:    "endsWith",
 			args:    args{source: `name.endsWith("z")`},
-			want:    "ENDS_WITH(`name`, \"z\")",
+			want:    "ENDS_WITH(name, \"z\")",
 			wantErr: false,
 		},
 		{
 			name:    "matches",
 			args:    args{source: `name.matches("a+")`},
-			want:    "REGEXP_CONTAINS(`name`, \"a+\")",
+			want:    "REGEXP_CONTAINS(name, \"a+\")",
 			wantErr: false,
 		},
 		{
 			name:    "contains",
 			args:    args{source: `name.contains("abc")`},
-			want:    "INSTR(`name`, \"abc\") != 0",
+			want:    "INSTR(name, \"abc\") != 0",
 			wantErr: false,
 		},
 		{
 			name:    "&&",
 			args:    args{source: `name.startsWith("a") && name.endsWith("z")`},
-			want:    "STARTS_WITH(`name`, \"a\") AND ENDS_WITH(`name`, \"z\")",
+			want:    "STARTS_WITH(name, \"a\") AND ENDS_WITH(name, \"z\")",
 			wantErr: false,
 		},
 		{
 			name:    "||",
 			args:    args{source: `name.startsWith("a") || name.endsWith("z")`},
-			want:    "STARTS_WITH(`name`, \"a\") OR ENDS_WITH(`name`, \"z\")",
+			want:    "STARTS_WITH(name, \"a\") OR ENDS_WITH(name, \"z\")",
 			wantErr: false,
 		},
 		{
 			name:    "()",
 			args:    args{source: `age >= 10 && (name.startsWith("a") || name.endsWith("z"))`},
-			want:    "`age` >= 10 AND (STARTS_WITH(`name`, \"a\") OR ENDS_WITH(`name`, \"z\"))",
+			want:    "age >= 10 AND (STARTS_WITH(name, \"a\") OR ENDS_WITH(name, \"z\"))",
 			wantErr: false,
 		},
 		{
 			name:    "IF",
 			args:    args{source: `name == "a" ? "a" : "b"`},
-			want:    "IF(`name` = \"a\", \"a\", \"b\")",
+			want:    "IF(name = \"a\", \"a\", \"b\")",
 			wantErr: false,
 		},
 		{
 			name:    "==",
 			args:    args{source: `name == "a"`},
-			want:    "`name` = \"a\"",
+			want:    "name = \"a\"",
 			wantErr: false,
 		},
 		{
 			name:    "!=",
 			args:    args{source: `age != 20`},
-			want:    "`age` != 20",
+			want:    "age != 20",
 			wantErr: false,
 		},
 		{
 			name:    "IS NULL",
 			args:    args{source: `null_var == null`},
-			want:    "`null_var` IS NULL",
+			want:    "null_var IS NULL",
 			wantErr: false,
 		},
 		{
 			name:    "IS NOT TRUE",
 			args:    args{source: `adult != true`},
-			want:    "`adult` IS NOT TRUE",
+			want:    "adult IS NOT TRUE",
 			wantErr: false,
 		},
 		{
 			name:    "<",
 			args:    args{source: `age < 20`},
-			want:    "`age` < 20",
+			want:    "age < 20",
 			wantErr: false,
 		},
 		{
 			name:    ">=",
 			args:    args{source: `height >= 1.6180339887`},
-			want:    "`height` >= 1.6180339887",
+			want:    "height >= 1.6180339887",
 			wantErr: false,
 		},
 		{
 			name:    "NOT",
 			args:    args{source: `!adult`},
-			want:    "NOT `adult`",
+			want:    "NOT adult",
 			wantErr: false,
 		},
 		{
@@ -189,19 +189,19 @@ func TestConvert(t *testing.T) {
 		{
 			name:    "list_var",
 			args:    args{source: `string_list[0] == "a"`},
-			want:    "`string_list`[1] = \"a\"", // PostgreSQL arrays are 1-indexed
+			want:    "string_list[1] = \"a\"", // PostgreSQL arrays are 1-indexed
 			wantErr: false,
 		},
 		{
 			name:    "map",
 			args:    args{source: `{"one": 1, "two": 2, "three": 3}["one"] == 1`},
-			want:    "STRUCT(1 AS one, 2 AS two, 3 AS three).`one` = 1",
+			want:    "STRUCT(1 AS one, 2 AS two, 3 AS three).one = 1",
 			wantErr: false,
 		},
 		{
 			name:    "map_var",
 			args:    args{source: `string_int_map["one"] == 1`},
-			want:    "`string_int_map`.`one` = 1",
+			want:    "string_int_map.one = 1",
 			wantErr: false,
 		},
 		{
@@ -243,25 +243,25 @@ func TestConvert(t *testing.T) {
 		{
 			name:    "date",
 			args:    args{source: `birthday > date(2000, 1, 1) + 1`},
-			want:    "`birthday` > DATE(2000, 1, 1) + 1",
+			want:    "birthday > DATE(2000, 1, 1) + 1",
 			wantErr: false,
 		},
 		{
 			name:    "time",
 			args:    args{source: `fixed_time == time("18:00:00")`},
-			want:    "`fixed_time` = TIME(\"18:00:00\")",
+			want:    "fixed_time = TIME(\"18:00:00\")",
 			wantErr: false,
 		},
 		{
 			name:    "datetime",
 			args:    args{source: `scheduled_at != datetime(date("2021-09-01"), fixed_time)`},
-			want:    "`scheduled_at` != DATETIME(DATE(\"2021-09-01\"), `fixed_time`)",
+			want:    "scheduled_at != DATETIME(DATE(\"2021-09-01\"), fixed_time)",
 			wantErr: false,
 		},
 		{
 			name:    "timestamp",
 			args:    args{source: `created_at - duration("60m") <= timestamp(datetime("2021-09-01 18:00:00"), "Asia/Tokyo")`},
-			want:    "`created_at` - INTERVAL 1 HOUR <= TIMESTAMP(DATETIME(\"2021-09-01 18:00:00\"), \"Asia/Tokyo\")",
+			want:    "created_at - INTERVAL 1 HOUR <= TIMESTAMP(DATETIME(\"2021-09-01 18:00:00\"), \"Asia/Tokyo\")",
 			wantErr: false,
 		},
 		{
@@ -333,73 +333,73 @@ func TestConvert(t *testing.T) {
 		{
 			name:    "timestamp_sub",
 			args:    args{source: `created_at - interval(1, HOUR)`},
-			want:    "`created_at` - INTERVAL 1 HOUR",
+			want:    "created_at - INTERVAL 1 HOUR",
 			wantErr: false,
 		},
 		{
 			name:    "timestamp_getSeconds",
 			args:    args{source: `created_at.getSeconds()`},
-			want:    "EXTRACT(SECOND FROM `created_at`)",
+			want:    "EXTRACT(SECOND FROM created_at)",
 			wantErr: false,
 		},
 		{
 			name:    "\"timestamp_getHours_withTimezone",
 			args:    args{source: `created_at.getHours("Asia/Tokyo")`},
-			want:    "EXTRACT(HOUR FROM `created_at` AT \"Asia/Tokyo\")",
+			want:    "EXTRACT(HOUR FROM created_at AT \"Asia/Tokyo\")",
 			wantErr: false,
 		},
 		{
 			name:    "date_getFullYear",
 			args:    args{source: `birthday.getFullYear()`},
-			want:    "EXTRACT(YEAR FROM `birthday`)",
+			want:    "EXTRACT(YEAR FROM birthday)",
 			wantErr: false,
 		},
 		{
 			name:    "datetime_getMonth",
 			args:    args{source: `scheduled_at.getMonth()`},
-			want:    "EXTRACT(MONTH FROM `scheduled_at`) - 1",
+			want:    "EXTRACT(MONTH FROM scheduled_at) - 1",
 			wantErr: false,
 		},
 		{
 			name:    "datetime_getDayOfMonth",
 			args:    args{source: `scheduled_at.getDayOfMonth()`},
-			want:    "EXTRACT(DAY FROM `scheduled_at`) - 1",
+			want:    "EXTRACT(DAY FROM scheduled_at) - 1",
 			wantErr: false,
 		},
 		{
 			name:    "time_getMinutes",
 			args:    args{source: `fixed_time.getMinutes()`},
-			want:    "EXTRACT(MINUTE FROM `fixed_time`)",
+			want:    "EXTRACT(MINUTE FROM fixed_time)",
 			wantErr: false,
 		},
 		{
 			name:    "fieldSelect",
 			args:    args{source: `page.title == "test"`},
-			want:    "`page`.`title` = \"test\"",
+			want:    "page.title = \"test\"",
 			wantErr: false,
 		},
 		{
 			name:    "fieldSelect_startsWith",
 			args:    args{source: `page.title.startsWith("test")`},
-			want:    "STARTS_WITH(`page`.`title`, \"test\")",
+			want:    "STARTS_WITH(page.title, \"test\")",
 			wantErr: false,
 		},
 		{
 			name:    "fieldSelect_add",
 			args:    args{source: `trigram.cell[0].page_count + 1`},
-			want:    "`trigram`.`cell`[1].`page_count` + 1", // PostgreSQL 1-indexed arrays
+			want:    "trigram.cell[1].page_count + 1", // PostgreSQL 1-indexed arrays
 			wantErr: false,
 		},
 		{
 			name:    "fieldSelect_concatString",
 			args:    args{source: `trigram.cell[0].sample[0].title + "test"`},
-			want:    "`trigram`.`cell`[1].`sample`[1].`title` || \"test\"", // PostgreSQL syntax
+			want:    "trigram.cell[1].sample[1].title || \"test\"", // PostgreSQL syntax
 			wantErr: false,
 		},
 		{
 			name:    "fieldSelect_in",
 			args:    args{source: `"test" in trigram.cell[0].value`},
-			want:    "\"test\" = ANY(`trigram`.`cell`[1].`value`)", // PostgreSQL array membership
+			want:    "\"test\" = ANY(trigram.cell[1].value)", // PostgreSQL array membership
 			wantErr: false,
 		},
 		{
@@ -429,13 +429,13 @@ func TestConvert(t *testing.T) {
 		{
 			name:    "cast_string_from_timestamp",
 			args:    args{source: `string(created_at)`},
-			want:    "CAST(`created_at` AS STRING)",
+			want:    "CAST(created_at AS STRING)",
 			wantErr: false,
 		},
 		{
 			name:    "cast_int_epoch",
 			args:    args{source: `int(created_at)`},
-			want:    "UNIX_SECONDS(`created_at`)",
+			want:    "UNIX_SECONDS(created_at)",
 			wantErr: false,
 		},
 		{
@@ -453,7 +453,7 @@ func TestConvert(t *testing.T) {
 		{
 			name:    "size_list",
 			args:    args{source: `size(string_list)`},
-			want:    "ARRAY_LENGTH(`string_list`)",
+			want:    "ARRAY_LENGTH(string_list)",
 			wantErr: false,
 		},
 	}

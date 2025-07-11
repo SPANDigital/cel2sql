@@ -497,9 +497,8 @@ func (con *converter) visitCallMapIndex(expr *exprpb.Expr) error {
 	if err != nil {
 		return err
 	}
-	con.str.WriteString(".`")
+	con.str.WriteString(".")
 	con.str.WriteString(fieldName)
-	con.str.WriteString("`")
 	return nil
 }
 
@@ -587,9 +586,7 @@ func (con *converter) visitConst(expr *exprpb.Expr) error {
 }
 
 func (con *converter) visitIdent(expr *exprpb.Expr) error {
-	con.str.WriteString("`")
 	con.str.WriteString(expr.GetIdentExpr().GetName())
-	con.str.WriteString("`")
 	return nil
 }
 
@@ -621,9 +618,8 @@ func (con *converter) visitSelect(expr *exprpb.Expr) error {
 	if err != nil {
 		return err
 	}
-	con.str.WriteString(".`")
+	con.str.WriteString(".")
 	con.str.WriteString(sel.GetField())
-	con.str.WriteString("`")
 	if sel.GetTestOnly() {
 		con.str.WriteString(")")
 	}
