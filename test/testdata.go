@@ -1,9 +1,11 @@
+// Package test provides PostgreSQL schema definitions for testing.
 package test
 
 import (
 	"github.com/spandigital/cel2sql/pg"
 )
 
+// NewTrigramsTableSchema returns a PostgreSQL schema for the trigrams table.
 func NewTrigramsTableSchema() pg.Schema {
 	return pg.Schema{
 		{
@@ -108,6 +110,7 @@ func NewTrigramsTableSchema() pg.Schema {
 	}
 }
 
+// NewWikipediaTableSchema returns a PostgreSQL schema for the wikipedia table.
 func NewWikipediaTableSchema() pg.Schema {
 	return pg.Schema{
 		{

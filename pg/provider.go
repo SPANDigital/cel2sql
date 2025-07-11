@@ -1,3 +1,4 @@
+// Package pg provides PostgreSQL type provider for CEL type system integration.
 package pg
 
 import (
@@ -15,7 +16,7 @@ import (
 	"github.com/spandigital/cel2sql/sqltypes"
 )
 
-// PostgreSQL field type representation
+// FieldSchema represents a PostgreSQL field type with name, type, and optional nested schema.
 type FieldSchema struct {
 	Name     string
 	Type     string        // PostgreSQL type name (text, integer, boolean, etc.)
@@ -23,7 +24,7 @@ type FieldSchema struct {
 	Schema   []FieldSchema // for composite types
 }
 
-// PostgreSQL table schema
+// Schema represents a PostgreSQL table schema as a slice of field schemas.
 type Schema []FieldSchema
 
 // TypeProvider interface for PostgreSQL type providers
@@ -113,7 +114,7 @@ func (p *typeProvider) EnumValue(enumName string) ref.Val {
 	return types.NewErr("unknown enum name '%s'", enumName)
 }
 
-func (p *typeProvider) FindIdent(identName string) (ref.Val, bool) {
+func (p *typeProvider) FindIdent(_ string) (ref.Val, bool) {
 	return nil, false
 }
 
@@ -207,7 +208,7 @@ func (p *typeProvider) FindFieldType(messageType string, fieldName string) (*ref
 	}, true
 }
 
-func (p *typeProvider) NewValue(typeName string, fields map[string]ref.Val) ref.Val {
+func (p *typeProvider) NewValue(typeName string, _ map[string]ref.Val) ref.Val {
 	return types.NewErr("unknown type '%s'", typeName)
 }
 

@@ -1,3 +1,4 @@
+// Package main demonstrates basic usage of cel2sql with a predefined schema.
 package main
 
 import (

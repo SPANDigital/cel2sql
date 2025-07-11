@@ -1,3 +1,4 @@
+// Package cel2sql converts CEL (Common Expression Language) expressions to PostgreSQL SQL conditions.
 package cel2sql
 
 import (
@@ -17,6 +18,7 @@ import (
 // Implementations based on `google/cel-go`'s unparser
 // https://github.com/google/cel-go/blob/master/parser/unparser.go
 
+// Convert converts a CEL AST to a PostgreSQL SQL WHERE clause condition.
 func Convert(ast *cel.Ast) (string, error) {
 	checkedExpr, err := cel.AstToCheckedExpr(ast)
 	if err != nil {
@@ -171,18 +173,6 @@ func isTimestampRelatedType(typ *exprpb.Type) bool {
 		return name == "DATE" || name == "TIME" || name == "DATETIME"
 	}
 	return typ.GetWellKnown() == exprpb.Type_TIMESTAMP
-}
-
-func isDateType(typ *exprpb.Type) bool {
-	return typ.GetAbstractType() != nil && typ.GetAbstractType().GetName() == "DATE"
-}
-
-func isTimeType(typ *exprpb.Type) bool {
-	return typ.GetAbstractType() != nil && typ.GetAbstractType().GetName() == "TIME"
-}
-
-func isDateTimeType(typ *exprpb.Type) bool {
-	return typ.GetAbstractType() != nil && typ.GetAbstractType().GetName() == "DATETIME"
 }
 
 func isTimestampType(typ *exprpb.Type) bool {
@@ -525,7 +515,7 @@ func (con *converter) visitCallListIndex(expr *exprpb.Expr) error {
 	index := args[1]
 	// PostgreSQL arrays are 1-indexed, CEL is 0-indexed, so add 1
 	if constExpr := index.GetConstExpr(); constExpr != nil {
-		con.str.WriteString(fmt.Sprintf("%d", constExpr.GetInt64Value()+1))
+		con.str.WriteString(strconv.FormatInt(constExpr.GetInt64Value()+1, 10))
 	} else {
 		if err := con.visit(index); err != nil {
 			return err
