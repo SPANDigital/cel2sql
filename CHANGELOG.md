@@ -1,5 +1,25 @@
 # Changelog
 
+## [2.4.0] - 2025-01-11
+
+### Added
+- Comprehensive JSON/JSONB support for PostgreSQL columns
+- JSON path operations (`->>`) for CEL field access on JSON/JSONB columns
+- Support for nested JSON field access in CEL expressions (e.g., `users.preferences.theme`)
+- Comprehensive test coverage for JSON/JSONB operations with real data
+- Enhanced CEL-to-SQL conversion with PostgreSQL JSON path syntax
+
+### Changed
+- Updated SQL generation to automatically detect JSON/JSONB columns and use proper path syntax
+- Enhanced type provider to track JSON/JSONB column types for conversion
+- Improved test data with realistic JSON structures for comprehensive testing
+
+### Technical Details
+- Added `shouldUseJSONPath` function to detect JSON field access patterns
+- Enhanced `visitSelect` function to handle JSON path operations
+- JSON fields are converted to PostgreSQL `field->>'key'` syntax
+- Maintains backward compatibility with existing CEL expressions
+
 ## [2.3.0] - 2025-01-11
 
 ### Added
