@@ -43,8 +43,18 @@ This project converts [CEL (Common Expression Language)](https://opensource.goog
   - `boolean` → `decls.Bool`
   - `double precision` → `decls.Double`
   - `timestamp with time zone` → `decls.Timestamp`
+  - `json` → `decls.String` (with JSON path support)
+  - `jsonb` → `decls.String` (with JSON path support)
 - Support arrays with `Repeated: true`
 - Handle composite types with nested `Schema` fields
+- JSON/JSONB fields support PostgreSQL path operations (`->>`)
+
+### JSON/JSONB Support
+
+- CEL expressions like `user.preferences.theme` automatically convert to `user.preferences->>'theme'`
+- The converter detects JSON/JSONB columns and applies proper PostgreSQL syntax
+- Nested JSON access is supported: `user.profile.settings.key` → `user.profile->>'settings'->>'key'`
+- JSON field detection happens in `shouldUseJSONPath()` and `visitSelect()` functions
 
 ### Testing
 
@@ -70,9 +80,27 @@ This project converts [CEL (Common Expression Language)](https://opensource.goog
 schema := pg.Schema{
     {Name: "field_name", Type: "text", Repeated: false},
     {Name: "array_field", Type: "text", Repeated: true},
+    {Name: "json_field", Type: "jsonb", Repeated: false},
     {Name: "composite_field", Type: "composite", Schema: []pg.FieldSchema{...}},
 }
 provider := pg.NewTypeProvider(map[string]pg.Schema{"TableName": schema})
+```
+
+### Dynamic Schema Loading
+
+```go
+// Load schema from PostgreSQL database
+provider, err := pg.NewTypeProviderWithConnection(ctx, connectionString)
+if err != nil {
+    return err
+}
+defer provider.Close()
+
+// Load specific table schema
+err = provider.LoadTableSchema(ctx, "tableName")
+if err != nil {
+    return err
+}
 ```
 
 ### CEL Environment Setup
@@ -92,13 +120,24 @@ env, err := cel.NewEnv(
 
 ## Migration Context
 
-This project was recently migrated from BigQuery to PostgreSQL:
+This project was recently migrated from BigQuery to PostgreSQL and modernized:
 
 - **Removed**: All `cloud.google.com/go/bigquery` dependencies
 - **Removed**: `bq/` package entirely
 - **Added**: `pg/` package with PostgreSQL-specific logic
-- **Updated**: All tests to use PostgreSQL schemas
+- **Updated**: All tests to use PostgreSQL schemas and testcontainers
 - **Updated**: Documentation to reflect PostgreSQL usage
+- **Added**: Comprehensive JSON/JSONB support with path operations
+- **Enhanced**: Type system with dynamic schema loading
+- **Improved**: SQL generation with PostgreSQL-specific syntax
+
+## Current Version Features (v2.4.0)
+
+- **JSON/JSONB Support**: Full PostgreSQL JSON path operations
+- **Dynamic Schema Loading**: Load table schemas from live PostgreSQL databases
+- **Enhanced Testing**: Comprehensive testcontainer integration tests
+- **PostgreSQL Optimized**: Single quotes, POSITION(), ARRAY_LENGTH(,1), etc.
+- **Type Safety**: Improved type mappings and error handling
 
 ## Things to Avoid
 

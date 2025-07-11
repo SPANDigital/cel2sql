@@ -3,6 +3,21 @@
 cel2sql converts [CEL (Common Expression Language)](https://opensource.google/projects/cel) to SQL condition.
 It is specifically targeting PostgreSQL standard SQL.
 
+## Latest Release - v2.4.0
+
+🚀 **New Features:**
+- **Comprehensive JSON/JSONB Support**: Native PostgreSQL JSON path operations
+- **Dynamic Schema Loading**: Load table schemas directly from PostgreSQL databases
+- **Enhanced Type System**: Improved PostgreSQL type mappings and array support
+- **Testcontainer Integration**: Full test coverage with real PostgreSQL databases
+
+**Key Improvements:**
+- PostgreSQL-optimized SQL generation (single quotes, proper functions)
+- JSON field access: `user.preferences.theme` → `user.preferences->>'theme'`
+- Array operations: `size(array)` → `ARRAY_LENGTH(array, 1)`
+- String operations: `contains()` → `POSITION(...) > 0`
+- All tests pass with comprehensive integration coverage
+
 ## Usage
 
 ```go
@@ -36,7 +51,7 @@ env, _ := cel.NewEnv(
 ast, _ := env.Compile(`employee.name == "John Doe" && employee.hired_at >= current_timestamp() - duration("24h")`)
 sqlCondition, _ := cel2sql.Convert(ast)
 
-fmt.Println(sqlCondition) // `employee`.`name` = "John Doe" AND `employee`.`hired_at` >= CURRENT_TIMESTAMP - INTERVAL '1 DAY'
+fmt.Println(sqlCondition) // employee.name = 'John Doe' AND employee.hired_at >= CURRENT_TIMESTAMP - INTERVAL '1 DAY'
 ```
 
 ## Dynamic Schema Loading
@@ -91,7 +106,7 @@ func main() {
     }
     
     fmt.Println(sqlCondition)
-    // Output: `employee`.`name` = 'John Doe' AND `employee`.`age` > 30
+    // Output: employee.name = 'John Doe' AND employee.age > 30
 }
 ```
 
@@ -116,6 +131,42 @@ CEL Type    | PostgreSQL Data Type
 `null_type` | `NULL`
 `timestamp` | `timestamp with time zone`
 `duration`  | `INTERVAL` 
+
+## JSON/JSONB Support
+
+cel2sql provides comprehensive support for PostgreSQL JSON and JSONB columns:
+
+```go
+// Example with JSON/JSONB fields
+userSchema := pg.Schema{
+    {Name: "name", Type: "text", Repeated: false},
+    {Name: "preferences", Type: "jsonb", Repeated: false},
+    {Name: "profile", Type: "json", Repeated: false},
+}
+
+env, _ := cel.NewEnv(
+    cel.CustomTypeProvider(pg.NewTypeProvider(map[string]pg.Schema{
+        "User": userSchema,
+    })),
+    cel.Variable("user", cel.ObjectType("User")),
+)
+
+// CEL expressions automatically convert to PostgreSQL JSON path operations
+ast, _ := env.Compile(`user.preferences.theme == "dark"`)
+sqlCondition, _ := cel2sql.Convert(ast)
+fmt.Println(sqlCondition) // user.preferences->>'theme' = 'dark'
+
+// Nested JSON access
+ast, _ = env.Compile(`user.profile.settings.notifications == "enabled"`)
+sqlCondition, _ = cel2sql.Convert(ast)
+fmt.Println(sqlCondition) // user.profile->>'settings'->>'notifications' = 'enabled'
+```
+
+**Supported JSON Operations:**
+- Field access: `user.preferences.theme` → `user.preferences->>'theme'`
+- Nested access: `user.profile.settings.key` → `user.profile->>'settings'->>'key'`
+- Works with both `json` and `jsonb` column types
+- Automatically detects JSON columns and applies proper PostgreSQL syntax 
 
 ## Supported CEL Operators/Functions
 
@@ -652,7 +703,7 @@ CEL Type    | PostgreSQL Data Type
       string.(string) -> bool
     </td>
     <td>
-      <code>INSTR(</code>string<code>, </code>string<code>) != 0</code>
+      <code>POSITION(</code>string<code> IN </code>string<code>) > 0</code>
     </td>
   </tr>
   <tr>
@@ -929,7 +980,7 @@ CEL Type    | PostgreSQL Data Type
       string.(string) -> bool
     </td>
     <td>
-      <code>REGEXP_CONTAINS(</code>string<code>, </code>string<code>)</code>
+      <code>REGEXP_LIKE(</code>string<code>, </code>string<code>)</code>
     </td>
   </tr>
   <tr>
@@ -956,7 +1007,7 @@ CEL Type    | PostgreSQL Data Type
       (list(A)) -> int
     </td>
     <td>
-      <code>ARRAY_LENGTH(</code>list<code>)</code>
+      <code>ARRAY_LENGTH(</code>list<code>, 1)</code>
     </td>
   </tr>
   <tr>
