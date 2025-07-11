@@ -36,6 +36,8 @@ func Convert(ast *cel.Ast) (string, error) {
 type converter struct {
 	str     strings.Builder
 	typeMap map[int64]*exprpb.Type
+	// Add comprehension tracking for future use
+	comprehensionMap map[int64]*ComprehensionInfo
 }
 
 func (con *converter) visit(expr *exprpb.Expr) error {
@@ -217,7 +219,7 @@ func (con *converter) callTimestampOperation(fun string, lhs *exprpb.Expr, rhs *
 	default:
 		return fmt.Errorf("unsupported operation (%s)", fun)
 	}
-	
+
 	if err := con.visitMaybeNested(timestamp, timestampParen); err != nil {
 		return err
 	}
@@ -569,9 +571,256 @@ func (con *converter) visitCallUnary(expr *exprpb.Expr) error {
 }
 
 func (con *converter) visitComprehension(expr *exprpb.Expr) error {
-	// TODO: introduce a macro expansion map between the top-level comprehension id and the
-	// function call that the macro replaces.
-	return fmt.Errorf("unimplemented : %v", expr)
+	info, err := con.identifyComprehension(expr)
+	if err != nil {
+		return fmt.Errorf("failed to identify comprehension: %w", err)
+	}
+
+	switch info.Type {
+	case ComprehensionAll:
+		return con.visitAllComprehension(expr, info)
+	case ComprehensionExists:
+		return con.visitExistsComprehension(expr, info)
+	case ComprehensionExistsOne:
+		return con.visitExistsOneComprehension(expr, info)
+	case ComprehensionMap:
+		return con.visitMapComprehension(expr, info)
+	case ComprehensionFilter:
+		return con.visitFilterComprehension(expr, info)
+	case ComprehensionTransformList:
+		return con.visitTransformListComprehension(expr, info)
+	case ComprehensionTransformMap:
+		return con.visitTransformMapComprehension(expr, info)
+	case ComprehensionTransformMapEntry:
+		return con.visitTransformMapEntryComprehension(expr, info)
+	default:
+		return fmt.Errorf("unsupported comprehension type: %v", info.Type)
+	}
+}
+
+// Comprehension visit functions - Phase 1 placeholder implementations
+
+func (con *converter) visitAllComprehension(expr *exprpb.Expr, info *ComprehensionInfo) error {
+	// Generate SQL for ALL comprehension: all elements must satisfy the predicate
+	// Pattern: NOT EXISTS (SELECT 1 FROM UNNEST(array) AS item WHERE NOT predicate)
+
+	comprehension := expr.GetComprehensionExpr()
+	if comprehension == nil {
+		return fmt.Errorf("expression is not a comprehension")
+	}
+
+	con.str.WriteString("NOT EXISTS (SELECT 1 FROM UNNEST(")
+
+	// Visit the iterable range (the array/list being comprehended over)
+	if err := con.visit(comprehension.GetIterRange()); err != nil {
+		return fmt.Errorf("failed to visit iter range in ALL comprehension: %w", err)
+	}
+
+	con.str.WriteString(") AS ")
+	con.str.WriteString(info.IterVar)
+
+	if info.Predicate != nil {
+		con.str.WriteString(" WHERE NOT (")
+		if err := con.visit(info.Predicate); err != nil {
+			return fmt.Errorf("failed to visit predicate in ALL comprehension: %w", err)
+		}
+		con.str.WriteString(")")
+	}
+
+	con.str.WriteString(")")
+	return nil
+}
+
+func (con *converter) visitExistsComprehension(expr *exprpb.Expr, info *ComprehensionInfo) error {
+	// Generate SQL for EXISTS comprehension: at least one element satisfies the predicate
+	// Pattern: EXISTS (SELECT 1 FROM UNNEST(array) AS item WHERE predicate)
+
+	comprehension := expr.GetComprehensionExpr()
+	if comprehension == nil {
+		return fmt.Errorf("expression is not a comprehension")
+	}
+
+	con.str.WriteString("EXISTS (SELECT 1 FROM UNNEST(")
+
+	// Visit the iterable range (the array/list being comprehended over)
+	if err := con.visit(comprehension.GetIterRange()); err != nil {
+		return fmt.Errorf("failed to visit iter range in EXISTS comprehension: %w", err)
+	}
+
+	con.str.WriteString(") AS ")
+	con.str.WriteString(info.IterVar)
+
+	if info.Predicate != nil {
+		con.str.WriteString(" WHERE ")
+		if err := con.visit(info.Predicate); err != nil {
+			return fmt.Errorf("failed to visit predicate in EXISTS comprehension: %w", err)
+		}
+	}
+
+	con.str.WriteString(")")
+	return nil
+}
+
+func (con *converter) visitExistsOneComprehension(expr *exprpb.Expr, info *ComprehensionInfo) error {
+	// Generate SQL for EXISTS_ONE comprehension: exactly one element satisfies the predicate
+	// Pattern: (SELECT COUNT(*) FROM UNNEST(array) AS item WHERE predicate) = 1
+
+	comprehension := expr.GetComprehensionExpr()
+	if comprehension == nil {
+		return fmt.Errorf("expression is not a comprehension")
+	}
+
+	con.str.WriteString("(SELECT COUNT(*) FROM UNNEST(")
+
+	// Visit the iterable range (the array/list being comprehended over)
+	if err := con.visit(comprehension.GetIterRange()); err != nil {
+		return fmt.Errorf("failed to visit iter range in EXISTS_ONE comprehension: %w", err)
+	}
+
+	con.str.WriteString(") AS ")
+	con.str.WriteString(info.IterVar)
+
+	if info.Predicate != nil {
+		con.str.WriteString(" WHERE ")
+		if err := con.visit(info.Predicate); err != nil {
+			return fmt.Errorf("failed to visit predicate in EXISTS_ONE comprehension: %w", err)
+		}
+	}
+
+	con.str.WriteString(") = 1")
+	return nil
+}
+
+func (con *converter) visitMapComprehension(expr *exprpb.Expr, info *ComprehensionInfo) error {
+	// Generate SQL for MAP comprehension: transform elements using the transform expression
+	// Pattern: ARRAY(SELECT transform FROM UNNEST(array) AS item [WHERE filter])
+
+	comprehension := expr.GetComprehensionExpr()
+	if comprehension == nil {
+		return fmt.Errorf("expression is not a comprehension")
+	}
+
+	con.str.WriteString("ARRAY(SELECT ")
+
+	// Visit the transform expression
+	if info.Transform != nil {
+		if err := con.visit(info.Transform); err != nil {
+			return fmt.Errorf("failed to visit transform in MAP comprehension: %w", err)
+		}
+	} else {
+		// If no transform, just return the variable itself
+		con.str.WriteString(info.IterVar)
+	}
+
+	con.str.WriteString(" FROM UNNEST(")
+
+	// Visit the iterable range (the array/list being comprehended over)
+	if err := con.visit(comprehension.GetIterRange()); err != nil {
+		return fmt.Errorf("failed to visit iter range in MAP comprehension: %w", err)
+	}
+
+	con.str.WriteString(") AS ")
+	con.str.WriteString(info.IterVar)
+
+	// Add filter condition if present (for map with filter)
+	if info.Filter != nil {
+		con.str.WriteString(" WHERE ")
+		if err := con.visit(info.Filter); err != nil {
+			return fmt.Errorf("failed to visit filter in MAP comprehension: %w", err)
+		}
+	}
+
+	con.str.WriteString(")")
+	return nil
+}
+
+func (con *converter) visitFilterComprehension(expr *exprpb.Expr, info *ComprehensionInfo) error {
+	// Generate SQL for FILTER comprehension: return elements that satisfy the predicate
+	// Pattern: ARRAY(SELECT item FROM UNNEST(array) AS item WHERE predicate)
+
+	comprehension := expr.GetComprehensionExpr()
+	if comprehension == nil {
+		return fmt.Errorf("expression is not a comprehension")
+	}
+
+	con.str.WriteString("ARRAY(SELECT ")
+	con.str.WriteString(info.IterVar)
+	con.str.WriteString(" FROM UNNEST(")
+
+	// Visit the iterable range (the array/list being comprehended over)
+	if err := con.visit(comprehension.GetIterRange()); err != nil {
+		return fmt.Errorf("failed to visit iter range in FILTER comprehension: %w", err)
+	}
+
+	con.str.WriteString(") AS ")
+	con.str.WriteString(info.IterVar)
+
+	if info.Predicate != nil {
+		con.str.WriteString(" WHERE ")
+		if err := con.visit(info.Predicate); err != nil {
+			return fmt.Errorf("failed to visit predicate in FILTER comprehension: %w", err)
+		}
+	}
+
+	con.str.WriteString(")")
+	return nil
+}
+
+func (con *converter) visitTransformListComprehension(expr *exprpb.Expr, info *ComprehensionInfo) error {
+	// Generate SQL for TRANSFORM_LIST comprehension: similar to MAP but may have different semantics
+	// Pattern: ARRAY(SELECT transform FROM UNNEST(array) AS item [WHERE filter])
+
+	comprehension := expr.GetComprehensionExpr()
+	if comprehension == nil {
+		return fmt.Errorf("expression is not a comprehension")
+	}
+
+	con.str.WriteString("ARRAY(SELECT ")
+
+	// Visit the transform expression
+	if info.Transform != nil {
+		if err := con.visit(info.Transform); err != nil {
+			return fmt.Errorf("failed to visit transform in TRANSFORM_LIST comprehension: %w", err)
+		}
+	} else {
+		// If no transform, just return the variable itself
+		con.str.WriteString(info.IterVar)
+	}
+
+	con.str.WriteString(" FROM UNNEST(")
+
+	// Visit the iterable range (the array/list being comprehended over)
+	if err := con.visit(comprehension.GetIterRange()); err != nil {
+		return fmt.Errorf("failed to visit iter range in TRANSFORM_LIST comprehension: %w", err)
+	}
+
+	con.str.WriteString(") AS ")
+	con.str.WriteString(info.IterVar)
+
+	// Add filter condition if present
+	if info.Filter != nil {
+		con.str.WriteString(" WHERE ")
+		if err := con.visit(info.Filter); err != nil {
+			return fmt.Errorf("failed to visit filter in TRANSFORM_LIST comprehension: %w", err)
+		}
+	}
+
+	con.str.WriteString(")")
+	return nil
+}
+
+func (con *converter) visitTransformMapComprehension(expr *exprpb.Expr, info *ComprehensionInfo) error {
+	// Generate SQL for TRANSFORM_MAP comprehension: work with map entries
+	// This is complex for PostgreSQL - maps are typically represented as JSON or composite types
+	// For now, return an error indicating this needs special handling
+	return fmt.Errorf("TRANSFORM_MAP comprehension requires map/JSON support: not yet implemented")
+}
+
+func (con *converter) visitTransformMapEntryComprehension(expr *exprpb.Expr, info *ComprehensionInfo) error {
+	// Generate SQL for TRANSFORM_MAP_ENTRY comprehension: work with map key-value pairs
+	// This is complex for PostgreSQL - maps are typically represented as JSON or composite types
+	// For now, return an error indicating this needs special handling
+	return fmt.Errorf("TRANSFORM_MAP_ENTRY comprehension requires map/JSON support: not yet implemented")
 }
 
 func (con *converter) visitConst(expr *exprpb.Expr) error {
@@ -641,17 +890,17 @@ func (con *converter) visitSelect(expr *exprpb.Expr) error {
 	if sel.GetTestOnly() {
 		con.str.WriteString("has(")
 	}
-	
+
 	// Check if we should use JSON path operators
 	// We need to determine if the operand is a JSON/JSONB field
 	useJSONPath := con.shouldUseJSONPath(sel.GetOperand(), sel.GetField())
-	
+
 	nested := !sel.GetTestOnly() && isBinaryOrTernaryOperator(sel.GetOperand())
 	err := con.visitMaybeNested(sel.GetOperand(), nested)
 	if err != nil {
 		return err
 	}
-	
+
 	if useJSONPath {
 		// Use ->> for text extraction
 		con.str.WriteString("->>")
@@ -663,7 +912,7 @@ func (con *converter) visitSelect(expr *exprpb.Expr) error {
 		con.str.WriteString(".")
 		con.str.WriteString(sel.GetField())
 	}
-	
+
 	if sel.GetTestOnly() {
 		con.str.WriteString(")")
 	}
@@ -679,7 +928,7 @@ func (con *converter) shouldUseJSONPath(operand *exprpb.Expr, _ string) bool {
 		// Direct field access - check if it's a known JSON field
 		return false // We don't have direct JSON field access in our current tests
 	}
-	
+
 	if selectExpr := operand.GetSelectExpr(); selectExpr != nil {
 		// Nested field access - check if the parent field is a JSON field
 		parentField := selectExpr.GetField()
@@ -690,7 +939,7 @@ func (con *converter) shouldUseJSONPath(operand *exprpb.Expr, _ string) bool {
 			}
 		}
 	}
-	
+
 	return false
 }
 
@@ -934,6 +1183,6 @@ func (con *converter) callTimestampFromString(_ *exprpb.Expr, args []*exprpb.Exp
 		con.str.WriteString(")")
 		return nil
 	}
-	
+
 	return fmt.Errorf("timestamp function expects 1 or 2 arguments, got %d", len(args))
 }

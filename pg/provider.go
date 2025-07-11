@@ -103,7 +103,7 @@ func (p *typeProvider) LoadTableSchema(ctx context.Context, tableName string) er
 
 		field := FieldSchema{
 			Name:     columnName,
-			Type:     elementType, // Use element type for arrays, or data_type for non-arrays
+			Type:     elementType,         // Use element type for arrays, or data_type for non-arrays
 			Repeated: dataType == "ARRAY", // PostgreSQL returns "ARRAY" for array columns
 		}
 
@@ -175,7 +175,7 @@ func (p *typeProvider) FindStructFieldNames(structType string) ([]string, bool) 
 	if !found {
 		return nil, false
 	}
-	
+
 	fieldNames := make([]string, len(schema))
 	for i, field := range schema {
 		fieldNames[i] = field.Name

@@ -56,6 +56,14 @@ This project converts [CEL (Common Expression Language)](https://opensource.goog
 - Nested JSON access is supported: `user.profile.settings.key` → `user.profile->>'settings'->>'key'`
 - JSON field detection happens in `shouldUseJSONPath()` and `visitSelect()` functions
 
+### CEL Comprehensions Support
+
+- **Full comprehension support**: `all()`, `exists()`, `exists_one()`, `filter()`, `map()`
+- **PostgreSQL UNNEST integration**: All comprehensions use `UNNEST()` for array processing
+- **Pattern recognition**: `comprehensions.go` handles AST pattern matching for comprehension types
+- **Nested comprehensions**: Support for complex nested operations
+- **Schema integration**: Works with `pg.Schema` including array fields and composite types
+
 ### Testing
 
 - Test files should use PostgreSQL schemas, not BigQuery
@@ -179,3 +187,23 @@ This project was recently migrated from BigQuery to PostgreSQL and modernized:
 ## Contact
 
 For questions or issues, contact Richard Wooding or create an issue on the SPANDigital/cel2sql repository.
+
+## Project Structure
+
+- **Root files**: Core library files (`cel2sql.go`, `comprehensions.go`)
+- **`pg/`**: PostgreSQL-specific type provider and schema handling
+- **`sqltypes/`**: Custom SQL type definitions for CEL integration
+- **`test/`**: Test data and schema definitions
+- **`examples/`**: Example implementations in separate directories:
+  - `examples/basic/`: Basic usage examples
+  - `examples/load_table_schema/`: Dynamic schema loading examples
+  - `examples/comprehensions/`: CEL comprehensions examples
+  - Each example should be in its own directory with a `main.go` and `README.md`
+
+### Example Directory Guidelines
+
+- Each example must be in its own subdirectory under `examples/`
+- Main file should be named `main.go` (not named after the feature)
+- Include a comprehensive `README.md` explaining the example
+- Examples should be runnable with `go run main.go` from their directory
+- Document expected output and key concepts demonstrated

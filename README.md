@@ -3,9 +3,15 @@
 cel2sql converts [CEL (Common Expression Language)](https://cel.dev/) [Github Reoi](https://opensource.google/projects/cel) to SQL condition.
 It is specifically targeting PostgreSQL standard SQL.
 
-## Latest Release - v2.4.0
+## Latest Release - v2.5.0
 
-🚀 **New Features:**
+🚀 **Major New Features:**
+- **🔥 CEL Comprehensions Support**: Full support for `all()`, `exists()`, `exists_one()`, `filter()`, and `map()` comprehensions
+- **PostgreSQL UNNEST Integration**: Comprehensions are converted to efficient PostgreSQL SQL using `UNNEST()` and array functions
+- **Nested Comprehensions**: Support for complex nested comprehensions like `employees.exists(e, e.skills.exists(s, s == 'Go'))`
+- **Array Field Access**: Direct comprehensions on array fields in PostgreSQL schemas
+
+**Previous Features (v2.4.0):**
 - **Comprehensive JSON/JSONB Support**: Native PostgreSQL JSON path operations
 - **Dynamic Schema Loading**: Load table schemas directly from PostgreSQL databases
 - **Enhanced Type System**: Improved PostgreSQL type mappings and array support
@@ -16,6 +22,7 @@ It is specifically targeting PostgreSQL standard SQL.
 - JSON field access: `user.preferences.theme` → `user.preferences->>'theme'`
 - Array operations: `size(array)` → `ARRAY_LENGTH(array, 1)`
 - String operations: `contains()` → `POSITION(...) > 0`
+- CEL comprehensions: `list.all(x, x > 0)` → `NOT EXISTS (SELECT 1 FROM UNNEST(list) AS x WHERE NOT (x > 0))`
 - All tests pass with comprehensive integration coverage
 
 ## Usage
@@ -1093,6 +1100,136 @@ cel2sql contains time related functions bellow.
 - `current_timestamp()`
 - `interval(N, date_part)`
 
-## Acknowledgments
+## CEL Comprehensions
 
-This project is based on the excellent work by [@cockscomb](https://github.com/cockscomb) at [cockscomb/cel2sql](https://github.com/cockscomb/cel2sql). We thank the original author for creating the foundation that made this PostgreSQL-focused implementation possible.
+cel2sql now supports CEL comprehensions for working with lists and arrays. Comprehensions are converted to PostgreSQL-compatible SQL using `UNNEST()` and various array functions.
+
+### Supported Comprehension Types
+
+| CEL Expression | Description | Generated SQL Pattern |
+|----------------|-------------|----------------------|
+| `list.all(x, condition)` | All elements satisfy condition | `NOT EXISTS (SELECT 1 FROM UNNEST(list) AS x WHERE NOT (condition))` |
+| `list.exists(x, condition)` | At least one element satisfies condition | `EXISTS (SELECT 1 FROM UNNEST(list) AS x WHERE condition)` |
+| `list.exists_one(x, condition)` | Exactly one element satisfies condition | `(SELECT COUNT(*) FROM UNNEST(list) AS x WHERE condition) = 1` |
+| `list.filter(x, condition)` | Return elements that satisfy condition | `ARRAY(SELECT x FROM UNNEST(list) AS x WHERE condition)` |
+| `list.map(x, transform)` | Transform all elements | `ARRAY(SELECT transform FROM UNNEST(list) AS x)` |
+
+### Examples
+
+#### Simple Array Comprehensions
+
+```go
+// Check if all numbers are positive
+cel: [1, 2, 3, 4, 5].all(x, x > 0)
+sql: NOT EXISTS (SELECT 1 FROM UNNEST(ARRAY[1, 2, 3, 4, 5]) AS x WHERE NOT (x > 0))
+
+// Check if any number is greater than 3
+cel: [1, 2, 3, 4, 5].exists(x, x > 3)
+sql: EXISTS (SELECT 1 FROM UNNEST(ARRAY[1, 2, 3, 4, 5]) AS x WHERE x > 3)
+
+// Filter even numbers
+cel: [1, 2, 3, 4, 5].filter(x, x % 2 == 0)
+sql: ARRAY(SELECT x FROM UNNEST(ARRAY[1, 2, 3, 4, 5]) AS x WHERE MOD(x, 2) = 0)
+
+// Double all numbers
+cel: [1, 2, 3, 4, 5].map(x, x * 2)
+sql: ARRAY(SELECT x * 2 FROM UNNEST(ARRAY[1, 2, 3, 4, 5]) AS x)
+```
+
+#### PostgreSQL Schema-based Comprehensions
+
+```go
+// Define schema with array fields
+schema := pg.Schema{
+    {Name: "name", Type: "text", Repeated: false},
+    {Name: "age", Type: "bigint", Repeated: false},
+    {Name: "skills", Type: "text", Repeated: true}, // Array field
+}
+
+// CEL expressions with comprehensions
+cel: employees.all(e, e.age >= 18)
+sql: NOT EXISTS (SELECT 1 FROM UNNEST(employees) AS e WHERE NOT (e.age >= 18))
+
+cel: employees.filter(e, e.age > 30).map(e, e.name)
+sql: ARRAY(SELECT e.name FROM UNNEST(ARRAY(SELECT e FROM UNNEST(employees) AS e WHERE e.age > 30)) AS e)
+
+cel: emp.skills.exists(s, s == 'Go')
+sql: EXISTS (SELECT 1 FROM UNNEST(emp.skills) AS s WHERE s = 'Go')
+```
+
+#### Nested Comprehensions
+
+```go
+// Check if any employee has Go skills (nested comprehension)
+cel: employees.exists(e, e.skills.exists(s, s == 'Go'))
+sql: EXISTS (SELECT 1 FROM UNNEST(employees) AS e WHERE EXISTS (SELECT 1 FROM UNNEST(e.skills) AS s WHERE s = 'Go'))
+
+// Filter employees with all high scores
+cel: employees.filter(e, e.scores.all(s, s >= 80))
+sql: ARRAY(SELECT e FROM UNNEST(employees) AS e WHERE NOT EXISTS (SELECT 1 FROM UNNEST(e.scores) AS s WHERE NOT (s >= 80)))
+```
+
+#### Working with Composite Types
+
+```go
+// Define nested schema
+addressSchema := pg.Schema{
+    {Name: "city", Type: "text", Repeated: false},
+    {Name: "country", Type: "text", Repeated: false},
+}
+
+employeeSchema := pg.Schema{
+    {Name: "name", Type: "text", Repeated: false},
+    {Name: "address", Type: "composite", Schema: addressSchema},
+}
+
+// CEL with nested field access
+cel: employees.filter(e, e.address.city == 'New York')
+sql: ARRAY(SELECT e FROM UNNEST(employees) AS e WHERE e.address.city = 'New York')
+
+cel: employees.map(e, e.address.city)
+sql: ARRAY(SELECT e.address.city FROM UNNEST(employees) AS e)
+```
+
+### Performance Considerations
+
+- **UNNEST with large arrays**: PostgreSQL's `UNNEST()` function is efficient but consider indexing strategies for large datasets
+- **Nested comprehensions**: May generate complex SQL; consider restructuring data or using materialized views for frequently accessed patterns
+- **Map operations**: Return new arrays which may use memory; consider streaming for large results
+
+### Usage in Practice
+
+```go
+package main
+
+import (
+    "fmt"
+    "github.com/google/cel-go/cel"
+    "github.com/spandigital/cel2sql"
+    "github.com/spandigital/cel2sql/pg"
+)
+
+func main() {
+    // Define PostgreSQL schema
+    schema := pg.Schema{
+        {Name: "id", Type: "bigint", Repeated: false},
+        {Name: "name", Type: "text", Repeated: false},
+        {Name: "skills", Type: "text", Repeated: true},
+        {Name: "scores", Type: "bigint", Repeated: true},
+    }
+
+    provider := pg.NewTypeProvider(map[string]pg.Schema{"Employee": schema})
+
+    env, _ := cel.NewEnv(
+        cel.CustomTypeProvider(provider),
+        cel.Variable("employees", cel.ListType(cel.ObjectType("Employee"))),
+    )
+
+    // Compile and convert CEL comprehension to SQL
+    ast, _ := env.Compile(`employees.filter(e, e.scores.all(s, s >= 80)).map(e, e.name)`)
+    sqlCondition, _ := cel2sql.Convert(ast)
+    
+    fmt.Println(sqlCondition)
+    // Output: ARRAY(SELECT e.name FROM UNNEST(ARRAY(SELECT e FROM UNNEST(employees) AS e WHERE NOT EXISTS (SELECT 1 FROM UNNEST(e.scores) AS s WHERE NOT (s >= 80)))) AS e)
+}
+```

@@ -195,7 +195,7 @@ func TestLoadTableSchema_WithoutConnection(t *testing.T) {
 
 // TestCELToSQL_ComprehensiveIntegration tests the complete workflow:
 // 1. Load table schemas from PostgreSQL
-// 2. Convert CEL expressions to SQL conditions  
+// 2. Convert CEL expressions to SQL conditions
 // 3. Execute queries with date arithmetic and array manipulation
 func TestCELToSQL_ComprehensiveIntegration(t *testing.T) {
 	ctx := context.Background()
