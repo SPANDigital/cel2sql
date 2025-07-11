@@ -181,7 +181,7 @@ fmt.Println(sqlCondition) // user.profile->>'settings'->>'notifications' = 'enab
   </tr>
   <tr>
     <th rowspan="1">
-      !_
+      !
     </th>
     <td>
       (bool) -> bool
@@ -192,7 +192,7 @@ fmt.Println(sqlCondition) // user.profile->>'settings'->>'notifications' = 'enab
   </tr>
   <tr>
     <th rowspan="2">
-      -_
+      - (unary)
     </th>
     <td>
       (int) -> int
@@ -211,7 +211,7 @@ fmt.Println(sqlCondition) // user.profile->>'settings'->>'notifications' = 'enab
   </tr>
   <tr>
     <th rowspan="3">
-      _!=_
+      !=
     </th>
     <td>
       (A, A) -> bool
@@ -238,7 +238,7 @@ fmt.Println(sqlCondition) // user.profile->>'settings'->>'notifications' = 'enab
   </tr>
   <tr>
     <th rowspan="1">
-      _%_
+      %
     </th>
     <td>
       (int, int) -> int
@@ -249,7 +249,7 @@ fmt.Println(sqlCondition) // user.profile->>'settings'->>'notifications' = 'enab
   </tr>
   <tr>
     <th rowspan="1">
-      _&&_
+      &&
     </th>
     <td>
       (bool, bool) -> bool
@@ -260,7 +260,7 @@ fmt.Println(sqlCondition) // user.profile->>'settings'->>'notifications' = 'enab
   </tr>
   <tr>
     <th rowspan="2">
-      _*_
+      *
     </th>
     <td>
       (int, int) -> int
@@ -279,7 +279,7 @@ fmt.Println(sqlCondition) // user.profile->>'settings'->>'notifications' = 'enab
   </tr>
   <tr>
     <th rowspan="7">
-      _+_
+      +
     </th>
     <td>
       (int, int) -> int
@@ -338,7 +338,7 @@ fmt.Println(sqlCondition) // user.profile->>'settings'->>'notifications' = 'enab
   </tr>
   <tr>
     <th rowspan="3">
-      _-_
+      - (binary)
     </th>
     <td>
       (int, int) -> int
@@ -365,7 +365,7 @@ fmt.Println(sqlCondition) // user.profile->>'settings'->>'notifications' = 'enab
   </tr>
   <tr>
     <th rowspan="2">
-      _/_
+      /
     </th>
     <td>
       (int, int) -> int
@@ -384,7 +384,7 @@ fmt.Println(sqlCondition) // user.profile->>'settings'->>'notifications' = 'enab
   </tr>
   <tr>
     <th rowspan="6">
-      _<=_
+      &lt;=
     </th>
     <td>
       (bool, bool) -> bool
@@ -435,7 +435,7 @@ fmt.Println(sqlCondition) // user.profile->>'settings'->>'notifications' = 'enab
   </tr>
   <tr>
     <th rowspan="6">
-      _<_
+      &lt;
     </th>
     <td>
       (bool, bool) -> bool
@@ -486,7 +486,7 @@ fmt.Println(sqlCondition) // user.profile->>'settings'->>'notifications' = 'enab
   </tr>
   <tr>
     <th rowspan="3">
-      _==_
+      ==
     </th>
     <td>
       (A, A) -> bool
@@ -513,7 +513,7 @@ fmt.Println(sqlCondition) // user.profile->>'settings'->>'notifications' = 'enab
   </tr>
   <tr>
     <th rowspan="6">
-      _>=_
+      &gt;=
     </th>
     <td>
       (bool, bool) -> bool
@@ -564,7 +564,7 @@ fmt.Println(sqlCondition) // user.profile->>'settings'->>'notifications' = 'enab
   </tr>
   <tr>
     <th rowspan="6">
-      _>_
+      &gt;
     </th>
     <td>
       (bool, bool) -> bool
@@ -615,7 +615,7 @@ fmt.Println(sqlCondition) // user.profile->>'settings'->>'notifications' = 'enab
   </tr>
   <tr>
     <th rowspan="1">
-      _?_:_
+      ? :
     </th>
     <td>
       (bool, A, A) -> A
@@ -626,7 +626,7 @@ fmt.Println(sqlCondition) // user.profile->>'settings'->>'notifications' = 'enab
   </tr>
   <tr>
     <th rowspan="2">
-      _[_]
+      [ ]
     </th>
     <td>
       (list(A), int) -> A
@@ -656,7 +656,7 @@ fmt.Println(sqlCondition) // user.profile->>'settings'->>'notifications' = 'enab
   </tr>
   <tr>
     <th rowspan="1">
-      _||_
+      ||
     </th>
     <td>
       (bool, bool) -> bool
