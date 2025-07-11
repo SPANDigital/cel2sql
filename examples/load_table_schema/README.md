@@ -63,19 +63,19 @@ go run main.go
 ```
 === Example 1: Pre-defined Schema ===
 CEL: user.name == "John Doe"
-SQL: `user`.`name` = 'John Doe'
+SQL: user.name = 'John Doe'
 
 CEL: user.age > 30 && user.is_active
-SQL: `user`.`age` > 30 AND `user`.`is_active`
+SQL: user.age > 30 AND user.is_active
 
 CEL: user.email.contains("@example.com")
-SQL: `user`.`email` LIKE '%@example.com%'
+SQL: POSITION('@example.com' IN user.email) > 0
 
 CEL: "admin" in user.tags
-SQL: 'admin' = ANY(`user`.`tags`)
+SQL: 'admin' = ANY(user.tags)
 
 CEL: user.created_at > timestamp("2023-01-01T00:00:00Z")
-SQL: `user`.`created_at` > '2023-01-01T00:00:00Z'
+SQL: user.created_at > '2023-01-01T00:00:00Z'
 ```
 
 ## Key Benefits

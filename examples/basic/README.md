@@ -19,7 +19,7 @@ go run main.go
 
 ```
 CEL Expression: employee.name == "John Doe" && employee.age >= 25 && employee.active
-PostgreSQL SQL: `employee`.`name` = "John Doe" AND `employee`.`age` >= 25 AND `employee`.`active`
+PostgreSQL SQL: employee.name = 'John Doe' AND employee.age >= 25 AND employee.active
 ```
 
 ## Code Breakdown
