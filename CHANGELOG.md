@@ -1,5 +1,54 @@
 # Changelog
 
+## [2.3.0] - 2025-01-11
+
+### Added
+- Comprehensive integration tests using testcontainers for PostgreSQL
+- Support for array type detection from PostgreSQL information_schema
+- Enhanced test coverage for date arithmetic and array operations
+- Automated test data generation for comprehensive testing
+- Integration tests validating complete CEL-to-SQL-to-results workflow
+
+### Changed
+- Updated SQL generation to use PostgreSQL-specific syntax consistently
+- Updated string literals to use single quotes (PostgreSQL standard)
+- Updated `contains` function to use `POSITION` instead of `CONTAINS`
+- Updated array length function to use `ARRAY_LENGTH(..., 1)`
+- Updated timestamp handling to use `CAST(..., AS TIMESTAMP WITH TIME ZONE)`
+- Improved array type detection to handle PostgreSQL's `ARRAY` type suffix
+- Enhanced boolean handling to use `IS TRUE`/`IS FALSE` for PostgreSQL
+
+### Fixed
+- Fixed array type detection in `pg/provider.go` to properly handle PostgreSQL array types
+- Fixed string literal quoting in SQL generation for PostgreSQL compatibility
+- Fixed timestamp function generation for PostgreSQL date/time operations
+- Fixed all test expectations to match actual PostgreSQL output
+- Fixed CEL boolean handling for proper PostgreSQL boolean operations
+
+### Removed
+- Removed MySQL-style backtick quoting from SQL generation
+- Removed demo and debug files to clean up the codebase
+
+### Security
+- Improved SQL injection prevention through proper quoting
+- Enhanced parameterized query support
+
+## [2.2.0] - 2025-01-10
+
+### Added
+- Initial comprehensive PostgreSQL migration
+- Enhanced type system integration
+
+## [2.1.1] - 2025-01-10
+
+### Fixed
+- Bug fixes and improvements
+
+## [2.1.0] - 2025-01-10
+
+### Added
+- Enhanced CEL expression support
+
 ## [2.0.0] - 2025-07-10
 
 ### BREAKING CHANGES
