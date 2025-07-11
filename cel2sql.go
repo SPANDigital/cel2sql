@@ -449,7 +449,6 @@ func (con *converter) visitCallFunc(expr *exprpb.Expr) error {
 			case argType.GetPrimitive() == exprpb.Type_BYTES:
 				sqlFun = "LENGTH"
 			case isListType(argType):
-				sqlFun = "ARRAY_LENGTH"
 				// For PostgreSQL, we need to specify the array dimension (1 for 1D arrays)
 				con.str.WriteString("ARRAY_LENGTH(")
 				if target != nil {
@@ -870,7 +869,7 @@ func isFieldAccessExpression(expr *exprpb.Expr) bool {
 	return false
 }
 
-func (con *converter) callTimestampFromString(target *exprpb.Expr, args []*exprpb.Expr) error {
+func (con *converter) callTimestampFromString(_ *exprpb.Expr, args []*exprpb.Expr) error {
 	if len(args) == 1 {
 		// For PostgreSQL, we need to cast the string to a timestamp
 		con.str.WriteString("CAST(")

@@ -375,7 +375,7 @@ func TestCELToSQL_ComprehensiveIntegration(t *testing.T) {
 		t.Logf("Complex date CEL: %s", celExpression)
 		t.Logf("Complex date SQL: %s", sqlCondition)
 
-		query := fmt.Sprintf("SELECT COUNT(*) FROM users WHERE %s", sqlCondition)
+		query := "SELECT COUNT(*) FROM users WHERE " + sqlCondition
 		var count int
 		err = pool.QueryRow(ctx, query).Scan(&count)
 		require.NoError(t, err)
@@ -399,7 +399,7 @@ func TestCELToSQL_ComprehensiveIntegration(t *testing.T) {
 		t.Logf("Complex array CEL: %s", celExpression)
 		t.Logf("Complex array SQL: %s", sqlCondition)
 
-		query := fmt.Sprintf("SELECT COUNT(*) FROM products WHERE %s", sqlCondition)
+		query := "SELECT COUNT(*) FROM products WHERE " + sqlCondition
 		var count int
 		err = pool.QueryRow(ctx, query).Scan(&count)
 		require.NoError(t, err)
