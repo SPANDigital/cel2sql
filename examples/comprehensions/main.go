@@ -1,3 +1,6 @@
+// Package main demonstrates CEL comprehensions support in cel2sql with PostgreSQL integration.
+// This example shows how to use all(), exists(), exists_one(), filter(), and map() comprehensions
+// with both simple arrays and complex PostgreSQL schemas including nested structures.
 package main
 
 import (

@@ -1,6 +1,7 @@
 package cel2sql
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/google/cel-go/common/operators"
@@ -10,16 +11,17 @@ import (
 // ComprehensionType represents the type of comprehension operation
 type ComprehensionType int
 
+// CEL comprehension types supported by cel2sql
 const (
-	ComprehensionAll ComprehensionType = iota
-	ComprehensionExists
-	ComprehensionExistsOne
-	ComprehensionMap
-	ComprehensionFilter
-	ComprehensionTransformList
-	ComprehensionTransformMap
-	ComprehensionTransformMapEntry
-	ComprehensionUnknown
+	ComprehensionAll               ComprehensionType = iota // All elements satisfy condition
+	ComprehensionExists                                     // At least one element satisfies condition
+	ComprehensionExistsOne                                  // Exactly one element satisfies condition
+	ComprehensionMap                                        // Transform elements using expression
+	ComprehensionFilter                                     // Filter elements by predicate
+	ComprehensionTransformList                              // Transform list elements
+	ComprehensionTransformMap                               // Transform map entries
+	ComprehensionTransformMapEntry                          // Transform map key-value pairs
+	ComprehensionUnknown                                    // Unrecognized comprehension pattern
 )
 
 // String returns a string representation of the comprehension type
@@ -64,7 +66,7 @@ type ComprehensionInfo struct {
 func (con *converter) identifyComprehension(expr *exprpb.Expr) (*ComprehensionInfo, error) {
 	comprehension := expr.GetComprehensionExpr()
 	if comprehension == nil {
-		return nil, fmt.Errorf("expression is not a comprehension")
+		return nil, errors.New("expression is not a comprehension")
 	}
 
 	// Analyze the comprehension structure to determine its type
@@ -204,28 +206,28 @@ func (con *converter) isListAppendStep(step *exprpb.Expr, accuVar string) bool {
 	return false
 }
 
-func (con *converter) isConditionalCountStep(step *exprpb.Expr, accuVar string) bool {
+func (con *converter) isConditionalCountStep(step *exprpb.Expr, _ string) bool {
 	if call := step.GetCallExpr(); call != nil {
 		return call.Function == operators.Conditional && len(call.Args) == 3
 	}
 	return false
 }
 
-func (con *converter) isConditionalAppendStep(step *exprpb.Expr, accuVar string) bool {
+func (con *converter) isConditionalAppendStep(step *exprpb.Expr, _ string) bool {
 	if call := step.GetCallExpr(); call != nil {
 		return call.Function == operators.Conditional && len(call.Args) == 3
 	}
 	return false
 }
 
-func (con *converter) isConditionalFilterStep(step *exprpb.Expr, accuVar, iterVar string) bool {
+func (con *converter) isConditionalFilterStep(step *exprpb.Expr, _, _ string) bool {
 	if call := step.GetCallExpr(); call != nil {
 		return call.Function == operators.Conditional && len(call.Args) == 3
 	}
 	return false
 }
 
-func (con *converter) isEqualsOneResult(result *exprpb.Expr, accuVar string) bool {
+func (con *converter) isEqualsOneResult(result *exprpb.Expr, _ string) bool {
 	if call := result.GetCallExpr(); call != nil {
 		return call.Function == operators.Equals
 	}
@@ -276,7 +278,7 @@ func (con *converter) extractPredicateFromOrStep(step *exprpb.Expr, accuVar stri
 	return nil
 }
 
-func (con *converter) extractTransformFromAppendStep(step *exprpb.Expr, accuVar string) *exprpb.Expr {
+func (con *converter) extractTransformFromAppendStep(step *exprpb.Expr, _ string) *exprpb.Expr {
 	if call := step.GetCallExpr(); call != nil && len(call.Args) == 2 {
 		// In append step: accu + [transform], find the list and extract its first element
 		for _, arg := range call.Args {
@@ -296,7 +298,7 @@ func (con *converter) extractPredicateFromConditionalStep(step *exprpb.Expr) *ex
 	return nil
 }
 
-func (con *converter) extractFilterAndTransformFromConditionalStep(step *exprpb.Expr, accuVar string) (*exprpb.Expr, *exprpb.Expr) {
+func (con *converter) extractFilterAndTransformFromConditionalStep(step *exprpb.Expr, _ string) (*exprpb.Expr, *exprpb.Expr) {
 	if call := step.GetCallExpr(); call != nil && len(call.Args) == 3 {
 		filter := call.Args[0]
 		thenExpr := call.Args[1]

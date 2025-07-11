@@ -207,3 +207,15 @@ For questions or issues, contact Richard Wooding or create an issue on the SPAND
 - Include a comprehensive `README.md` explaining the example
 - Examples should be runnable with `go run main.go` from their directory
 - Document expected output and key concepts demonstrated
+
+### Code Quality and Linting
+
+- **golangci-lint**: All code must pass `golangci-lint run` without issues
+- **Required before commits**: Run `golangci-lint run` and fix all issues
+- **Common linting rules**:
+  - Use `errors.New()` instead of `fmt.Errorf()` for static error messages
+  - Rename unused parameters to `_` (e.g., `func foo(used string, _ string)`)
+  - Add comments for exported constants and types
+  - Include package comments for main packages in examples
+- **Formatting**: Always run `go fmt ./...` before committing
+- **Static analysis**: Ensure `go vet ./...` passes without warnings

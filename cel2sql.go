@@ -36,8 +36,6 @@ func Convert(ast *cel.Ast) (string, error) {
 type converter struct {
 	str     strings.Builder
 	typeMap map[int64]*exprpb.Type
-	// Add comprehension tracking for future use
-	comprehensionMap map[int64]*ComprehensionInfo
 }
 
 func (con *converter) visit(expr *exprpb.Expr) error {
@@ -606,7 +604,7 @@ func (con *converter) visitAllComprehension(expr *exprpb.Expr, info *Comprehensi
 
 	comprehension := expr.GetComprehensionExpr()
 	if comprehension == nil {
-		return fmt.Errorf("expression is not a comprehension")
+		return errors.New("expression is not a comprehension")
 	}
 
 	con.str.WriteString("NOT EXISTS (SELECT 1 FROM UNNEST(")
@@ -637,7 +635,7 @@ func (con *converter) visitExistsComprehension(expr *exprpb.Expr, info *Comprehe
 
 	comprehension := expr.GetComprehensionExpr()
 	if comprehension == nil {
-		return fmt.Errorf("expression is not a comprehension")
+		return errors.New("expression is not a comprehension")
 	}
 
 	con.str.WriteString("EXISTS (SELECT 1 FROM UNNEST(")
@@ -667,7 +665,7 @@ func (con *converter) visitExistsOneComprehension(expr *exprpb.Expr, info *Compr
 
 	comprehension := expr.GetComprehensionExpr()
 	if comprehension == nil {
-		return fmt.Errorf("expression is not a comprehension")
+		return errors.New("expression is not a comprehension")
 	}
 
 	con.str.WriteString("(SELECT COUNT(*) FROM UNNEST(")
@@ -697,7 +695,7 @@ func (con *converter) visitMapComprehension(expr *exprpb.Expr, info *Comprehensi
 
 	comprehension := expr.GetComprehensionExpr()
 	if comprehension == nil {
-		return fmt.Errorf("expression is not a comprehension")
+		return errors.New("expression is not a comprehension")
 	}
 
 	con.str.WriteString("ARRAY(SELECT ")
@@ -740,7 +738,7 @@ func (con *converter) visitFilterComprehension(expr *exprpb.Expr, info *Comprehe
 
 	comprehension := expr.GetComprehensionExpr()
 	if comprehension == nil {
-		return fmt.Errorf("expression is not a comprehension")
+		return errors.New("expression is not a comprehension")
 	}
 
 	con.str.WriteString("ARRAY(SELECT ")
@@ -772,7 +770,7 @@ func (con *converter) visitTransformListComprehension(expr *exprpb.Expr, info *C
 
 	comprehension := expr.GetComprehensionExpr()
 	if comprehension == nil {
-		return fmt.Errorf("expression is not a comprehension")
+		return errors.New("expression is not a comprehension")
 	}
 
 	con.str.WriteString("ARRAY(SELECT ")
@@ -809,18 +807,18 @@ func (con *converter) visitTransformListComprehension(expr *exprpb.Expr, info *C
 	return nil
 }
 
-func (con *converter) visitTransformMapComprehension(expr *exprpb.Expr, info *ComprehensionInfo) error {
+func (con *converter) visitTransformMapComprehension(_ *exprpb.Expr, _ *ComprehensionInfo) error {
 	// Generate SQL for TRANSFORM_MAP comprehension: work with map entries
 	// This is complex for PostgreSQL - maps are typically represented as JSON or composite types
 	// For now, return an error indicating this needs special handling
-	return fmt.Errorf("TRANSFORM_MAP comprehension requires map/JSON support: not yet implemented")
+	return errors.New("TRANSFORM_MAP comprehension requires map/JSON support: not yet implemented")
 }
 
-func (con *converter) visitTransformMapEntryComprehension(expr *exprpb.Expr, info *ComprehensionInfo) error {
+func (con *converter) visitTransformMapEntryComprehension(_ *exprpb.Expr, _ *ComprehensionInfo) error {
 	// Generate SQL for TRANSFORM_MAP_ENTRY comprehension: work with map key-value pairs
 	// This is complex for PostgreSQL - maps are typically represented as JSON or composite types
 	// For now, return an error indicating this needs special handling
-	return fmt.Errorf("TRANSFORM_MAP_ENTRY comprehension requires map/JSON support: not yet implemented")
+	return errors.New("TRANSFORM_MAP_ENTRY comprehension requires map/JSON support: not yet implemented")
 }
 
 func (con *converter) visitConst(expr *exprpb.Expr) error {
