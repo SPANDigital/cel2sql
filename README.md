@@ -1,6 +1,6 @@
 # cel2sql
 
-cel2sql converts [CEL (Common Expression Language)](https://opensource.google/projects/cel) to SQL condition.
+cel2sql converts [CEL (Common Expression Language)](https://cel.dev/) [Github Reoi](https://opensource.google/projects/cel) to SQL condition.
 It is specifically targeting PostgreSQL standard SQL.
 
 ## Latest Release - v2.4.0
