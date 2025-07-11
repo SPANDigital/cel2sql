@@ -322,6 +322,48 @@ func TestCELToSQL_ComprehensiveIntegration(t *testing.T) {
 			expectedRows:  4,
 			description:   "OR condition test",
 		},
+		{
+			name:          "json_field_access",
+			table:         "users",
+			celExpression: `users.preferences.theme == "dark"`,
+			expectedRows:  4,
+			description:   "JSONB field access test",
+		},
+		{
+			name:          "json_boolean_field",
+			table:         "users",
+			celExpression: `users.preferences.notifications == "true"`,
+			expectedRows:  5,
+			description:   "JSONB boolean field test (as string)",
+		},
+		{
+			name:          "json_string_field",
+			table:         "users",
+			celExpression: `users.profile.location == "New York"`,
+			expectedRows:  1,
+			description:   "JSON string field test",
+		},
+		{
+			name:          "product_json_price_string",
+			table:         "products",
+			celExpression: `products.metadata.price == "999.99"`,
+			expectedRows:  1,
+			description:   "JSONB numeric field comparison (as string)",
+		},
+		{
+			name:          "product_json_category",
+			table:         "products",
+			celExpression: `products.metadata.category == "electronics"`,
+			expectedRows:  2,
+			description:   "JSONB string field equality",
+		},
+		{
+			name:          "json_complex_condition",
+			table:         "users",
+			celExpression: `users.preferences.theme == "dark" && users.age > 25`,
+			expectedRows:  2,
+			description:   "Complex condition with JSON field",
+		},
 	}
 
 	// Create database connection for executing queries

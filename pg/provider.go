@@ -217,6 +217,9 @@ func (p *typeProvider) FindStructFieldType(structType, fieldName string) (*types
 		exprType = sqltypes.Date
 	case "time", "timetz", "time with time zone", "time without time zone":
 		exprType = sqltypes.Time
+	case "json", "jsonb":
+		// JSON and JSONB types are treated as dynamic objects in CEL
+		exprType = decls.Dyn
 	default:
 		// Handle composite types
 		if strings.Contains(field.Type, "composite") || len(field.Schema) > 0 {

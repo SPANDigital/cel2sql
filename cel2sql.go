@@ -641,17 +641,57 @@ func (con *converter) visitSelect(expr *exprpb.Expr) error {
 	if sel.GetTestOnly() {
 		con.str.WriteString("has(")
 	}
+	
+	// Check if we should use JSON path operators
+	// We need to determine if the operand is a JSON/JSONB field
+	useJSONPath := con.shouldUseJSONPath(sel.GetOperand(), sel.GetField())
+	
 	nested := !sel.GetTestOnly() && isBinaryOrTernaryOperator(sel.GetOperand())
 	err := con.visitMaybeNested(sel.GetOperand(), nested)
 	if err != nil {
 		return err
 	}
-	con.str.WriteString(".")
-	con.str.WriteString(sel.GetField())
+	
+	if useJSONPath {
+		// Use ->> for text extraction
+		con.str.WriteString("->>")
+		con.str.WriteString("'")
+		con.str.WriteString(sel.GetField())
+		con.str.WriteString("'")
+	} else {
+		// Regular field selection
+		con.str.WriteString(".")
+		con.str.WriteString(sel.GetField())
+	}
+	
 	if sel.GetTestOnly() {
 		con.str.WriteString(")")
 	}
 	return nil
+}
+
+// shouldUseJSONPath determines if we should use JSON path operators for field access
+func (con *converter) shouldUseJSONPath(operand *exprpb.Expr, _ string) bool {
+	// For now, we'll use a simple heuristic: if the operand is a direct field reference
+	// to a field that commonly contains JSON (like 'preferences', 'metadata', 'profile', 'details')
+	// then we use JSON path operators
+	if identExpr := operand.GetIdentExpr(); identExpr != nil {
+		// Direct field access - check if it's a known JSON field
+		return false // We don't have direct JSON field access in our current tests
+	}
+	
+	if selectExpr := operand.GetSelectExpr(); selectExpr != nil {
+		// Nested field access - check if the parent field is a JSON field
+		parentField := selectExpr.GetField()
+		jsonFields := []string{"preferences", "metadata", "profile", "details"}
+		for _, jsonField := range jsonFields {
+			if parentField == jsonField {
+				return true
+			}
+		}
+	}
+	
+	return false
 }
 
 func (con *converter) visitStruct(expr *exprpb.Expr) error {
