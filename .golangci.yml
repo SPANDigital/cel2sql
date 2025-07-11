@@ -94,12 +94,5 @@ issues:
         - gocritic
         - gosec
         - unused
-    # Exclude deprecated CEL API warnings (these are expected until we fully migrate)
-    - text: "SA1019.*ref.TypeProvider is deprecated"
-      linters:
-        - staticcheck
-    - text: "SA1019.*ref.FieldType is deprecated"
-      linters:
-        - staticcheck
   max-issues-per-linter: 0
   max-same-issues: 0

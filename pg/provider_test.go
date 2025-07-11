@@ -1,3 +1,6 @@
+// Package pg provides PostgreSQL type provider for CEL type system integration.
+//
+//nolint:staticcheck // This file contains tests for deprecated ref.FieldType which is still needed for compatibility
 package pg_test
 
 import (
@@ -97,7 +100,7 @@ func Test_typeProvider_FindFieldType(t *testing.T) {
 	tests := []struct {
 		name      string
 		args      args
-		want      *ref.FieldType
+		want      *ref.FieldType //nolint:staticcheck // ref.FieldType is deprecated but still needed for compatibility
 		wantFound bool
 	}{
 		{

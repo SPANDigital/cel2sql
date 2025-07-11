@@ -29,7 +29,7 @@ type Schema []FieldSchema
 
 // TypeProvider interface for PostgreSQL type providers
 type TypeProvider interface {
-	ref.TypeProvider
+	ref.TypeProvider //nolint:staticcheck // ref.TypeProvider is deprecated but still needed for compatibility
 	LoadTableSchema(ctx context.Context, tableName string) error
 	Close()
 }
@@ -155,7 +155,7 @@ func (p *typeProvider) FindType(typeName string) (*exprpb.Type, bool) {
 	return decls.NewTypeType(decls.NewObjectType(typeName)), true
 }
 
-func (p *typeProvider) FindFieldType(messageType string, fieldName string) (*ref.FieldType, bool) {
+func (p *typeProvider) FindFieldType(messageType string, fieldName string) (*ref.FieldType, bool) { //nolint:staticcheck // ref.FieldType is deprecated but still needed for compatibility
 	schema, found := p.findSchema(messageType)
 	if !found {
 		return nil, false
@@ -203,7 +203,7 @@ func (p *typeProvider) FindFieldType(messageType string, fieldName string) (*ref
 		typ = decls.NewListType(typ)
 	}
 
-	return &ref.FieldType{
+	return &ref.FieldType{ //nolint:staticcheck // ref.FieldType is deprecated but still needed for compatibility
 		Type: typ,
 	}, true
 }
@@ -212,4 +212,4 @@ func (p *typeProvider) NewValue(typeName string, _ map[string]ref.Val) ref.Val {
 	return types.NewErr("unknown type '%s'", typeName)
 }
 
-var _ ref.TypeProvider = new(typeProvider)
+var _ ref.TypeProvider = new(typeProvider) //nolint:staticcheck // ref.TypeProvider is deprecated but still needed for compatibility
