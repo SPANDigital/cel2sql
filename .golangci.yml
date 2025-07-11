@@ -1,23 +1,20 @@
+version: 2
+
 run:
   timeout: 5m
   modules-download-mode: readonly
 
 linters:
   enable:
-    # Core linters (essential)
+    # Core linters (enabled by default)
     - errcheck
-    - gosimple
     - govet
     - ineffassign
     - staticcheck
-    - typecheck
     - unused
     
     # Code quality linters (important)
     - bodyclose
-    - gci
-    - gofmt
-    - goimports
     - goconst
     - gocritic
     - misspell
@@ -48,35 +45,39 @@ linters:
     - paralleltest
     - testpackage
     - nlreturn
-    - wsl
-    - godot
-    - godox
-    - err113
-    - mnd
-    - ireturn
-    - nonamedreturns
-    - exhaustruct
-    - gochecknoglobals
-    - depguard
-    - gomoddirectives
-    - gomodguard
 
 linters-settings:
-  gci:
-    sections:
-      - standard
-      - default
-      - prefix(github.com/spandigital/cel2sql)
-  goimports:
-    local-prefixes: github.com/spandigital/cel2sql
-  govet: {}
-  misspell:
-    locale: US
+  govet:
+    # Enable all analyzers
+    enable-all: true
+    # Disable specific analyzers
+    disable:
+      - fieldalignment # Too strict for this project
+      
+  gocritic:
+    # Enable multiple checks by tags
+    enabled-tags:
+      - diagnostic
+      - style
+      - performance
+    disabled-checks:
+      - unnamedResult
+      - whyNoLint
+      
   revive:
-    confidence: 0.3  # Use confidence instead of min-confidence
+    # Enable default rules
+    rules:
+      - name: exported
+        disabled: false
+        
   gosec:
+    # Exclude specific rules
     excludes:
-      - G404 # Random number generator not cryptographically secure
+      - G104 # Audit errors not checked - too many false positives
+      
+  misspell:
+    # Correct spellings using locale preferences for US or UK
+    locale: US
 
 issues:
   exclude-rules:
@@ -92,15 +93,6 @@ issues:
       linters:
         - gocritic
         - gosec
-    # Temporarily exclude staticcheck deprecation warnings for CEL API
-    - text: "SA1019.*cel.Declarations is deprecated"
-      linters:
-        - staticcheck
-    - text: "SA1019.*ref.FieldType is deprecated"
-      linters:
-        - staticcheck
-    - text: "SA1019.*ref.TypeProvider is deprecated"
-      linters:
-        - staticcheck
+        - unused
   max-issues-per-linter: 0
   max-same-issues: 0
