@@ -53,27 +53,36 @@ func TestLoadTableSchema_WithPostgresContainer(t *testing.T) {
 	require.NoError(t, err)
 
 	// Verify the schema was loaded correctly
-	// Test FindType
-	foundType, found := provider.FindType("users")
+	// Test FindStructType
+	foundType, found := provider.FindStructType("users")
 	assert.True(t, found, "users type should be found")
 	assert.NotNil(t, foundType, "users type should not be nil")
 
-	// Test FindFieldType for each expected field
+	// Test FindStructFieldNames
+	fieldNames, found := provider.FindStructFieldNames("users")
+	assert.True(t, found, "users field names should be found")
+	assert.Contains(t, fieldNames, "id")
+	assert.Contains(t, fieldNames, "name")
+	assert.Contains(t, fieldNames, "email")
+	assert.Contains(t, fieldNames, "age")
+	assert.Contains(t, fieldNames, "created_at")
+	assert.Contains(t, fieldNames, "is_active")
+
+	// Test FindStructFieldType for each expected field
 	testCases := []struct {
-		fieldName    string
-		expectedType string
+		fieldName string
 	}{
-		{"id", "int"},
-		{"name", "text"},
-		{"email", "text"},
-		{"age", "int"},
-		{"created_at", "timestamp"},
-		{"is_active", "boolean"},
+		{"id"},
+		{"name"},
+		{"email"},
+		{"age"},
+		{"created_at"},
+		{"is_active"},
 	}
 
 	for _, tc := range testCases {
 		t.Run("field_"+tc.fieldName, func(t *testing.T) {
-			fieldType, found := provider.FindFieldType("users", tc.fieldName)
+			fieldType, found := provider.FindStructFieldType("users", tc.fieldName)
 			assert.True(t, found, "field %s should be found", tc.fieldName)
 			assert.NotNil(t, fieldType, "field %s type should not be nil", tc.fieldName)
 		})
@@ -118,12 +127,12 @@ func TestLoadTableSchema_WithArrayTypes(t *testing.T) {
 	require.NoError(t, err)
 
 	// Test array field type
-	fieldType, found := provider.FindFieldType("products", "tags")
+	fieldType, found := provider.FindStructFieldType("products", "tags")
 	assert.True(t, found, "tags field should be found")
 	assert.NotNil(t, fieldType, "tags field type should not be nil")
 
 	// Test scores array field
-	scoresFieldType, found := provider.FindFieldType("products", "scores")
+	scoresFieldType, found := provider.FindStructFieldType("products", "scores")
 	assert.True(t, found, "scores field should be found")
 	assert.NotNil(t, scoresFieldType, "scores field type should not be nil")
 }
@@ -165,7 +174,7 @@ func TestLoadTableSchema_NonExistentTable(t *testing.T) {
 	require.NoError(t, err) // Should not error, just return empty schema
 
 	// Verify the table type is found but has no fields
-	foundType, found := provider.FindType("non_existent_table")
+	foundType, found := provider.FindStructType("non_existent_table")
 	assert.True(t, found, "non_existent_table type should be found")
 	assert.NotNil(t, foundType, "non_existent_table type should not be nil")
 }

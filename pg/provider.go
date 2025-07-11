@@ -29,7 +29,7 @@ type Schema []FieldSchema
 
 // TypeProvider interface for PostgreSQL type providers
 type TypeProvider interface {
-	ref.TypeProvider //nolint:staticcheck // ref.TypeProvider is deprecated but still needed for compatibility
+	types.Provider
 	LoadTableSchema(ctx context.Context, tableName string) error
 	Close()
 }
@@ -147,16 +147,29 @@ func (p *typeProvider) findSchema(typeName string) (Schema, bool) {
 	return schema, true
 }
 
-func (p *typeProvider) FindType(typeName string) (*exprpb.Type, bool) {
-	_, found := p.findSchema(typeName)
+func (p *typeProvider) FindStructType(structType string) (*types.Type, bool) {
+	_, found := p.findSchema(structType)
 	if !found {
 		return nil, false
 	}
-	return decls.NewTypeType(decls.NewObjectType(typeName)), true
+	return types.NewObjectType(structType), true
 }
 
-func (p *typeProvider) FindFieldType(messageType string, fieldName string) (*ref.FieldType, bool) { //nolint:staticcheck // ref.FieldType is deprecated but still needed for compatibility
-	schema, found := p.findSchema(messageType)
+func (p *typeProvider) FindStructFieldNames(structType string) ([]string, bool) {
+	schema, found := p.findSchema(structType)
+	if !found {
+		return nil, false
+	}
+	
+	fieldNames := make([]string, len(schema))
+	for i, field := range schema {
+		fieldNames[i] = field.Name
+	}
+	return fieldNames, true
+}
+
+func (p *typeProvider) FindStructFieldType(structType, fieldName string) (*types.FieldType, bool) {
+	schema, found := p.findSchema(structType)
 	if !found {
 		return nil, false
 	}
@@ -171,45 +184,51 @@ func (p *typeProvider) FindFieldType(messageType string, fieldName string) (*ref
 		return nil, false
 	}
 
-	var typ *exprpb.Type
+	var exprType *exprpb.Type
 	switch field.Type {
 	case "text", "varchar", "char", "character varying", "character":
-		typ = decls.String
+		exprType = decls.String
 	case "bytea":
-		typ = decls.Bytes
+		exprType = decls.Bytes
 	case "boolean", "bool":
-		typ = decls.Bool
+		exprType = decls.Bool
 	case "integer", "int", "int4", "bigint", "int8", "smallint", "int2":
-		typ = decls.Int
+		exprType = decls.Int
 	case "real", "float4", "double precision", "float8", "numeric", "decimal":
-		typ = decls.Double
+		exprType = decls.Double
 	case "timestamp", "timestamptz", "timestamp with time zone", "timestamp without time zone":
-		typ = decls.Timestamp
+		exprType = decls.Timestamp
 	case "date":
-		typ = sqltypes.Date
+		exprType = sqltypes.Date
 	case "time", "timetz", "time with time zone", "time without time zone":
-		typ = sqltypes.Time
+		exprType = sqltypes.Time
 	default:
 		// Handle composite types
 		if strings.Contains(field.Type, "composite") || len(field.Schema) > 0 {
-			typ = decls.NewObjectType(strings.Join([]string{messageType, fieldName}, "."))
+			exprType = decls.NewObjectType(strings.Join([]string{structType, fieldName}, "."))
 		} else {
 			// Default to string for unknown types
-			typ = decls.String
+			exprType = decls.String
 		}
 	}
 
 	if field.Repeated {
-		typ = decls.NewListType(typ)
+		exprType = decls.NewListType(exprType)
 	}
 
-	return &ref.FieldType{ //nolint:staticcheck // ref.FieldType is deprecated but still needed for compatibility
-		Type: typ,
+	// Convert exprpb.Type to types.Type
+	celType, err := types.ExprTypeToType(exprType)
+	if err != nil {
+		return nil, false
+	}
+
+	return &types.FieldType{
+		Type: celType,
 	}, true
 }
 
-func (p *typeProvider) NewValue(typeName string, _ map[string]ref.Val) ref.Val {
-	return types.NewErr("unknown type '%s'", typeName)
+func (p *typeProvider) NewValue(structType string, _ map[string]ref.Val) ref.Val {
+	return types.NewErr("unknown type '%s'", structType)
 }
 
-var _ ref.TypeProvider = new(typeProvider) //nolint:staticcheck // ref.TypeProvider is deprecated but still needed for compatibility
+var _ types.Provider = new(typeProvider)

@@ -111,7 +111,7 @@ func TestLoadTableSchema_WithPostgresContainer(t *testing.T) {
     require.NoError(t, err)
 
     // Verify the schema was loaded correctly
-    foundType, found := provider.FindType("users")
+    foundType, found := provider.FindStructType("users")
     assert.True(t, found)
     assert.NotNil(t, foundType)
 }
