@@ -449,3 +449,299 @@ func TestCELToSQL_ComprehensiveIntegration(t *testing.T) {
 		assert.GreaterOrEqual(t, count, 0, "Array manipulation query should execute without error")
 	})
 }
+
+// TestLoadTableSchema_JsonComprehensions tests JSON/JSONB fields combined with comprehensions
+func TestLoadTableSchema_JsonComprehensions(t *testing.T) {
+	ctx := context.Background()
+
+	// Create a PostgreSQL container with JSON comprehension test data
+	container, err := postgres.Run(ctx,
+		"postgres:15",
+		postgres.WithDatabase("testdb"),
+		postgres.WithUsername("testuser"),
+		postgres.WithPassword("testpass"),
+		postgres.WithInitScripts("create_json_comprehension_test_data.sql"),
+		testcontainers.WithWaitStrategy(
+			wait.ForLog("database system is ready to accept connections").
+				WithOccurrence(2).
+				WithStartupTimeout(time.Second*60),
+		),
+	)
+	require.NoError(t, err)
+
+	defer func() {
+		if err := container.Terminate(ctx); err != nil {
+			t.Errorf("failed to terminate container: %v", err)
+		}
+	}()
+
+	// Get connection string
+	connStr, err := container.ConnectionString(ctx, "sslmode=disable")
+	require.NoError(t, err)
+
+	// Create type provider with database connection
+	provider, err := pg.NewTypeProviderWithConnection(ctx, connStr)
+	require.NoError(t, err)
+	defer provider.Close()
+
+	// Load schemas for JSON tables
+	err = provider.LoadTableSchema(ctx, "json_users")
+	require.NoError(t, err)
+	err = provider.LoadTableSchema(ctx, "json_products")
+	require.NoError(t, err)
+
+	// Create CEL environment with loaded schemas
+	celEnv, err := cel.NewEnv(
+		cel.CustomTypeProvider(provider),
+		cel.Variable("json_users", cel.ObjectType("json_users")),
+		cel.Variable("json_products", cel.ObjectType("json_products")),
+	)
+	require.NoError(t, err)
+
+	// Test cases combining JSON/JSONB fields with comprehensions
+	testCases := []struct {
+		name          string
+		table         string
+		celExpression string
+		expectedRows  int
+		description   string
+	}{
+		// Simple JSON Array tests using PostgreSQL contains operator
+		{
+			name:          "json_array_contains_operator",
+			table:         "json_users",
+			celExpression: `json_users.tags.contains("developer")`,
+			expectedRows:  2,
+			description:   "JSONB array contains string using contains function",
+		},
+
+		// Test basic comprehensions on simple JSON arrays
+		{
+			name:          "json_array_exists_tag",
+			table:         "json_users",
+			celExpression: `json_users.tags.exists(tag, tag == "developer")`,
+			expectedRows:  2,
+			description:   "EXISTS comprehension on JSONB string array",
+		},
+	}
+
+	// Create database connection for executing queries
+	pool, err := pgxpool.New(ctx, connStr)
+	require.NoError(t, err)
+	defer pool.Close()
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			// Parse CEL expression
+			ast, issues := celEnv.Parse(tc.celExpression)
+			require.NoError(t, issues.Err(), "Failed to parse CEL expression: %s", tc.celExpression)
+
+			// Check CEL expression
+			ast, issues = celEnv.Check(ast)
+			require.NoError(t, issues.Err(), "Failed to check CEL expression: %s", tc.celExpression)
+
+			// Convert CEL to SQL
+			sqlCondition, err := cel2sql.Convert(ast)
+			require.NoError(t, err, "Failed to convert CEL to SQL: %s", tc.celExpression)
+
+			t.Logf("CEL: %s", tc.celExpression)
+			t.Logf("SQL: %s", sqlCondition)
+
+			// Execute query to validate the generated SQL
+			query := fmt.Sprintf("SELECT COUNT(*) FROM %s WHERE %s", tc.table, sqlCondition)
+			var count int
+			err = pool.QueryRow(ctx, query).Scan(&count)
+			require.NoError(t, err, "Failed to execute query: %s", query)
+
+			// Verify expected results
+			assert.Equal(t, tc.expectedRows, count,
+				"Expected %d rows but got %d for test case: %s\nCEL: %s\nSQL: %s\nQuery: %s",
+				tc.expectedRows, count, tc.description, tc.celExpression, sqlCondition, query)
+		})
+	}
+
+	// Additional complex test combining multiple comprehension types
+	t.Run("json_comprehensive_complex_query", func(t *testing.T) {
+		// This tests a very complex query combining multiple JSON comprehensions
+		celExpression := `json_users.tags.exists(tag, tag == "developer") && 
+		                 json_users.scores.all(score, score > 70) && 
+		                 json_users.attributes.exists_one(attr, attr.skill == "JavaScript" && attr.level >= 9) &&
+		                 "write" in json_users.settings.permissions`
+
+		ast, issues := celEnv.Parse(celExpression)
+		require.NoError(t, issues.Err())
+
+		ast, issues = celEnv.Check(ast)
+		require.NoError(t, issues.Err())
+
+		sqlCondition, err := cel2sql.Convert(ast)
+		require.NoError(t, err)
+
+		t.Logf("Complex JSON CEL: %s", celExpression)
+		t.Logf("Complex JSON SQL: %s", sqlCondition)
+
+		query := "SELECT COUNT(*) FROM json_users WHERE " + sqlCondition
+		var count int
+		err = pool.QueryRow(ctx, query).Scan(&count)
+		require.NoError(t, err)
+
+		// This specific combination should match exactly 1 user (Alice Johnson)
+		assert.Equal(t, 1, count, "Complex JSON comprehension query should match exactly 1 user")
+	})
+
+	// Test JSON field type inference
+	t.Run("json_field_types_verification", func(t *testing.T) {
+		// Verify that JSON/JSONB fields are properly recognized
+		fieldNames, found := provider.FindStructFieldNames("json_users")
+		assert.True(t, found, "json_users field names should be found")
+		assert.Contains(t, fieldNames, "settings")
+		assert.Contains(t, fieldNames, "metadata")
+		assert.Contains(t, fieldNames, "tags")
+		assert.Contains(t, fieldNames, "scores")
+		assert.Contains(t, fieldNames, "attributes")
+
+		// Check field types
+		settingsType, found := provider.FindStructFieldType("json_users", "settings")
+		assert.True(t, found, "settings field should be found")
+		assert.NotNil(t, settingsType, "settings field type should not be nil")
+
+		tagsType, found := provider.FindStructFieldType("json_users", "tags")
+		assert.True(t, found, "tags field should be found")
+		assert.NotNil(t, tagsType, "tags field type should not be nil")
+	})
+
+	// First, let's check the actual data structure
+	t.Run("debug_data_structure", func(t *testing.T) {
+		// Check what our JSON data actually looks like
+		query := "SELECT id, name, tags, scores FROM json_users LIMIT 2"
+		rows, err := pool.Query(ctx, query)
+		require.NoError(t, err)
+		defer rows.Close()
+
+		for rows.Next() {
+			var id int
+			var name string
+			var tags, scores interface{}
+			err = rows.Scan(&id, &name, &tags, &scores)
+			require.NoError(t, err)
+			t.Logf("User %d: %s, tags: %v (type: %T), scores: %v (type: %T)", id, name, tags, tags, scores, scores)
+		}
+
+		// Also check the actual SQL output for a simple case
+		query = "SELECT jsonb_array_elements_text(tags) FROM json_users WHERE id = 1"
+		var tag string
+		err = pool.QueryRow(ctx, query).Scan(&tag)
+		if err != nil {
+			t.Logf("Error with jsonb_array_elements_text: %v", err)
+		} else {
+			t.Logf("First tag from user 1: %s", tag)
+		}
+
+		// Also check the table schema
+		query = "SELECT column_name, data_type FROM information_schema.columns WHERE table_name = 'json_users' ORDER BY ordinal_position"
+		rows, err = pool.Query(ctx, query)
+		require.NoError(t, err)
+		defer rows.Close()
+
+		for rows.Next() {
+			var columnName, dataType string
+			err = rows.Scan(&columnName, &dataType)
+			require.NoError(t, err)
+			t.Logf("Column: %s, Type: %s", columnName, dataType)
+		}
+
+		// Check raw JSON content
+		query = "SELECT tags::text, scores::text FROM json_users WHERE id = 1"
+		var tagsRaw, scoresRaw string
+		err = pool.QueryRow(ctx, query).Scan(&tagsRaw, &scoresRaw)
+		require.NoError(t, err)
+		t.Logf("Raw tags JSON: %s", tagsRaw)
+		t.Logf("Raw scores JSON: %s", scoresRaw)
+
+		// Try actual working JSON functions
+		query = "SELECT count(*) FROM json_users WHERE tags ? 'developer'"
+		var count int
+		err = pool.QueryRow(ctx, query).Scan(&count)
+		if err != nil {
+			t.Logf("Error with tags ? operator: %v", err)
+		} else {
+			t.Logf("Count of users with developer tag using ? operator: %d", count)
+		}
+
+		// Test the actual functions that should work
+		query = "SELECT count(*) FROM json_users WHERE EXISTS (SELECT 1 FROM jsonb_array_elements_text(tags) AS tag WHERE tag = 'developer')"
+		err = pool.QueryRow(ctx, query).Scan(&count)
+		if err != nil {
+			t.Logf("Error with jsonb_array_elements_text: %v", err)
+		} else {
+			t.Logf("Count using jsonb_array_elements_text: %d", count)
+		}
+		
+		// Test for scores with proper casting
+		query = "SELECT count(*) FROM json_users WHERE EXISTS (SELECT 1 FROM jsonb_array_elements(scores) AS score WHERE (score::text)::int > 90)"
+		err = pool.QueryRow(ctx, query).Scan(&count)
+		if err != nil {
+			t.Logf("Error with jsonb_array_elements for scores: %v", err)  
+		} else {
+			t.Logf("Count using jsonb_array_elements for scores > 90: %d", count)
+		}
+
+		// Check the type of JSON data PostgreSQL sees
+		query = "SELECT jsonb_typeof(tags), jsonb_typeof(scores) FROM json_users WHERE id = 1"
+		var tagsType, scoresType string
+		err = pool.QueryRow(ctx, query).Scan(&tagsType, &scoresType)
+		if err != nil {
+			t.Logf("Error checking jsonb_typeof: %v", err)
+		} else {
+			t.Logf("JSONB type of tags: %s, scores: %s", tagsType, scoresType)
+		}
+		
+		// Try different approaches
+		query = "SELECT count(*) FROM json_users WHERE jsonb_array_length(tags) > 2"
+		err = pool.QueryRow(ctx, query).Scan(&count)
+		if err != nil {
+			t.Logf("Error with jsonb_array_length: %v", err)
+		} else {
+			t.Logf("Count using jsonb_array_length: %d", count)
+		}
+	})
+
+	// Check all users' JSON data to debug the issue
+	t.Run("debug_all_user_data", func(t *testing.T) {
+		query := "SELECT id, name, tags IS NULL, scores IS NULL, tags::text, scores::text FROM json_users ORDER BY id"
+		rows, err := pool.Query(ctx, query)
+		require.NoError(t, err)
+		defer rows.Close()
+		
+		for rows.Next() {
+			var id int
+			var name string
+			var tagsNull, scoresNull bool
+			var tagsText, scoresText *string
+			err = rows.Scan(&id, &name, &tagsNull, &scoresNull, &tagsText, &scoresText)
+			require.NoError(t, err)
+			
+			tagsStr := "NULL"
+			if tagsText != nil {
+				tagsStr = *tagsText
+			}
+			scoresStr := "NULL"
+			if scoresText != nil {
+				scoresStr = *scoresText
+			}
+			
+			t.Logf("User %d (%s): tags_null=%v, scores_null=%v, tags='%s', scores='%s'", 
+				id, name, tagsNull, scoresNull, tagsStr, scoresStr)
+		}
+		
+		// Try the function on specific known-good rows
+		query = "SELECT count(*) FROM json_users WHERE id = 1 AND EXISTS (SELECT 1 FROM jsonb_array_elements_text(tags) AS tag WHERE tag = 'developer')"
+		var count int
+		err = pool.QueryRow(ctx, query).Scan(&count)
+		if err != nil {
+			t.Logf("Error with jsonb_array_elements_text on specific row: %v", err)
+		} else {
+			t.Logf("Count using jsonb_array_elements_text on row 1: %d", count)
+		}
+	})
+}

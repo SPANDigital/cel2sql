@@ -3,9 +3,16 @@
 cel2sql converts [CEL (Common Expression Language)](https://cel.dev/) [Github Reoi](https://opensource.google/projects/cel) to SQL condition.
 It is specifically targeting PostgreSQL standard SQL.
 
-## Latest Release - v2.5.0
+## Latest Release - v2.6.0
 
 🚀 **Major New Features:**
+- **🔥 JSON/JSONB Comprehensions Support**: Full support for CEL comprehensions on JSON/JSONB arrays
+- **Advanced JSON Array Operations**: Support for `exists()`, `all()`, `exists_one()` on JSON/JSONB arrays  
+- **Numeric JSON Field Casting**: Automatic casting of numeric JSON fields (e.g., `(score)::numeric`)
+- **Nested JSON Array Access**: Support for comprehensions on nested JSON arrays (e.g., `settings.permissions`)
+- **JSON Type Safety**: Null and type checks for JSON/JSONB comprehensions using `jsonb_typeof()`
+
+**Previous Features (v2.5.0):**
 - **🔥 CEL Comprehensions Support**: Full support for `all()`, `exists()`, `exists_one()`, `filter()`, and `map()` comprehensions
 - **PostgreSQL UNNEST Integration**: Comprehensions are converted to efficient PostgreSQL SQL using `UNNEST()` and array functions
 - **Nested Comprehensions**: Support for complex nested comprehensions like `employees.exists(e, e.skills.exists(s, s == 'Go'))`

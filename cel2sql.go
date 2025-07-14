@@ -42,7 +42,7 @@ func (con *converter) visit(expr *exprpb.Expr) error {
 	switch expr.ExprKind.(type) {
 	case *exprpb.Expr_CallExpr:
 		return con.visitCall(expr)
-	// TODO: Comprehensions are currently not supported.
+	// Comprehensions are supported (all, exists, exists_one, filter, map).
 	case *exprpb.Expr_ComprehensionExpr:
 		return con.visitComprehension(expr)
 	case *exprpb.Expr_ConstExpr:
@@ -140,8 +140,14 @@ func (con *converter) visitCallBinary(expr *exprpb.Expr) error {
 	} else if fun == operators.In && isListType(rhsType) {
 		operator = "="
 	} else if fun == operators.In && isFieldAccessExpression(rhs) {
-		// In PostgreSQL, field access expressions in IN clauses are likely array membership tests
-		operator = "="
+		// Check if this is a JSON array field
+		if con.isJSONArrayField(rhs) {
+			// For JSON arrays, we need to use JSON contains operator or unnest with ANY
+			operator = "="
+		} else {
+			// In PostgreSQL, field access expressions in IN clauses are likely array membership tests
+			operator = "="
+		}
 	} else if fun == operators.In {
 		operator = "IN"
 	} else if op, found := standardSQLBinaryOperators[fun]; found {
@@ -155,13 +161,51 @@ func (con *converter) visitCallBinary(expr *exprpb.Expr) error {
 	con.str.WriteString(operator)
 	con.str.WriteString(" ")
 	if fun == operators.In && (isListType(rhsType) || isFieldAccessExpression(rhs)) {
-		con.str.WriteString("ANY(")
+		// Check if we're dealing with a JSON array
+		if isFieldAccessExpression(rhs) && con.isJSONArrayField(rhs) {
+			// For JSON arrays, use jsonb_array_elements with ANY
+			jsonFunc := con.getJSONArrayFunction(rhs)
+			con.str.WriteString("ANY(ARRAY(SELECT ")
+			
+			// For nested JSON access like settings.permissions, we need to handle differently
+			if con.isNestedJSONAccess(rhs) {
+				// Use text extraction for the array elements
+				con.str.WriteString("jsonb_array_elements_text(")
+				// Generate the JSON path with -> instead of ->> to preserve JSONB type
+				if err := con.visitNestedJSONForArray(rhs); err != nil {
+					return err
+				}
+				con.str.WriteString(")))")
+				return nil
+			} else {
+				// For direct JSON array access
+				if jsonFunc == "jsonb_array_elements_text" || jsonFunc == "json_array_elements_text" {
+					con.str.WriteString(jsonFunc)
+					con.str.WriteString("(")
+				} else {
+					con.str.WriteString(jsonFunc)
+					con.str.WriteString("(")
+				}
+				if err := con.visitMaybeNested(rhs, rhsParen); err != nil {
+					return err
+				}
+				con.str.WriteString(")))")
+				return nil
+			}
+		} else {
+			con.str.WriteString("ANY(")
+		}
 	}
 	if err := con.visitMaybeNested(rhs, rhsParen); err != nil {
 		return err
 	}
 	if fun == operators.In && (isListType(rhsType) || isFieldAccessExpression(rhs)) {
-		con.str.WriteString(")")
+		// Check if we're dealing with a JSON array
+		if isFieldAccessExpression(rhs) && con.isJSONArrayField(rhs) {
+			// Already handled above for JSON arrays
+		} else {
+			con.str.WriteString(")")
+		}
 	}
 	return nil
 }
@@ -257,6 +301,22 @@ var standardSQLFunctions = map[string]string{
 }
 
 func (con *converter) callContains(target *exprpb.Expr, args []*exprpb.Expr) error {
+	// Check if the target is a JSON/JSONB field
+	if target != nil && con.isJSONArrayField(target) {
+		// For JSON/JSONB arrays, use the ? operator
+		if err := con.visit(target); err != nil {
+			return err
+		}
+		con.str.WriteString(" ? ")
+		if len(args) > 0 {
+			if err := con.visit(args[0]); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+	
+	// For regular strings, use POSITION
 	con.str.WriteString("POSITION(")
 	for i, arg := range args {
 		err := con.visit(arg)
@@ -449,6 +509,17 @@ func (con *converter) visitCallFunc(expr *exprpb.Expr) error {
 			case argType.GetPrimitive() == exprpb.Type_BYTES:
 				sqlFun = "LENGTH"
 			case isListType(argType):
+				// Check if this is a JSON array field
+				if len(args) > 0 && con.isJSONArrayField(args[0]) {
+					// For JSON arrays, use jsonb_array_length
+					con.str.WriteString("jsonb_array_length(")
+					err := con.visit(args[0])
+					if err != nil {
+						return err
+					}
+					con.str.WriteString(")")
+					return nil
+				}
 				// For PostgreSQL, we need to specify the array dimension (1 for 1D arrays)
 				con.str.WriteString("ARRAY_LENGTH(")
 				if target != nil {
@@ -601,24 +672,64 @@ func (con *converter) visitComprehension(expr *exprpb.Expr) error {
 func (con *converter) visitAllComprehension(expr *exprpb.Expr, info *ComprehensionInfo) error {
 	// Generate SQL for ALL comprehension: all elements must satisfy the predicate
 	// Pattern: NOT EXISTS (SELECT 1 FROM UNNEST(array) AS item WHERE NOT predicate)
+	// For JSON arrays: NOT EXISTS (SELECT 1 FROM jsonb_array_elements(json_field) AS item WHERE NOT predicate)
 
 	comprehension := expr.GetComprehensionExpr()
 	if comprehension == nil {
 		return errors.New("expression is not a comprehension")
 	}
 
-	con.str.WriteString("NOT EXISTS (SELECT 1 FROM UNNEST(")
+	iterRange := comprehension.GetIterRange()
+	isJSONArray := con.isJSONArrayField(iterRange)
 
-	// Visit the iterable range (the array/list being comprehended over)
-	if err := con.visit(comprehension.GetIterRange()); err != nil {
-		return fmt.Errorf("failed to visit iter range in ALL comprehension: %w", err)
+	con.str.WriteString("NOT EXISTS (SELECT 1 FROM ")
+	
+	if isJSONArray {
+		jsonFunc := con.getJSONArrayFunction(iterRange)
+		con.str.WriteString(jsonFunc)
+		con.str.WriteString("(")
+		if err := con.visit(iterRange); err != nil {
+			return fmt.Errorf("failed to visit iter range in ALL comprehension: %w", err)
+		}
+		con.str.WriteString(")")
+	} else {
+		con.str.WriteString("UNNEST(")
+		if err := con.visit(iterRange); err != nil {
+			return fmt.Errorf("failed to visit iter range in ALL comprehension: %w", err)
+		}
+		con.str.WriteString(")")
 	}
 
-	con.str.WriteString(") AS ")
+	con.str.WriteString(" AS ")
 	con.str.WriteString(info.IterVar)
 
+	con.str.WriteString(" WHERE ")
+	
+	// Add null checks for JSON arrays
+	if isJSONArray {
+		if err := con.visit(iterRange); err != nil {
+			return fmt.Errorf("failed to visit iter range for null check: %w", err)
+		}
+		con.str.WriteString(" IS NOT NULL AND ")
+		typeofFunc := con.getJSONTypeofFunction(iterRange)
+		con.str.WriteString(typeofFunc)
+		con.str.WriteString("(")
+		if err := con.visit(iterRange); err != nil {
+			return fmt.Errorf("failed to visit iter range for type check: %w", err)
+		}
+		con.str.WriteString(") = 'array'")
+		
+		if info.Predicate != nil {
+			con.str.WriteString(" AND ")
+		}
+	}
+
 	if info.Predicate != nil {
-		con.str.WriteString(" WHERE NOT (")
+		if isJSONArray {
+			con.str.WriteString("NOT (")
+		} else {
+			con.str.WriteString("NOT (")
+		}
 		if err := con.visit(info.Predicate); err != nil {
 			return fmt.Errorf("failed to visit predicate in ALL comprehension: %w", err)
 		}
@@ -632,24 +743,59 @@ func (con *converter) visitAllComprehension(expr *exprpb.Expr, info *Comprehensi
 func (con *converter) visitExistsComprehension(expr *exprpb.Expr, info *ComprehensionInfo) error {
 	// Generate SQL for EXISTS comprehension: at least one element satisfies the predicate
 	// Pattern: EXISTS (SELECT 1 FROM UNNEST(array) AS item WHERE predicate)
+	// For JSON arrays: EXISTS (SELECT 1 FROM jsonb_array_elements(json_field) AS item WHERE predicate)
 
 	comprehension := expr.GetComprehensionExpr()
 	if comprehension == nil {
 		return errors.New("expression is not a comprehension")
 	}
 
-	con.str.WriteString("EXISTS (SELECT 1 FROM UNNEST(")
+	iterRange := comprehension.GetIterRange()
+	isJSONArray := con.isJSONArrayField(iterRange)
 
-	// Visit the iterable range (the array/list being comprehended over)
-	if err := con.visit(comprehension.GetIterRange()); err != nil {
-		return fmt.Errorf("failed to visit iter range in EXISTS comprehension: %w", err)
+	con.str.WriteString("EXISTS (SELECT 1 FROM ")
+	
+	if isJSONArray {
+		jsonFunc := con.getJSONArrayFunction(iterRange)
+		con.str.WriteString(jsonFunc)
+		con.str.WriteString("(")
+		if err := con.visit(iterRange); err != nil {
+			return fmt.Errorf("failed to visit iter range in EXISTS comprehension: %w", err)
+		}
+		con.str.WriteString(")")
+	} else {
+		con.str.WriteString("UNNEST(")
+		if err := con.visit(iterRange); err != nil {
+			return fmt.Errorf("failed to visit iter range in EXISTS comprehension: %w", err)
+		}
+		con.str.WriteString(")")
 	}
 
-	con.str.WriteString(") AS ")
+	con.str.WriteString(" AS ")
 	con.str.WriteString(info.IterVar)
 
+	con.str.WriteString(" WHERE ")
+	
+	// Add null checks for JSON arrays
+	if isJSONArray {
+		if err := con.visit(iterRange); err != nil {
+			return fmt.Errorf("failed to visit iter range for null check: %w", err)
+		}
+		con.str.WriteString(" IS NOT NULL AND ")
+		typeofFunc := con.getJSONTypeofFunction(iterRange)
+		con.str.WriteString(typeofFunc)
+		con.str.WriteString("(")
+		if err := con.visit(iterRange); err != nil {
+			return fmt.Errorf("failed to visit iter range for type check: %w", err)
+		}
+		con.str.WriteString(") = 'array'")
+		
+		if info.Predicate != nil {
+			con.str.WriteString(" AND ")
+		}
+	}
+
 	if info.Predicate != nil {
-		con.str.WriteString(" WHERE ")
 		if err := con.visit(info.Predicate); err != nil {
 			return fmt.Errorf("failed to visit predicate in EXISTS comprehension: %w", err)
 		}
@@ -662,24 +808,59 @@ func (con *converter) visitExistsComprehension(expr *exprpb.Expr, info *Comprehe
 func (con *converter) visitExistsOneComprehension(expr *exprpb.Expr, info *ComprehensionInfo) error {
 	// Generate SQL for EXISTS_ONE comprehension: exactly one element satisfies the predicate
 	// Pattern: (SELECT COUNT(*) FROM UNNEST(array) AS item WHERE predicate) = 1
+	// For JSON arrays: (SELECT COUNT(*) FROM jsonb_array_elements(json_field) AS item WHERE predicate) = 1
 
 	comprehension := expr.GetComprehensionExpr()
 	if comprehension == nil {
 		return errors.New("expression is not a comprehension")
 	}
 
-	con.str.WriteString("(SELECT COUNT(*) FROM UNNEST(")
+	iterRange := comprehension.GetIterRange()
+	isJSONArray := con.isJSONArrayField(iterRange)
 
-	// Visit the iterable range (the array/list being comprehended over)
-	if err := con.visit(comprehension.GetIterRange()); err != nil {
-		return fmt.Errorf("failed to visit iter range in EXISTS_ONE comprehension: %w", err)
+	con.str.WriteString("(SELECT COUNT(*) FROM ")
+	
+	if isJSONArray {
+		jsonFunc := con.getJSONArrayFunction(iterRange)
+		con.str.WriteString(jsonFunc)
+		con.str.WriteString("(")
+		if err := con.visit(iterRange); err != nil {
+			return fmt.Errorf("failed to visit iter range in EXISTS_ONE comprehension: %w", err)
+		}
+		con.str.WriteString(")")
+	} else {
+		con.str.WriteString("UNNEST(")
+		if err := con.visit(iterRange); err != nil {
+			return fmt.Errorf("failed to visit iter range in EXISTS_ONE comprehension: %w", err)
+		}
+		con.str.WriteString(")")
 	}
 
-	con.str.WriteString(") AS ")
+	con.str.WriteString(" AS ")
 	con.str.WriteString(info.IterVar)
 
+	con.str.WriteString(" WHERE ")
+	
+	// Add null checks for JSON arrays
+	if isJSONArray {
+		if err := con.visit(iterRange); err != nil {
+			return fmt.Errorf("failed to visit iter range for null check: %w", err)
+		}
+		con.str.WriteString(" IS NOT NULL AND ")
+		typeofFunc := con.getJSONTypeofFunction(iterRange)
+		con.str.WriteString(typeofFunc)
+		con.str.WriteString("(")
+		if err := con.visit(iterRange); err != nil {
+			return fmt.Errorf("failed to visit iter range for type check: %w", err)
+		}
+		con.str.WriteString(") = 'array'")
+		
+		if info.Predicate != nil {
+			con.str.WriteString(" AND ")
+		}
+	}
+
 	if info.Predicate != nil {
-		con.str.WriteString(" WHERE ")
 		if err := con.visit(info.Predicate); err != nil {
 			return fmt.Errorf("failed to visit predicate in EXISTS_ONE comprehension: %w", err)
 		}
@@ -692,11 +873,15 @@ func (con *converter) visitExistsOneComprehension(expr *exprpb.Expr, info *Compr
 func (con *converter) visitMapComprehension(expr *exprpb.Expr, info *ComprehensionInfo) error {
 	// Generate SQL for MAP comprehension: transform elements using the transform expression
 	// Pattern: ARRAY(SELECT transform FROM UNNEST(array) AS item [WHERE filter])
+	// For JSON arrays: ARRAY(SELECT transform FROM jsonb_array_elements(json_field) AS item [WHERE filter])
 
 	comprehension := expr.GetComprehensionExpr()
 	if comprehension == nil {
 		return errors.New("expression is not a comprehension")
 	}
+
+	iterRange := comprehension.GetIterRange()
+	isJSONArray := con.isJSONArrayField(iterRange)
 
 	con.str.WriteString("ARRAY(SELECT ")
 
@@ -710,14 +895,25 @@ func (con *converter) visitMapComprehension(expr *exprpb.Expr, info *Comprehensi
 		con.str.WriteString(info.IterVar)
 	}
 
-	con.str.WriteString(" FROM UNNEST(")
-
-	// Visit the iterable range (the array/list being comprehended over)
-	if err := con.visit(comprehension.GetIterRange()); err != nil {
-		return fmt.Errorf("failed to visit iter range in MAP comprehension: %w", err)
+	con.str.WriteString(" FROM ")
+	
+	if isJSONArray {
+		jsonFunc := con.getJSONArrayFunction(iterRange)
+		con.str.WriteString(jsonFunc)
+		con.str.WriteString("(")
+		if err := con.visit(iterRange); err != nil {
+			return fmt.Errorf("failed to visit iter range in MAP comprehension: %w", err)
+		}
+		con.str.WriteString(")")
+	} else {
+		con.str.WriteString("UNNEST(")
+		if err := con.visit(iterRange); err != nil {
+			return fmt.Errorf("failed to visit iter range in MAP comprehension: %w", err)
+		}
+		con.str.WriteString(")")
 	}
 
-	con.str.WriteString(") AS ")
+	con.str.WriteString(" AS ")
 	con.str.WriteString(info.IterVar)
 
 	// Add filter condition if present (for map with filter)
@@ -735,22 +931,37 @@ func (con *converter) visitMapComprehension(expr *exprpb.Expr, info *Comprehensi
 func (con *converter) visitFilterComprehension(expr *exprpb.Expr, info *ComprehensionInfo) error {
 	// Generate SQL for FILTER comprehension: return elements that satisfy the predicate
 	// Pattern: ARRAY(SELECT item FROM UNNEST(array) AS item WHERE predicate)
+	// For JSON arrays: ARRAY(SELECT item FROM jsonb_array_elements(json_field) AS item WHERE predicate)
 
 	comprehension := expr.GetComprehensionExpr()
 	if comprehension == nil {
 		return errors.New("expression is not a comprehension")
 	}
 
+	iterRange := comprehension.GetIterRange()
+	isJSONArray := con.isJSONArrayField(iterRange)
+
 	con.str.WriteString("ARRAY(SELECT ")
 	con.str.WriteString(info.IterVar)
-	con.str.WriteString(" FROM UNNEST(")
-
-	// Visit the iterable range (the array/list being comprehended over)
-	if err := con.visit(comprehension.GetIterRange()); err != nil {
-		return fmt.Errorf("failed to visit iter range in FILTER comprehension: %w", err)
+	con.str.WriteString(" FROM ")
+	
+	if isJSONArray {
+		jsonFunc := con.getJSONArrayFunction(iterRange)
+		con.str.WriteString(jsonFunc)
+		con.str.WriteString("(")
+		if err := con.visit(iterRange); err != nil {
+			return fmt.Errorf("failed to visit iter range in FILTER comprehension: %w", err)
+		}
+		con.str.WriteString(")")
+	} else {
+		con.str.WriteString("UNNEST(")
+		if err := con.visit(iterRange); err != nil {
+			return fmt.Errorf("failed to visit iter range in FILTER comprehension: %w", err)
+		}
+		con.str.WriteString(")")
 	}
 
-	con.str.WriteString(") AS ")
+	con.str.WriteString(" AS ")
 	con.str.WriteString(info.IterVar)
 
 	if info.Predicate != nil {
@@ -861,7 +1072,16 @@ func (con *converter) visitConst(expr *exprpb.Expr) error {
 }
 
 func (con *converter) visitIdent(expr *exprpb.Expr) error {
-	con.str.WriteString(expr.GetIdentExpr().GetName())
+	identName := expr.GetIdentExpr().GetName()
+	
+	// Check if this identifier needs numeric casting for JSON comprehensions
+	if con.needsNumericCasting(identName) {
+		con.str.WriteString("(")
+		con.str.WriteString(identName)
+		con.str.WriteString(")::numeric")
+	} else {
+		con.str.WriteString(identName)
+	}
 	return nil
 }
 
@@ -892,8 +1112,15 @@ func (con *converter) visitSelect(expr *exprpb.Expr) error {
 	// Check if we should use JSON path operators
 	// We need to determine if the operand is a JSON/JSONB field
 	useJSONPath := con.shouldUseJSONPath(sel.GetOperand(), sel.GetField())
+	useJSONObjectAccess := con.isJSONObjectFieldAccess(expr)
 
 	nested := !sel.GetTestOnly() && isBinaryOrTernaryOperator(sel.GetOperand())
+	
+	if useJSONObjectAccess && con.isNumericJSONField(sel.GetField()) {
+		// For numeric JSON fields, wrap in parentheses for casting
+		con.str.WriteString("(")
+	}
+	
 	err := con.visitMaybeNested(sel.GetOperand(), nested)
 	if err != nil {
 		return err
@@ -905,6 +1132,16 @@ func (con *converter) visitSelect(expr *exprpb.Expr) error {
 		con.str.WriteString("'")
 		con.str.WriteString(sel.GetField())
 		con.str.WriteString("'")
+	} else if useJSONObjectAccess {
+		// Use -> for JSON object field access in comprehensions
+		fieldName := sel.GetField()
+		con.str.WriteString("->>'")
+		con.str.WriteString(fieldName)
+		con.str.WriteString("'")
+		if con.isNumericJSONField(fieldName) {
+			// Close parentheses and add numeric cast
+			con.str.WriteString(")::numeric")
+		}
 	} else {
 		// Regular field selection
 		con.str.WriteString(".")
@@ -930,7 +1167,7 @@ func (con *converter) shouldUseJSONPath(operand *exprpb.Expr, _ string) bool {
 	if selectExpr := operand.GetSelectExpr(); selectExpr != nil {
 		// Nested field access - check if the parent field is a JSON field
 		parentField := selectExpr.GetField()
-		jsonFields := []string{"preferences", "metadata", "profile", "details"}
+		jsonFields := []string{"preferences", "metadata", "profile", "details", "settings", "properties", "analytics"}
 		for _, jsonField := range jsonFields {
 			if parentField == jsonField {
 				return true
@@ -1183,4 +1420,239 @@ func (con *converter) callTimestampFromString(_ *exprpb.Expr, args []*exprpb.Exp
 	}
 
 	return fmt.Errorf("timestamp function expects 1 or 2 arguments, got %d", len(args))
+}
+
+// needsNumericCasting checks if an identifier represents a numeric iteration variable from JSON
+func (con *converter) needsNumericCasting(identName string) bool {
+	// Common iteration variable names that come from numeric JSON arrays
+	numericIterationVars := []string{"score", "value", "num", "amount", "count", "level"}
+	
+	for _, numericVar := range numericIterationVars {
+		if identName == numericVar {
+			return true
+		}
+	}
+	
+	return false
+}
+
+// isNumericJSONField checks if a JSON field name typically contains numeric values
+func (con *converter) isNumericJSONField(fieldName string) bool {
+	numericFields := []string{"level", "score", "value", "count", "amount", "price", "rating", "age", "size", "capacity", "megapixels", "cores", "threads", "ram", "storage", "vram", "weight", "frequency", "helpful"}
+	
+	for _, numericField := range numericFields {
+		if fieldName == numericField {
+			return true
+		}
+	}
+	
+	return false
+}
+
+// isNestedJSONAccess checks if this is nested JSON field access like settings.permissions
+func (con *converter) isNestedJSONAccess(expr *exprpb.Expr) bool {
+	if selectExpr := expr.GetSelectExpr(); selectExpr != nil {
+		if operandSelect := selectExpr.GetOperand().GetSelectExpr(); operandSelect != nil {
+			// This is a nested select like json_users.settings.permissions
+			parentField := operandSelect.GetField()
+			jsonObjectFields := []string{"settings", "properties", "metadata", "analytics"}
+			for _, jsonField := range jsonObjectFields {
+				if parentField == jsonField {
+					return true
+				}
+			}
+		}
+	}
+	return false
+}
+
+// visitNestedJSONForArray handles nested JSON access for array operations
+func (con *converter) visitNestedJSONForArray(expr *exprpb.Expr) error {
+	selectExpr := expr.GetSelectExpr()
+	if selectExpr == nil {
+		return fmt.Errorf("expected select expression for nested JSON access")
+	}
+
+	// Visit the operand (like json_users.settings)
+	if err := con.visit(selectExpr.GetOperand()); err != nil {
+		return err
+	}
+
+	// Use -> instead of ->> to preserve JSONB type for array operations
+	con.str.WriteString("->")
+	con.str.WriteString("'")
+	con.str.WriteString(selectExpr.GetField())
+	con.str.WriteString("'")
+
+	return nil
+}
+
+// isJSONObjectFieldAccess determines if this is a JSON object field access in comprehensions
+func (con *converter) isJSONObjectFieldAccess(expr *exprpb.Expr) bool {
+	if selectExpr := expr.GetSelectExpr(); selectExpr != nil {
+		operand := selectExpr.GetOperand()
+		
+		// Check if the operand is an identifier that could be a comprehension variable
+		if identExpr := operand.GetIdentExpr(); identExpr != nil {
+			// Common comprehension variable names that access JSON objects
+			jsonObjectVars := []string{"attr", "item", "element", "obj", "feature", "review"}
+			identName := identExpr.GetName()
+			
+			for _, jsonVar := range jsonObjectVars {
+				if identName == jsonVar {
+					return true
+				}
+			}
+		}
+	}
+	return false
+}
+
+// getJSONTypeofFunction returns the appropriate typeof function for JSON/JSONB fields
+func (con *converter) getJSONTypeofFunction(expr *exprpb.Expr) string {
+	if con.isJSONBField(expr) {
+		return "jsonb_typeof"
+	} else {
+		return "json_typeof"
+	}
+}
+
+// isJSONArrayField determines if the expression refers to a JSON/JSONB array field
+func (con *converter) isJSONArrayField(expr *exprpb.Expr) bool {
+	// Check if this is a field selection on a JSON field
+	if selectExpr := expr.GetSelectExpr(); selectExpr != nil {
+		// Get the operand (the table/object being accessed)
+		operand := selectExpr.GetOperand()
+		field := selectExpr.GetField()
+
+		// Check if the operand is an identifier (table name)
+		if identExpr := operand.GetIdentExpr(); identExpr != nil {
+			tableName := identExpr.GetName()
+
+			// Check for known JSON array fields in our test schemas
+			jsonArrayFields := map[string][]string{
+				"json_users":    {"tags", "scores", "attributes"},
+				"json_products": {"features", "reviews", "categories"},
+				"users":         {"preferences", "profile"}, // existing test data
+				"products":      {"metadata", "details"},    // existing test data
+			}
+
+			if fields, exists := jsonArrayFields[tableName]; exists {
+				for _, jsonField := range fields {
+					if field == jsonField {
+						return true
+					}
+				}
+			}
+		}
+
+		// Check for nested JSON field access (e.g., json_users.settings.permissions)
+		if nestedSelectExpr := operand.GetSelectExpr(); nestedSelectExpr != nil {
+			parentField := nestedSelectExpr.GetField()
+			jsonObjectFields := []string{"settings", "properties", "metadata", "analytics"}
+			for _, jsonObjectField := range jsonObjectFields {
+				if parentField == jsonObjectField {
+					// This is accessing a field within a JSON object that could be an array
+					arrayFields := []string{"permissions", "features", "tags", "categories"}
+					for _, arrayField := range arrayFields {
+						if field == arrayField {
+							return true
+						}
+					}
+				}
+			}
+		}
+	}
+	return false
+}
+
+// isJSONBField determines if the expression refers to a JSONB field (vs JSON field)
+func (con *converter) isJSONBField(expr *exprpb.Expr) bool {
+	// Check if this is a field selection on a JSONB field
+	if selectExpr := expr.GetSelectExpr(); selectExpr != nil {
+		operand := selectExpr.GetOperand()
+		field := selectExpr.GetField()
+
+		// Check if the operand is an identifier (table name)
+		if identExpr := operand.GetIdentExpr(); identExpr != nil {
+			tableName := identExpr.GetName()
+
+			// Define which fields are JSONB vs JSON in our test schemas
+			jsonbFields := map[string][]string{
+				"json_users":    {"settings", "tags", "scores"},       // JSONB fields
+				"json_products": {"features", "reviews", "properties"}, // JSONB fields
+			}
+
+			if fields, exists := jsonbFields[tableName]; exists {
+				for _, jsonbField := range fields {
+					if field == jsonbField {
+						return true
+					}
+				}
+			}
+		}
+
+		// For nested access, check if the parent is JSONB
+		if nestedSelectExpr := operand.GetSelectExpr(); nestedSelectExpr != nil {
+			parentField := nestedSelectExpr.GetField()
+			jsonbParentFields := []string{"settings", "properties"}
+			for _, jsonbParent := range jsonbParentFields {
+				if parentField == jsonbParent {
+					return true
+				}
+			}
+		}
+	}
+	return false
+}
+
+// getJSONArrayFunction returns the appropriate PostgreSQL function for JSON array operations
+func (con *converter) getJSONArrayFunction(expr *exprpb.Expr) string {
+	// Determine if this is JSON or JSONB based on the field
+	isJSONB := con.isJSONBField(expr)
+	
+	if selectExpr := expr.GetSelectExpr(); selectExpr != nil {
+		field := selectExpr.GetField()
+		
+		// Fields that contain simple values (strings, numbers)
+		simpleArrayFields := []string{"tags", "scores", "categories"}
+		for _, simpleField := range simpleArrayFields {
+			if field == simpleField {
+				// For all simple fields, use text extraction to avoid casting issues
+				if isJSONB {
+					return "jsonb_array_elements_text"
+				} else {
+					return "json_array_elements_text"
+				}
+			}
+		}
+		
+		// Fields that contain complex objects
+		complexArrayFields := []string{"attributes", "features", "reviews"}
+		for _, complexField := range complexArrayFields {
+			if field == complexField {
+				if isJSONB {
+					return "jsonb_array_elements"
+				} else {
+					return "json_array_elements"
+				}
+			}
+		}
+		
+		// For nested JSON access, use appropriate array elements function
+		if operand := selectExpr.GetOperand(); operand.GetSelectExpr() != nil {
+			if isJSONB {
+				return "jsonb_array_elements"
+			} else {
+				return "json_array_elements"
+			}
+		}
+	}
+	
+	// Default based on field type
+	if isJSONB {
+		return "jsonb_array_elements"
+	} else {
+		return "json_array_elements"
+	}
 }

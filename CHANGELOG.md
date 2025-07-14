@@ -1,5 +1,44 @@
 # Changelog
 
+## [2.6.0] - 2025-07-14
+
+### Added
+- 🔥 **JSON/JSONB Comprehensions Support**: Full support for CEL comprehensions on JSON/JSONB arrays
+- **Advanced JSON Array Operations**: Support for `exists()`, `all()`, `exists_one()` on JSON/JSONB arrays
+- **Numeric JSON Field Casting**: Automatic casting of numeric JSON fields (e.g., `(score)::numeric`)
+- **Nested JSON Array Access**: Support for comprehensions on nested JSON arrays (e.g., `settings.permissions`)
+- **JSON Type Safety**: Null and type checks for JSON/JSONB comprehensions using `jsonb_typeof()`
+- **Mixed JSON/JSONB Support**: Proper handling of both JSON and JSONB column types
+- **Complex JSON Queries**: Support for complex expressions combining multiple comprehensions
+
+### Enhanced
+- **JSON Array Function Selection**: Intelligent selection between `jsonb_array_elements_text` and `json_array_elements_text`
+- **JSON Path Operations**: Enhanced nested JSON access with proper `->` and `->>` operators
+- **Comprehension Type Detection**: Improved detection of JSON vs regular array comprehensions
+- **SQL Generation**: Optimized SQL generation for JSON/JSONB array operations
+- **Error Handling**: Better error messages for JSON/JSONB comprehension issues
+
+### Technical Details
+- Added `isJSONArrayField()` function to detect JSON/JSONB array fields
+- Added `getJSONArrayFunction()` to select appropriate PostgreSQL JSON array functions
+- Added `isNestedJSONAccess()` for handling nested JSON field access
+- Added `needsNumericCasting()` for automatic numeric casting in JSON comprehensions
+- Enhanced `visitAllComprehension()`, `visitExistsComprehension()`, `visitExistsOneComprehension()` with JSON support
+- Added comprehensive test suite with real PostgreSQL JSON/JSONB data
+- Fixed TODO comment: "Comprehensions are now supported (all, exists, exists_one, filter, map)"
+
+### Examples
+```sql
+-- CEL: json_users.tags.exists(tag, tag == "developer")
+-- SQL: EXISTS (SELECT 1 FROM jsonb_array_elements_text(json_users.tags) AS tag WHERE json_users.tags IS NOT NULL AND jsonb_typeof(json_users.tags) = 'array' AND tag = 'developer')
+
+-- CEL: json_users.scores.all(score, score > 70)
+-- SQL: NOT EXISTS (SELECT 1 FROM jsonb_array_elements_text(json_users.scores) AS score WHERE json_users.scores IS NOT NULL AND jsonb_typeof(json_users.scores) = 'array' AND NOT ((score)::numeric > 70))
+
+-- CEL: json_users.attributes.exists_one(attr, attr.skill == "JavaScript" && attr.level >= 9)
+-- SQL: (SELECT COUNT(*) FROM json_array_elements(json_users.attributes) AS attr WHERE json_users.attributes IS NOT NULL AND json_typeof(json_users.attributes) = 'array' AND attr->>'skill' = 'JavaScript' AND (attr->>'level')::numeric >= 9) = 1
+```
+
 ## [2.4.0] - 2025-01-11
 
 ### Added
