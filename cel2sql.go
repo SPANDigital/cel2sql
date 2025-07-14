@@ -15,6 +15,14 @@ import (
 	exprpb "google.golang.org/genproto/googleapis/api/expr/v1alpha1"
 )
 
+// Constants for PostgreSQL JSON functions
+const (
+	jsonArrayElements      = "json_array_elements"
+	jsonbArrayElements     = "jsonb_array_elements"
+	jsonArrayElementsText  = "json_array_elements_text"
+	jsonbArrayElementsText = "jsonb_array_elements_text"
+)
+
 // Implementations based on `google/cel-go`'s unparser
 // https://github.com/google/cel-go/blob/master/parser/unparser.go
 
@@ -140,14 +148,9 @@ func (con *converter) visitCallBinary(expr *exprpb.Expr) error {
 	} else if fun == operators.In && isListType(rhsType) {
 		operator = "="
 	} else if fun == operators.In && isFieldAccessExpression(rhs) {
-		// Check if this is a JSON array field
-		if con.isJSONArrayField(rhs) {
-			// For JSON arrays, we need to use JSON contains operator or unnest with ANY
-			operator = "="
-		} else {
-			// In PostgreSQL, field access expressions in IN clauses are likely array membership tests
-			operator = "="
-		}
+		// In PostgreSQL, field access expressions in IN clauses are likely array membership tests
+		// For both JSON arrays and regular arrays, we use the same operator
+		operator = "="
 	} else if fun == operators.In {
 		operator = "IN"
 	} else if op, found := standardSQLBinaryOperators[fun]; found {
@@ -177,33 +180,24 @@ func (con *converter) visitCallBinary(expr *exprpb.Expr) error {
 				}
 				con.str.WriteString(")))")
 				return nil
-			} else {
-				// For direct JSON array access
-				if jsonFunc == "jsonb_array_elements_text" || jsonFunc == "json_array_elements_text" {
-					con.str.WriteString(jsonFunc)
-					con.str.WriteString("(")
-				} else {
-					con.str.WriteString(jsonFunc)
-					con.str.WriteString("(")
-				}
-				if err := con.visitMaybeNested(rhs, rhsParen); err != nil {
-					return err
-				}
-				con.str.WriteString(")))")
-				return nil
 			}
-		} else {
-			con.str.WriteString("ANY(")
+			// For direct JSON array access
+			con.str.WriteString(jsonFunc)
+			con.str.WriteString("(")
+			if err := con.visitMaybeNested(rhs, rhsParen); err != nil {
+				return err
+			}
+			con.str.WriteString(")))")
+			return nil
 		}
+		con.str.WriteString("ANY(")
 	}
 	if err := con.visitMaybeNested(rhs, rhsParen); err != nil {
 		return err
 	}
 	if fun == operators.In && (isListType(rhsType) || isFieldAccessExpression(rhs)) {
-		// Check if we're dealing with a JSON array
-		if isFieldAccessExpression(rhs) && con.isJSONArrayField(rhs) {
-			// Already handled above for JSON arrays
-		} else {
+		// Check if we're dealing with a JSON array - already handled above for JSON arrays
+		if !isFieldAccessExpression(rhs) || !con.isJSONArrayField(rhs) {
 			con.str.WriteString(")")
 		}
 	}
@@ -725,11 +719,7 @@ func (con *converter) visitAllComprehension(expr *exprpb.Expr, info *Comprehensi
 	}
 
 	if info.Predicate != nil {
-		if isJSONArray {
-			con.str.WriteString("NOT (")
-		} else {
-			con.str.WriteString("NOT (")
-		}
+		con.str.WriteString("NOT (")
 		if err := con.visit(info.Predicate); err != nil {
 			return fmt.Errorf("failed to visit predicate in ALL comprehension: %w", err)
 		}
@@ -1126,13 +1116,14 @@ func (con *converter) visitSelect(expr *exprpb.Expr) error {
 		return err
 	}
 
-	if useJSONPath {
+	switch {
+	case useJSONPath:
 		// Use ->> for text extraction
 		con.str.WriteString("->>")
 		con.str.WriteString("'")
 		con.str.WriteString(sel.GetField())
 		con.str.WriteString("'")
-	} else if useJSONObjectAccess {
+	case useJSONObjectAccess:
 		// Use -> for JSON object field access in comprehensions
 		fieldName := sel.GetField()
 		con.str.WriteString("->>'")
@@ -1142,7 +1133,7 @@ func (con *converter) visitSelect(expr *exprpb.Expr) error {
 			// Close parentheses and add numeric cast
 			con.str.WriteString(")::numeric")
 		}
-	} else {
+	default:
 		// Regular field selection
 		con.str.WriteString(".")
 		con.str.WriteString(sel.GetField())
@@ -1470,7 +1461,7 @@ func (con *converter) isNestedJSONAccess(expr *exprpb.Expr) bool {
 func (con *converter) visitNestedJSONForArray(expr *exprpb.Expr) error {
 	selectExpr := expr.GetSelectExpr()
 	if selectExpr == nil {
-		return fmt.Errorf("expected select expression for nested JSON access")
+		return errors.New("expected select expression for nested JSON access")
 	}
 
 	// Visit the operand (like json_users.settings)
@@ -1512,9 +1503,8 @@ func (con *converter) isJSONObjectFieldAccess(expr *exprpb.Expr) bool {
 func (con *converter) getJSONTypeofFunction(expr *exprpb.Expr) string {
 	if con.isJSONBField(expr) {
 		return "jsonb_typeof"
-	} else {
-		return "json_typeof"
 	}
+	return "json_typeof"
 }
 
 // isJSONArrayField determines if the expression refers to a JSON/JSONB array field
@@ -1620,10 +1610,9 @@ func (con *converter) getJSONArrayFunction(expr *exprpb.Expr) string {
 			if field == simpleField {
 				// For all simple fields, use text extraction to avoid casting issues
 				if isJSONB {
-					return "jsonb_array_elements_text"
-				} else {
-					return "json_array_elements_text"
+					return jsonbArrayElementsText
 				}
+				return jsonArrayElementsText
 			}
 		}
 		
@@ -1632,27 +1621,24 @@ func (con *converter) getJSONArrayFunction(expr *exprpb.Expr) string {
 		for _, complexField := range complexArrayFields {
 			if field == complexField {
 				if isJSONB {
-					return "jsonb_array_elements"
-				} else {
-					return "json_array_elements"
+					return jsonbArrayElements
 				}
+				return jsonArrayElements
 			}
 		}
 		
 		// For nested JSON access, use appropriate array elements function
 		if operand := selectExpr.GetOperand(); operand.GetSelectExpr() != nil {
 			if isJSONB {
-				return "jsonb_array_elements"
-			} else {
-				return "json_array_elements"
+				return jsonbArrayElements
 			}
+			return jsonArrayElements
 		}
 	}
 	
 	// Default based on field type
 	if isJSONB {
-		return "jsonb_array_elements"
-	} else {
-		return "json_array_elements"
+		return jsonbArrayElements
 	}
+	return jsonArrayElements
 }
