@@ -4,23 +4,13 @@ package cel2sql
 import (
 	"errors"
 	"fmt"
-	"regexp"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/google/cel-go/cel"
 	"github.com/google/cel-go/common/operators"
 	"github.com/google/cel-go/common/overloads"
 	exprpb "google.golang.org/genproto/googleapis/api/expr/v1alpha1"
-)
-
-// Constants for PostgreSQL JSON functions
-const (
-	jsonArrayElements      = "json_array_elements"
-	jsonbArrayElements     = "jsonb_array_elements"
-	jsonArrayElementsText  = "json_array_elements_text"
-	jsonbArrayElementsText = "jsonb_array_elements_text"
 )
 
 // Implementations based on `google/cel-go`'s unparser
@@ -102,12 +92,6 @@ func (con *converter) visitCall(expr *exprpb.Expr) error {
 	}
 }
 
-var standardSQLBinaryOperators = map[string]string{
-	operators.LogicalAnd: "AND",
-	operators.LogicalOr:  "OR",
-	operators.Equals:     "=",
-}
-
 func (con *converter) visitCallBinary(expr *exprpb.Expr) error {
 	c := expr.GetCallExpr()
 	fun := c.GetFunction()
@@ -169,7 +153,7 @@ func (con *converter) visitCallBinary(expr *exprpb.Expr) error {
 			// For JSON arrays, use jsonb_array_elements with ANY
 			jsonFunc := con.getJSONArrayFunction(rhs)
 			con.str.WriteString("ANY(ARRAY(SELECT ")
-			
+
 			// For nested JSON access like settings.permissions, we need to handle differently
 			if con.isNestedJSONAccess(rhs) {
 				// Use text extraction for the array elements
@@ -204,70 +188,6 @@ func (con *converter) visitCallBinary(expr *exprpb.Expr) error {
 	return nil
 }
 
-func isTimestampRelatedType(typ *exprpb.Type) bool {
-	abstractType := typ.GetAbstractType()
-	if abstractType != nil {
-		name := abstractType.GetName()
-		return name == "DATE" || name == "TIME" || name == "DATETIME"
-	}
-	return typ.GetWellKnown() == exprpb.Type_TIMESTAMP
-}
-
-func isTimestampType(typ *exprpb.Type) bool {
-	return typ.GetWellKnown() == exprpb.Type_TIMESTAMP
-}
-
-func isDurationRelatedType(typ *exprpb.Type) bool {
-	abstractType := typ.GetAbstractType()
-	if abstractType != nil {
-		name := abstractType.GetName()
-		return name == "INTERVAL"
-	}
-	return typ.GetWellKnown() == exprpb.Type_DURATION
-}
-
-func (con *converter) callTimestampOperation(fun string, lhs *exprpb.Expr, rhs *exprpb.Expr) error {
-	lhsParen := isComplexOperatorWithRespectTo(fun, lhs)
-	rhsParen := isComplexOperatorWithRespectTo(fun, rhs)
-	lhsType := con.getType(lhs)
-	rhsType := con.getType(rhs)
-
-	var timestamp, duration *exprpb.Expr
-	var timestampParen, durationParen bool
-	switch {
-	case isTimestampRelatedType(lhsType):
-		timestamp, duration = lhs, rhs
-		timestampParen, durationParen = lhsParen, rhsParen
-	case isTimestampRelatedType(rhsType):
-		timestamp, duration = rhs, lhs
-		timestampParen, durationParen = rhsParen, lhsParen
-	default:
-		panic("lhs or rhs must be timestamp related type")
-	}
-
-	// PostgreSQL uses simple + and - operators for date arithmetic
-	var sqlOp string
-	switch fun {
-	case operators.Add:
-		sqlOp = "+"
-	case operators.Subtract:
-		sqlOp = "-"
-	default:
-		return fmt.Errorf("unsupported operation (%s)", fun)
-	}
-
-	if err := con.visitMaybeNested(timestamp, timestampParen); err != nil {
-		return err
-	}
-	con.str.WriteString(" ")
-	con.str.WriteString(sqlOp)
-	con.str.WriteString(" ")
-	if err := con.visitMaybeNested(duration, durationParen); err != nil {
-		return err
-	}
-	return nil
-}
-
 func (con *converter) visitCallConditional(expr *exprpb.Expr) error {
 	c := expr.GetCallExpr()
 	args := c.GetArgs()
@@ -287,13 +207,6 @@ func (con *converter) visitCallConditional(expr *exprpb.Expr) error {
 	return nil
 }
 
-var standardSQLFunctions = map[string]string{
-	operators.Modulo:     "MOD",
-	overloads.StartsWith: "STARTS_WITH",
-	overloads.EndsWith:   "ENDS_WITH",
-	overloads.Matches:    "REGEXP_CONTAINS",
-}
-
 func (con *converter) callContains(target *exprpb.Expr, args []*exprpb.Expr) error {
 	// Check if the target is a JSON/JSONB field
 	if target != nil && con.isJSONArrayField(target) {
@@ -309,7 +222,7 @@ func (con *converter) callContains(target *exprpb.Expr, args []*exprpb.Expr) err
 		}
 		return nil
 	}
-	
+
 	// For regular strings, use POSITION
 	con.str.WriteString("POSITION(")
 	for i, arg := range args {
@@ -330,100 +243,6 @@ func (con *converter) callContains(target *exprpb.Expr, args []*exprpb.Expr) err
 		}
 	}
 	con.str.WriteString(") > 0")
-	return nil
-}
-
-func (con *converter) callDuration(_ *exprpb.Expr, args []*exprpb.Expr) error {
-	if len(args) != 1 {
-		return errors.New("arguments must be single")
-	}
-	arg := args[0]
-	var durationString string
-	switch arg.ExprKind.(type) {
-	case *exprpb.Expr_ConstExpr:
-		switch arg.GetConstExpr().ConstantKind.(type) {
-		case *exprpb.Constant_StringValue:
-			durationString = arg.GetConstExpr().GetStringValue()
-		default:
-			return fmt.Errorf("unsupported constant kind %t", arg.GetConstExpr().ConstantKind)
-		}
-	default:
-		return fmt.Errorf("unsupported kind %t", arg.ExprKind)
-	}
-	d, err := time.ParseDuration(durationString)
-	if err != nil {
-		return err
-	}
-	con.str.WriteString("INTERVAL ")
-	switch d {
-	case d.Round(time.Hour):
-		con.str.WriteString(strconv.FormatFloat(d.Hours(), 'f', 0, 64))
-		con.str.WriteString(" HOUR")
-	case d.Round(time.Minute):
-		con.str.WriteString(strconv.FormatFloat(d.Minutes(), 'f', 0, 64))
-		con.str.WriteString(" MINUTE")
-	case d.Round(time.Second):
-		con.str.WriteString(strconv.FormatFloat(d.Seconds(), 'f', 0, 64))
-		con.str.WriteString(" SECOND")
-	case d.Round(time.Millisecond):
-		con.str.WriteString(strconv.FormatInt(d.Milliseconds(), 10))
-		con.str.WriteString(" MILLISECOND")
-	default:
-		con.str.WriteString(strconv.FormatInt(d.Truncate(time.Microsecond).Microseconds(), 10))
-		con.str.WriteString(" MICROSECOND")
-	}
-	return nil
-}
-
-func (con *converter) callInterval(_ *exprpb.Expr, args []*exprpb.Expr) error {
-	con.str.WriteString("INTERVAL ")
-	if err := con.visit(args[0]); err != nil {
-		return err
-	}
-	con.str.WriteString(" ")
-	datePart := args[1]
-	con.str.WriteString(datePart.GetIdentExpr().GetName())
-	return nil
-}
-
-func (con *converter) callExtractFromTimestamp(function string, target *exprpb.Expr, args []*exprpb.Expr) error {
-	con.str.WriteString("EXTRACT(")
-	switch function {
-	case overloads.TimeGetFullYear:
-		con.str.WriteString("YEAR")
-	case overloads.TimeGetMonth:
-		con.str.WriteString("MONTH")
-	case overloads.TimeGetDate:
-		con.str.WriteString("DAY")
-	case overloads.TimeGetHours:
-		con.str.WriteString("HOUR")
-	case overloads.TimeGetMinutes:
-		con.str.WriteString("MINUTE")
-	case overloads.TimeGetSeconds:
-		con.str.WriteString("SECOND")
-	case overloads.TimeGetMilliseconds:
-		con.str.WriteString("MILLISECOND")
-	case overloads.TimeGetDayOfYear:
-		con.str.WriteString("DAYOFYEAR")
-	case overloads.TimeGetDayOfMonth:
-		con.str.WriteString("DAY")
-	case overloads.TimeGetDayOfWeek:
-		con.str.WriteString("DAYOFWEEK")
-	}
-	con.str.WriteString(" FROM ")
-	if err := con.visit(target); err != nil {
-		return err
-	}
-	if isTimestampType(con.getType(target)) && len(args) == 1 {
-		con.str.WriteString(" AT ")
-		if err := con.visit(args[0]); err != nil {
-			return err
-		}
-	}
-	con.str.WriteString(")")
-	if function == overloads.TimeGetMonth || function == overloads.TimeGetDayOfYear || function == overloads.TimeGetDayOfMonth || function == overloads.TimeGetDayOfWeek {
-		con.str.WriteString(" - 1")
-	}
 	return nil
 }
 
@@ -612,10 +431,6 @@ func (con *converter) visitCallListIndex(expr *exprpb.Expr) error {
 	return nil
 }
 
-var standardSQLUnaryOperators = map[string]string{
-	operators.LogicalNot: "NOT ",
-}
-
 func (con *converter) visitCallUnary(expr *exprpb.Expr) error {
 	c := expr.GetCallExpr()
 	fun := c.GetFunction()
@@ -677,7 +492,7 @@ func (con *converter) visitAllComprehension(expr *exprpb.Expr, info *Comprehensi
 	isJSONArray := con.isJSONArrayField(iterRange)
 
 	con.str.WriteString("NOT EXISTS (SELECT 1 FROM ")
-	
+
 	if isJSONArray {
 		jsonFunc := con.getJSONArrayFunction(iterRange)
 		con.str.WriteString(jsonFunc)
@@ -698,7 +513,7 @@ func (con *converter) visitAllComprehension(expr *exprpb.Expr, info *Comprehensi
 	con.str.WriteString(info.IterVar)
 
 	con.str.WriteString(" WHERE ")
-	
+
 	// Add null checks for JSON arrays
 	if isJSONArray {
 		if err := con.visit(iterRange); err != nil {
@@ -712,7 +527,7 @@ func (con *converter) visitAllComprehension(expr *exprpb.Expr, info *Comprehensi
 			return fmt.Errorf("failed to visit iter range for type check: %w", err)
 		}
 		con.str.WriteString(") = 'array'")
-		
+
 		if info.Predicate != nil {
 			con.str.WriteString(" AND ")
 		}
@@ -744,7 +559,7 @@ func (con *converter) visitExistsComprehension(expr *exprpb.Expr, info *Comprehe
 	isJSONArray := con.isJSONArrayField(iterRange)
 
 	con.str.WriteString("EXISTS (SELECT 1 FROM ")
-	
+
 	if isJSONArray {
 		jsonFunc := con.getJSONArrayFunction(iterRange)
 		con.str.WriteString(jsonFunc)
@@ -765,7 +580,7 @@ func (con *converter) visitExistsComprehension(expr *exprpb.Expr, info *Comprehe
 	con.str.WriteString(info.IterVar)
 
 	con.str.WriteString(" WHERE ")
-	
+
 	// Add null checks for JSON arrays
 	if isJSONArray {
 		if err := con.visit(iterRange); err != nil {
@@ -779,7 +594,7 @@ func (con *converter) visitExistsComprehension(expr *exprpb.Expr, info *Comprehe
 			return fmt.Errorf("failed to visit iter range for type check: %w", err)
 		}
 		con.str.WriteString(") = 'array'")
-		
+
 		if info.Predicate != nil {
 			con.str.WriteString(" AND ")
 		}
@@ -809,7 +624,7 @@ func (con *converter) visitExistsOneComprehension(expr *exprpb.Expr, info *Compr
 	isJSONArray := con.isJSONArrayField(iterRange)
 
 	con.str.WriteString("(SELECT COUNT(*) FROM ")
-	
+
 	if isJSONArray {
 		jsonFunc := con.getJSONArrayFunction(iterRange)
 		con.str.WriteString(jsonFunc)
@@ -830,7 +645,7 @@ func (con *converter) visitExistsOneComprehension(expr *exprpb.Expr, info *Compr
 	con.str.WriteString(info.IterVar)
 
 	con.str.WriteString(" WHERE ")
-	
+
 	// Add null checks for JSON arrays
 	if isJSONArray {
 		if err := con.visit(iterRange); err != nil {
@@ -844,7 +659,7 @@ func (con *converter) visitExistsOneComprehension(expr *exprpb.Expr, info *Compr
 			return fmt.Errorf("failed to visit iter range for type check: %w", err)
 		}
 		con.str.WriteString(") = 'array'")
-		
+
 		if info.Predicate != nil {
 			con.str.WriteString(" AND ")
 		}
@@ -886,7 +701,7 @@ func (con *converter) visitMapComprehension(expr *exprpb.Expr, info *Comprehensi
 	}
 
 	con.str.WriteString(" FROM ")
-	
+
 	if isJSONArray {
 		jsonFunc := con.getJSONArrayFunction(iterRange)
 		con.str.WriteString(jsonFunc)
@@ -934,7 +749,7 @@ func (con *converter) visitFilterComprehension(expr *exprpb.Expr, info *Comprehe
 	con.str.WriteString("ARRAY(SELECT ")
 	con.str.WriteString(info.IterVar)
 	con.str.WriteString(" FROM ")
-	
+
 	if isJSONArray {
 		jsonFunc := con.getJSONArrayFunction(iterRange)
 		con.str.WriteString(jsonFunc)
@@ -1063,7 +878,7 @@ func (con *converter) visitConst(expr *exprpb.Expr) error {
 
 func (con *converter) visitIdent(expr *exprpb.Expr) error {
 	identName := expr.GetIdentExpr().GetName()
-	
+
 	// Check if this identifier needs numeric casting for JSON comprehensions
 	if con.needsNumericCasting(identName) {
 		con.str.WriteString("(")
@@ -1105,12 +920,12 @@ func (con *converter) visitSelect(expr *exprpb.Expr) error {
 	useJSONObjectAccess := con.isJSONObjectFieldAccess(expr)
 
 	nested := !sel.GetTestOnly() && isBinaryOrTernaryOperator(sel.GetOperand())
-	
+
 	if useJSONObjectAccess && con.isNumericJSONField(sel.GetField()) {
 		// For numeric JSON fields, wrap in parentheses for casting
 		con.str.WriteString("(")
 	}
-	
+
 	err := con.visitMaybeNested(sel.GetOperand(), nested)
 	if err != nil {
 		return err
@@ -1143,30 +958,6 @@ func (con *converter) visitSelect(expr *exprpb.Expr) error {
 		con.str.WriteString(")")
 	}
 	return nil
-}
-
-// shouldUseJSONPath determines if we should use JSON path operators for field access
-func (con *converter) shouldUseJSONPath(operand *exprpb.Expr, _ string) bool {
-	// For now, we'll use a simple heuristic: if the operand is a direct field reference
-	// to a field that commonly contains JSON (like 'preferences', 'metadata', 'profile', 'details')
-	// then we use JSON path operators
-	if identExpr := operand.GetIdentExpr(); identExpr != nil {
-		// Direct field access - check if it's a known JSON field
-		return false // We don't have direct JSON field access in our current tests
-	}
-
-	if selectExpr := operand.GetSelectExpr(); selectExpr != nil {
-		// Nested field access - check if the parent field is a JSON field
-		parentField := selectExpr.GetField()
-		jsonFields := []string{"preferences", "metadata", "profile", "details", "settings", "properties", "analytics"}
-		for _, jsonField := range jsonFields {
-			if parentField == jsonField {
-				return true
-			}
-		}
-	}
-
-	return false
 }
 
 func (con *converter) visitStruct(expr *exprpb.Expr) error {
@@ -1242,16 +1033,6 @@ func (con *converter) getType(node *exprpb.Expr) *exprpb.Type {
 	return con.typeMap[node.GetId()]
 }
 
-func isMapType(typ *exprpb.Type) bool {
-	_, ok := typ.TypeKind.(*exprpb.Type_MapType_)
-	return ok
-}
-
-func isListType(typ *exprpb.Type) bool {
-	_, ok := typ.TypeKind.(*exprpb.Type_ListType_)
-	return ok
-}
-
 // isLeftRecursive indicates whether the parser resolves the call in a left-recursive manner as
 // this can have an effect of how parentheses affect the order of operations in the AST.
 func isLeftRecursive(op string) bool {
@@ -1310,335 +1091,4 @@ func isBinaryOrTernaryOperator(expr *exprpb.Expr) bool {
 	}
 	_, isBinaryOp := operators.FindReverseBinaryOperator(expr.GetCallExpr().GetFunction())
 	return isBinaryOp || isSamePrecedence(operators.Conditional, expr)
-}
-
-func isNullLiteral(node *exprpb.Expr) bool {
-	_, isConst := node.ExprKind.(*exprpb.Expr_ConstExpr)
-	if !isConst {
-		return false
-	}
-	_, isNull := node.GetConstExpr().ConstantKind.(*exprpb.Constant_NullValue)
-	return isNull
-}
-
-func isBoolLiteral(node *exprpb.Expr) bool {
-	_, isConst := node.ExprKind.(*exprpb.Expr_ConstExpr)
-	if !isConst {
-		return false
-	}
-	_, isBool := node.GetConstExpr().ConstantKind.(*exprpb.Constant_BoolValue)
-	return isBool
-}
-
-func isStringLiteral(node *exprpb.Expr) bool {
-	_, isConst := node.ExprKind.(*exprpb.Expr_ConstExpr)
-	if !isConst {
-		return false
-	}
-	_, isString := node.GetConstExpr().ConstantKind.(*exprpb.Constant_StringValue)
-	return isString
-}
-
-// bytesToOctets converts byte sequences to a string using a three digit octal encoded value
-// per byte.
-func bytesToOctets(byteVal []byte) string {
-	var b strings.Builder
-	for _, c := range byteVal {
-		_, _ = fmt.Fprintf(&b, "\\%03o", c)
-	}
-	return b.String()
-}
-
-var fieldNameRegexp = regexp.MustCompile(`^[a-zA-Z_][a-zA-Z0-9_]{0,127}$`)
-
-func validateFieldName(name string) error {
-	if !fieldNameRegexp.MatchString(name) {
-		return fmt.Errorf("invalid field name \"%s\"", name)
-	}
-	return nil
-}
-
-func extractFieldName(node *exprpb.Expr) (string, error) {
-	if !isStringLiteral(node) {
-		return "", fmt.Errorf("unsupported type: %v", node)
-	}
-	fieldName := node.GetConstExpr().GetStringValue()
-	if err := validateFieldName(fieldName); err != nil {
-		return "", err
-	}
-	return fieldName, nil
-}
-
-func isFieldAccessExpression(expr *exprpb.Expr) bool {
-	// Check if this is a field access expression (like trigram.cell[0].value)
-	switch expr.GetExprKind().(type) {
-	case *exprpb.Expr_SelectExpr:
-		return true
-	case *exprpb.Expr_CallExpr:
-		// Check if it's an array index access
-		call := expr.GetCallExpr()
-		if call.GetFunction() == operators.Index {
-			return true
-		}
-	}
-	return false
-}
-
-func (con *converter) callTimestampFromString(_ *exprpb.Expr, args []*exprpb.Expr) error {
-	if len(args) == 1 {
-		// For PostgreSQL, we need to cast the string to a timestamp
-		con.str.WriteString("CAST(")
-		err := con.visit(args[0])
-		if err != nil {
-			return err
-		}
-		con.str.WriteString(" AS TIMESTAMP WITH TIME ZONE)")
-		return nil
-	} else if len(args) == 2 {
-		// Handle timestamp(datetime, timezone) format
-		con.str.WriteString("TIMESTAMP(")
-		err := con.visit(args[0])
-		if err != nil {
-			return err
-		}
-		con.str.WriteString(", ")
-		err = con.visit(args[1])
-		if err != nil {
-			return err
-		}
-		con.str.WriteString(")")
-		return nil
-	}
-
-	return fmt.Errorf("timestamp function expects 1 or 2 arguments, got %d", len(args))
-}
-
-// needsNumericCasting checks if an identifier represents a numeric iteration variable from JSON
-func (con *converter) needsNumericCasting(identName string) bool {
-	// Common iteration variable names that come from numeric JSON arrays
-	numericIterationVars := []string{"score", "value", "num", "amount", "count", "level"}
-	
-	for _, numericVar := range numericIterationVars {
-		if identName == numericVar {
-			return true
-		}
-	}
-	
-	return false
-}
-
-// isNumericJSONField checks if a JSON field name typically contains numeric values
-func (con *converter) isNumericJSONField(fieldName string) bool {
-	numericFields := []string{"level", "score", "value", "count", "amount", "price", "rating", "age", "size", "capacity", "megapixels", "cores", "threads", "ram", "storage", "vram", "weight", "frequency", "helpful"}
-	
-	for _, numericField := range numericFields {
-		if fieldName == numericField {
-			return true
-		}
-	}
-	
-	return false
-}
-
-// isNestedJSONAccess checks if this is nested JSON field access like settings.permissions
-func (con *converter) isNestedJSONAccess(expr *exprpb.Expr) bool {
-	if selectExpr := expr.GetSelectExpr(); selectExpr != nil {
-		if operandSelect := selectExpr.GetOperand().GetSelectExpr(); operandSelect != nil {
-			// This is a nested select like json_users.settings.permissions
-			parentField := operandSelect.GetField()
-			jsonObjectFields := []string{"settings", "properties", "metadata", "analytics"}
-			for _, jsonField := range jsonObjectFields {
-				if parentField == jsonField {
-					return true
-				}
-			}
-		}
-	}
-	return false
-}
-
-// visitNestedJSONForArray handles nested JSON access for array operations
-func (con *converter) visitNestedJSONForArray(expr *exprpb.Expr) error {
-	selectExpr := expr.GetSelectExpr()
-	if selectExpr == nil {
-		return errors.New("expected select expression for nested JSON access")
-	}
-
-	// Visit the operand (like json_users.settings)
-	if err := con.visit(selectExpr.GetOperand()); err != nil {
-		return err
-	}
-
-	// Use -> instead of ->> to preserve JSONB type for array operations
-	con.str.WriteString("->")
-	con.str.WriteString("'")
-	con.str.WriteString(selectExpr.GetField())
-	con.str.WriteString("'")
-
-	return nil
-}
-
-// isJSONObjectFieldAccess determines if this is a JSON object field access in comprehensions
-func (con *converter) isJSONObjectFieldAccess(expr *exprpb.Expr) bool {
-	if selectExpr := expr.GetSelectExpr(); selectExpr != nil {
-		operand := selectExpr.GetOperand()
-		
-		// Check if the operand is an identifier that could be a comprehension variable
-		if identExpr := operand.GetIdentExpr(); identExpr != nil {
-			// Common comprehension variable names that access JSON objects
-			jsonObjectVars := []string{"attr", "item", "element", "obj", "feature", "review"}
-			identName := identExpr.GetName()
-			
-			for _, jsonVar := range jsonObjectVars {
-				if identName == jsonVar {
-					return true
-				}
-			}
-		}
-	}
-	return false
-}
-
-// getJSONTypeofFunction returns the appropriate typeof function for JSON/JSONB fields
-func (con *converter) getJSONTypeofFunction(expr *exprpb.Expr) string {
-	if con.isJSONBField(expr) {
-		return "jsonb_typeof"
-	}
-	return "json_typeof"
-}
-
-// isJSONArrayField determines if the expression refers to a JSON/JSONB array field
-func (con *converter) isJSONArrayField(expr *exprpb.Expr) bool {
-	// Check if this is a field selection on a JSON field
-	if selectExpr := expr.GetSelectExpr(); selectExpr != nil {
-		// Get the operand (the table/object being accessed)
-		operand := selectExpr.GetOperand()
-		field := selectExpr.GetField()
-
-		// Check if the operand is an identifier (table name)
-		if identExpr := operand.GetIdentExpr(); identExpr != nil {
-			tableName := identExpr.GetName()
-
-			// Check for known JSON array fields in our test schemas
-			jsonArrayFields := map[string][]string{
-				"json_users":    {"tags", "scores", "attributes"},
-				"json_products": {"features", "reviews", "categories"},
-				"users":         {"preferences", "profile"}, // existing test data
-				"products":      {"metadata", "details"},    // existing test data
-			}
-
-			if fields, exists := jsonArrayFields[tableName]; exists {
-				for _, jsonField := range fields {
-					if field == jsonField {
-						return true
-					}
-				}
-			}
-		}
-
-		// Check for nested JSON field access (e.g., json_users.settings.permissions)
-		if nestedSelectExpr := operand.GetSelectExpr(); nestedSelectExpr != nil {
-			parentField := nestedSelectExpr.GetField()
-			jsonObjectFields := []string{"settings", "properties", "metadata", "analytics"}
-			for _, jsonObjectField := range jsonObjectFields {
-				if parentField == jsonObjectField {
-					// This is accessing a field within a JSON object that could be an array
-					arrayFields := []string{"permissions", "features", "tags", "categories"}
-					for _, arrayField := range arrayFields {
-						if field == arrayField {
-							return true
-						}
-					}
-				}
-			}
-		}
-	}
-	return false
-}
-
-// isJSONBField determines if the expression refers to a JSONB field (vs JSON field)
-func (con *converter) isJSONBField(expr *exprpb.Expr) bool {
-	// Check if this is a field selection on a JSONB field
-	if selectExpr := expr.GetSelectExpr(); selectExpr != nil {
-		operand := selectExpr.GetOperand()
-		field := selectExpr.GetField()
-
-		// Check if the operand is an identifier (table name)
-		if identExpr := operand.GetIdentExpr(); identExpr != nil {
-			tableName := identExpr.GetName()
-
-			// Define which fields are JSONB vs JSON in our test schemas
-			jsonbFields := map[string][]string{
-				"json_users":    {"settings", "tags", "scores"},       // JSONB fields
-				"json_products": {"features", "reviews", "properties"}, // JSONB fields
-			}
-
-			if fields, exists := jsonbFields[tableName]; exists {
-				for _, jsonbField := range fields {
-					if field == jsonbField {
-						return true
-					}
-				}
-			}
-		}
-
-		// For nested access, check if the parent is JSONB
-		if nestedSelectExpr := operand.GetSelectExpr(); nestedSelectExpr != nil {
-			parentField := nestedSelectExpr.GetField()
-			jsonbParentFields := []string{"settings", "properties"}
-			for _, jsonbParent := range jsonbParentFields {
-				if parentField == jsonbParent {
-					return true
-				}
-			}
-		}
-	}
-	return false
-}
-
-// getJSONArrayFunction returns the appropriate PostgreSQL function for JSON array operations
-func (con *converter) getJSONArrayFunction(expr *exprpb.Expr) string {
-	// Determine if this is JSON or JSONB based on the field
-	isJSONB := con.isJSONBField(expr)
-	
-	if selectExpr := expr.GetSelectExpr(); selectExpr != nil {
-		field := selectExpr.GetField()
-		
-		// Fields that contain simple values (strings, numbers)
-		simpleArrayFields := []string{"tags", "scores", "categories"}
-		for _, simpleField := range simpleArrayFields {
-			if field == simpleField {
-				// For all simple fields, use text extraction to avoid casting issues
-				if isJSONB {
-					return jsonbArrayElementsText
-				}
-				return jsonArrayElementsText
-			}
-		}
-		
-		// Fields that contain complex objects
-		complexArrayFields := []string{"attributes", "features", "reviews"}
-		for _, complexField := range complexArrayFields {
-			if field == complexField {
-				if isJSONB {
-					return jsonbArrayElements
-				}
-				return jsonArrayElements
-			}
-		}
-		
-		// For nested JSON access, use appropriate array elements function
-		if operand := selectExpr.GetOperand(); operand.GetSelectExpr() != nil {
-			if isJSONB {
-				return jsonbArrayElements
-			}
-			return jsonArrayElements
-		}
-	}
-	
-	// Default based on field type
-	if isJSONB {
-		return jsonbArrayElements
-	}
-	return jsonArrayElements
 }

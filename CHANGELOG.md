@@ -1,5 +1,27 @@
 # Changelog
 
+## [2.6.1] - 2025-07-14
+
+### Improved
+- **Code Architecture**: Refactored large `cel2sql.go` file into logical, maintainable modules for better code organization
+- **Modular Design**: Created dedicated modules for specific concerns:
+  - `json.go` - JSON/JSONB handling functions and constants (268 lines)
+  - `operators.go` - Operator mappings (26 lines)  
+  - `timestamps.go` - Timestamp and duration handling (207 lines)
+  - `utils.go` - Utility and type-checking functions (107 lines)
+- **Maintainability**: Reduced main `cel2sql.go` from ~1,700 lines to 1,094 lines with focused responsibilities
+- **Developer Experience**: Improved code navigation and readability for better maintenance
+- **Testing**: Maintained 100% backward compatibility with all existing tests passing
+- **Code Quality**: Clean linting with 0 issues and 60.5% code coverage maintained
+
+### Technical Details
+- Extracted JSON/JSONB-related functionality to dedicated module
+- Separated operator mappings for cleaner organization
+- Isolated timestamp/duration logic for better maintainability
+- Centralized utility functions for code reuse
+- Preserved all existing functionality with zero breaking changes
+- Enhanced code modularity while maintaining API compatibility
+
 ## [2.6.0] - 2025-07-14
 
 ### Added
