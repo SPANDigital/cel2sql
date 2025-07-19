@@ -94,6 +94,305 @@ func TestLoadTableSchema_WithPostgresContainer(t *testing.T) {
 	}
 }
 
+// TestJSONHasFieldExpressions tests the has() function for JSON/JSONB field existence
+func TestJSONHasFieldExpressions(t *testing.T) {
+	ctx := context.Background()
+
+	// Create a PostgreSQL container with nested JSON path test data
+	container, err := postgres.Run(ctx,
+		"postgres:15",
+		postgres.WithDatabase("testdb"),
+		postgres.WithUsername("testuser"),
+		postgres.WithPassword("testpass"),
+		postgres.WithInitScripts("create_json_nested_path_test_data.sql"),
+		testcontainers.WithWaitStrategy(
+			wait.ForLog("database system is ready to accept connections").
+				WithOccurrence(2).
+				WithStartupTimeout(time.Second*60),
+		),
+	)
+	require.NoError(t, err)
+
+	defer func() {
+		if err := container.Terminate(ctx); err != nil {
+			t.Errorf("failed to terminate container: %v", err)
+		}
+	}()
+
+	// Get connection string
+	connStr, err := container.ConnectionString(ctx, "sslmode=disable")
+	require.NoError(t, err)
+
+	// Create connection pool
+	pool, err := pgxpool.New(ctx, connStr)
+	require.NoError(t, err)
+	defer pool.Close()
+
+	// Create type provider with database connection
+	provider, err := pg.NewTypeProviderWithConnection(ctx, connStr)
+	require.NoError(t, err)
+	defer provider.Close()
+
+	// Load table schemas
+	err = provider.LoadTableSchema(ctx, "information_assets")
+	require.NoError(t, err)
+	err = provider.LoadTableSchema(ctx, "documents")
+	require.NoError(t, err)
+
+	testCases := []struct {
+		name          string
+		celExpr       string
+		expectedSQL   string
+		expectedCount int
+		description   string
+		table         string
+	}{
+		{
+			name:          "has_jsonb_simple_field",
+			celExpr:       `has(information_assets.metadata.corpus)`,
+			table:         "information_assets",
+			expectedSQL:   `information_assets.metadata ? 'corpus'`,
+			expectedCount: 6, // All records have metadata.corpus
+			description:   "Test has() for simple JSONB field existence",
+		},
+		{
+			name:          "has_jsonb_nested_field",
+			celExpr:       `has(information_assets.metadata.corpus.section)`,
+			table:         "information_assets",
+			expectedSQL:   `jsonb_extract_path_text(information_assets.metadata, 'corpus', 'section') IS NOT NULL`,
+			expectedCount: 6, // All records have metadata.corpus.section
+			description:   "Test has() for nested JSONB field existence",
+		},
+		{
+			name:          "has_json_simple_field",
+			celExpr:       `has(information_assets.properties.visibility)`,
+			table:         "information_assets",
+			expectedSQL:   `information_assets.properties->'visibility' IS NOT NULL`,
+			expectedCount: 6, // All records have properties.visibility
+			description:   "Test has() for simple JSON field existence",
+		},
+		{
+			name:          "has_jsonb_nonexistent_field",
+			celExpr:       `has(information_assets.metadata.nonexistent)`,
+			table:         "information_assets",
+			expectedSQL:   `information_assets.metadata ? 'nonexistent'`,
+			expectedCount: 0, // No records have metadata.nonexistent
+			description:   "Test has() for non-existent JSONB field",
+		},
+		{
+			name:          "has_jsonb_deeply_nested_field",
+			celExpr:       `has(information_assets.metadata.corpus.tags)`,
+			table:         "information_assets",
+			expectedSQL:   `jsonb_extract_path_text(information_assets.metadata, 'corpus', 'tags') IS NOT NULL`,
+			expectedCount: 6, // All records have corpus.tags
+			description:   "Test has() for deeply nested JSONB field existence",
+		},
+		{
+			name:          "has_jsonb_version_field",
+			celExpr:       `has(information_assets.metadata.version.major)`,
+			table:         "information_assets",
+			expectedSQL:   `jsonb_extract_path_text(information_assets.metadata, 'version', 'major') IS NOT NULL`,
+			expectedCount: 6, // All records have version.major
+			description:   "Test has() for nested version field",
+		},
+		{
+			name:          "has_jsonb_author_department",
+			celExpr:       `has(information_assets.metadata.author.department)`,
+			table:         "information_assets",
+			expectedSQL:   `jsonb_extract_path_text(information_assets.metadata, 'author', 'department') IS NOT NULL`,
+			expectedCount: 6, // All records have author.department
+			description:   "Test has() for author department field",
+		},
+		{
+			name:          "has_documents_content_metadata",
+			celExpr:       `has(documents.content.metadata)`,
+			table:         "documents",
+			expectedSQL:   `documents.content ? 'metadata'`,
+			expectedCount: 3, // Documents with content.metadata
+			description:   "Test has() for documents content metadata",
+		},
+		{
+			name:          "has_documents_deep_nested",
+			celExpr:       `has(documents.content.metadata.corpus.section)`,
+			table:         "documents",
+			expectedSQL:   `jsonb_extract_path_text(documents.content, 'metadata', 'corpus', 'section') IS NOT NULL`,
+			expectedCount: 3, // Documents with content.metadata.corpus.section
+			description:   "Test has() for deeply nested document field",
+		},
+		{
+			name:          "has_classification_security",
+			celExpr:       `has(information_assets.classification.security.level)`,
+			table:         "information_assets",
+			expectedSQL:   `jsonb_extract_path_text(information_assets.classification, 'security', 'level') IS NOT NULL`,
+			expectedCount: 6, // All records have classification.security.level
+			description:   "Test has() for classification security level",
+		},
+		{
+			name:          "has_conditional_and",
+			celExpr:       `has(information_assets.metadata.corpus.section) && information_assets.metadata.corpus.section == "Getting Started"`,
+			table:         "information_assets",
+			expectedSQL:   `jsonb_extract_path_text(information_assets.metadata, 'corpus', 'section') IS NOT NULL AND information_assets.metadata->'corpus'->>'section' = 'Getting Started'`,
+			expectedCount: 2, // Records where corpus.section exists AND equals "Getting Started"
+			description:   "Test has() combined with equality condition",
+		},
+		{
+			name:          "has_conditional_or",
+			celExpr:       `has(information_assets.metadata.nonexistent) || has(information_assets.metadata.corpus.section)`,
+			table:         "information_assets",
+			expectedSQL:   `information_assets.metadata ? 'nonexistent' OR jsonb_extract_path_text(information_assets.metadata, 'corpus', 'section') IS NOT NULL`,
+			expectedCount: 6, // All records have corpus.section even though none have nonexistent
+			description:   "Test has() with OR condition",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			// Create CEL environment
+			env, err := cel.NewEnv(
+				cel.CustomTypeProvider(provider),
+				cel.Variable(tc.table, cel.ObjectType(tc.table)), // Use table name as variable name
+			)
+			require.NoError(t, err)
+
+			// Parse and check the CEL expression
+			ast, issues := env.Compile(tc.celExpr)
+			require.Empty(t, issues.Err(), "CEL compilation failed: %v", issues.Err())
+
+			// Convert CEL to SQL
+			sqlCondition, err := cel2sql.Convert(ast)
+			require.NoError(t, err, "Failed to convert CEL to SQL")
+
+			t.Logf("CEL Expression: %s", tc.celExpr)
+			t.Logf("Generated SQL: %s", sqlCondition)
+			t.Logf("Expected SQL pattern: %s", tc.expectedSQL)
+
+			// Verify the SQL contains expected patterns (relaxed matching)
+			if tc.expectedSQL != "" {
+				// Extract key components to check
+				if strings.Contains(tc.expectedSQL, "?") {
+					assert.Contains(t, sqlCondition, "?", "SQL should contain JSONB existence operator")
+				}
+				if strings.Contains(tc.expectedSQL, "jsonb_extract_path_text") {
+					assert.Contains(t, sqlCondition, "jsonb_extract_path_text", "SQL should contain path extraction function")
+				}
+				if strings.Contains(tc.expectedSQL, "IS NOT NULL") {
+					assert.Contains(t, sqlCondition, "IS NOT NULL", "SQL should contain NOT NULL check")
+				}
+			}
+
+			// Execute the SQL query to verify it works and returns expected count
+			query := fmt.Sprintf("SELECT COUNT(*) FROM %s WHERE %s", tc.table, sqlCondition)
+			t.Logf("Executing query: %s", query)
+
+			var actualCount int
+			err = pool.QueryRow(ctx, query).Scan(&actualCount)
+			require.NoError(t, err, "Failed to execute generated SQL query")
+
+			t.Logf("Expected count: %d, Actual count: %d", tc.expectedCount, actualCount)
+			assert.Equal(t, tc.expectedCount, actualCount, "Query should return expected number of rows")
+
+			// Additional verification: execute a sample query to see what data matches
+			if actualCount > 0 && actualCount <= 3 {
+				// Use appropriate column name based on table
+				nameColumn := "name"
+				if tc.table == "documents" {
+					nameColumn = "title"
+				}
+
+				sampleQuery := fmt.Sprintf("SELECT id, %s FROM %s WHERE %s LIMIT 3", nameColumn, tc.table, sqlCondition)
+				rows, err := pool.Query(ctx, sampleQuery)
+				require.NoError(t, err)
+				defer rows.Close()
+
+				t.Logf("Sample matching records:")
+				for rows.Next() {
+					var id int
+					var name string
+					err = rows.Scan(&id, &name)
+					require.NoError(t, err)
+					t.Logf("  - ID: %d, Name: %s", id, name)
+				}
+			}
+		})
+	}
+
+	// Additional integration tests for edge cases
+	t.Run("has_null_handling", func(t *testing.T) {
+		// Test handling of null values in has() expressions
+		celExpr := `has(information_assets.metadata.completely_nonexistent.deeply_nested)`
+
+		env, err := cel.NewEnv(
+			cel.CustomTypeProvider(provider),
+			cel.Variable("information_assets", cel.ObjectType("information_assets")),
+		)
+		require.NoError(t, err)
+
+		ast, issues := env.Compile(celExpr)
+		require.Empty(t, issues.Err())
+
+		sqlCondition, err := cel2sql.Convert(ast)
+		require.NoError(t, err)
+
+		// This should not crash and should return 0 results
+		query := "SELECT COUNT(*) FROM information_assets WHERE " + sqlCondition
+		var count int
+		err = pool.QueryRow(ctx, query).Scan(&count)
+		require.NoError(t, err)
+		assert.Equal(t, 0, count, "Non-existent deeply nested field should return 0 results")
+	})
+
+	t.Run("has_type_mixing", func(t *testing.T) {
+		// Test mixing has() with JSON and JSONB access in the same expression
+		celExpr := `has(information_assets.metadata.corpus.section) && has(information_assets.properties.visibility)`
+
+		env, err := cel.NewEnv(
+			cel.CustomTypeProvider(provider),
+			cel.Variable("information_assets", cel.ObjectType("information_assets")),
+		)
+		require.NoError(t, err)
+
+		ast, issues := env.Compile(celExpr)
+		require.Empty(t, issues.Err())
+
+		sqlCondition, err := cel2sql.Convert(ast)
+		require.NoError(t, err)
+
+		// Should handle both JSONB (metadata) and JSON (properties) correctly
+		query := "SELECT COUNT(*) FROM information_assets WHERE " + sqlCondition
+		var count int
+		err = pool.QueryRow(ctx, query).Scan(&count)
+		require.NoError(t, err)
+		t.Logf("Mixed JSON/JSONB has() query returned %d results", count)
+		assert.GreaterOrEqual(t, count, 0, "Mixed type has() query should execute successfully")
+	})
+
+	t.Run("has_regular_fields", func(t *testing.T) {
+		// Test has() on regular database fields (non-JSON)
+		celExpr := `has(information_assets.name)`
+
+		env, err := cel.NewEnv(
+			cel.CustomTypeProvider(provider),
+			cel.Variable("information_assets", cel.ObjectType("information_assets")),
+		)
+		require.NoError(t, err)
+
+		ast, issues := env.Compile(celExpr)
+		require.Empty(t, issues.Err())
+
+		sqlCondition, err := cel2sql.Convert(ast)
+		require.NoError(t, err)
+
+		// Should check if the field is not null
+		assert.Contains(t, sqlCondition, "IS NOT NULL", "has() on regular field should check for NOT NULL")
+
+		query := "SELECT COUNT(*) FROM information_assets WHERE " + sqlCondition
+		var count int
+		err = pool.QueryRow(ctx, query).Scan(&count)
+		require.NoError(t, err)
+		assert.Equal(t, 6, count, "All records should have non-null name field")
+	})
+}
+
 func TestLoadTableSchema_WithArrayTypes(t *testing.T) {
 	ctx := context.Background()
 
@@ -677,12 +976,12 @@ func TestLoadTableSchema_JsonComprehensions(t *testing.T) {
 		} else {
 			t.Logf("Count using jsonb_array_elements_text: %d", count)
 		}
-		
+
 		// Test for scores with proper casting
 		query = "SELECT count(*) FROM json_users WHERE EXISTS (SELECT 1 FROM jsonb_array_elements(scores) AS score WHERE (score::text)::int > 90)"
 		err = pool.QueryRow(ctx, query).Scan(&count)
 		if err != nil {
-			t.Logf("Error with jsonb_array_elements for scores: %v", err)  
+			t.Logf("Error with jsonb_array_elements for scores: %v", err)
 		} else {
 			t.Logf("Count using jsonb_array_elements for scores > 90: %d", count)
 		}
@@ -696,7 +995,7 @@ func TestLoadTableSchema_JsonComprehensions(t *testing.T) {
 		} else {
 			t.Logf("JSONB type of tags: %s, scores: %s", tagsType, scoresType)
 		}
-		
+
 		// Try different approaches
 		query = "SELECT count(*) FROM json_users WHERE jsonb_array_length(tags) > 2"
 		err = pool.QueryRow(ctx, query).Scan(&count)
@@ -713,7 +1012,7 @@ func TestLoadTableSchema_JsonComprehensions(t *testing.T) {
 		rows, err := pool.Query(ctx, query)
 		require.NoError(t, err)
 		defer rows.Close()
-		
+
 		for rows.Next() {
 			var id int
 			var name string
@@ -721,7 +1020,7 @@ func TestLoadTableSchema_JsonComprehensions(t *testing.T) {
 			var tagsText, scoresText *string
 			err = rows.Scan(&id, &name, &tagsNull, &scoresNull, &tagsText, &scoresText)
 			require.NoError(t, err)
-			
+
 			tagsStr := "NULL"
 			if tagsText != nil {
 				tagsStr = *tagsText
@@ -730,11 +1029,11 @@ func TestLoadTableSchema_JsonComprehensions(t *testing.T) {
 			if scoresText != nil {
 				scoresStr = *scoresText
 			}
-			
-			t.Logf("User %d (%s): tags_null=%v, scores_null=%v, tags='%s', scores='%s'", 
+
+			t.Logf("User %d (%s): tags_null=%v, scores_null=%v, tags='%s', scores='%s'",
 				id, name, tagsNull, scoresNull, tagsStr, scoresStr)
 		}
-		
+
 		// Try the function on specific known-good rows
 		query = "SELECT count(*) FROM json_users WHERE id = 1 AND EXISTS (SELECT 1 FROM jsonb_array_elements_text(tags) AS tag WHERE tag = 'developer')"
 		var count int
@@ -794,108 +1093,108 @@ func TestJSONNestedPathExpressions(t *testing.T) {
 	require.NoError(t, err)
 
 	testCases := []struct {
-		name           string
-		celExpr        string
-		expectedSQL    string
-		expectedCount  int
-		description    string
-		table          string
+		name          string
+		celExpr       string
+		expectedSQL   string
+		expectedCount int
+		description   string
+		table         string
 	}{
 		{
-			name:    "nested_jsonb_corpus_section_getting_started",
-			celExpr: `information_assets.metadata.corpus.section == "Getting Started"`,
-			table:   "information_assets",
-			expectedSQL: `information_assets.metadata->'corpus'->>'section' = 'Getting Started'`,
+			name:          "nested_jsonb_corpus_section_getting_started",
+			celExpr:       `information_assets.metadata.corpus.section == "Getting Started"`,
+			table:         "information_assets",
+			expectedSQL:   `information_assets.metadata->'corpus'->>'section' = 'Getting Started'`,
 			expectedCount: 2, // User Guide Documentation and Migration Guide
-			description: "Test nested JSONB access for corpus section matching 'Getting Started'",
+			description:   "Test nested JSONB access for corpus section matching 'Getting Started'",
 		},
 		{
-			name:    "nested_jsonb_corpus_section_reference",
-			celExpr: `information_assets.metadata.corpus.section == "Reference"`,
-			table:   "information_assets",
-			expectedSQL: `information_assets.metadata->'corpus'->>'section' = 'Reference'`,
+			name:          "nested_jsonb_corpus_section_reference",
+			celExpr:       `information_assets.metadata.corpus.section == "Reference"`,
+			table:         "information_assets",
+			expectedSQL:   `information_assets.metadata->'corpus'->>'section' = 'Reference'`,
 			expectedCount: 2, // API Reference Manual and Developer Resources
-			description: "Test nested JSONB access for corpus section matching 'Reference'",
+			description:   "Test nested JSONB access for corpus section matching 'Reference'",
 		},
 		{
-			name:    "nested_jsonb_version_major_greater_than_1",
-			celExpr: `information_assets.metadata.version.major > 1`,
-			table:   "information_assets",
-			expectedSQL: `(information_assets.metadata->'version'->>'major')::numeric > 1`,
+			name:          "nested_jsonb_version_major_greater_than_1",
+			celExpr:       `information_assets.metadata.version.major > 1`,
+			table:         "information_assets",
+			expectedSQL:   `(information_assets.metadata->'version'->>'major')::numeric > 1`,
 			expectedCount: 3, // All items with major version 2
-			description: "Test nested JSONB access with numeric comparison",
+			description:   "Test nested JSONB access with numeric comparison",
 		},
 		{
-			name:    "nested_json_properties_visibility_public",
-			celExpr: `information_assets.properties.visibility == "public"`,
-			table:   "information_assets",
-			expectedSQL: `information_assets.properties->>'visibility' = 'public'`,
+			name:          "nested_json_properties_visibility_public",
+			celExpr:       `information_assets.properties.visibility == "public"`,
+			table:         "information_assets",
+			expectedSQL:   `information_assets.properties->>'visibility' = 'public'`,
 			expectedCount: 5, // Updated to match actual data
-			description: "Test nested JSON access for visibility property",
+			description:   "Test nested JSON access for visibility property",
 		},
 		{
-			name:    "nested_jsonb_author_department",
-			celExpr: `information_assets.metadata.author.department == "Engineering"`,
-			table:   "information_assets",
-			expectedSQL: `information_assets.metadata->'author'->>'department' = 'Engineering'`,
+			name:          "nested_jsonb_author_department",
+			celExpr:       `information_assets.metadata.author.department == "Engineering"`,
+			table:         "information_assets",
+			expectedSQL:   `information_assets.metadata->'author'->>'department' = 'Engineering'`,
 			expectedCount: 2, // API Reference Manual and Migration Guide
-			description: "Test nested JSONB access for author department",
+			description:   "Test nested JSONB access for author department",
 		},
 		{
-			name:    "nested_jsonb_corpus_chapter_greater_than_2",
-			celExpr: `information_assets.metadata.corpus.chapter > 2`,
-			table:   "information_assets",
-			expectedSQL: `(information_assets.metadata->'corpus'->>'chapter')::numeric > 2`,
+			name:          "nested_jsonb_corpus_chapter_greater_than_2",
+			celExpr:       `information_assets.metadata.corpus.chapter > 2`,
+			table:         "information_assets",
+			expectedSQL:   `(information_assets.metadata->'corpus'->>'chapter')::numeric > 2`,
 			expectedCount: 3, // Updated to match actual data (3 records with chapter > 2)
-			description: "Test nested JSONB access with numeric comparison on chapter",
+			description:   "Test nested JSONB access with numeric comparison on chapter",
 		},
 		{
-			name:    "document_nested_corpus_section",
-			celExpr: `documents.content.metadata.corpus.section == "Getting Started"`,
-			table:   "documents",
-			expectedSQL: `documents.content->'metadata'->'corpus'->>'section' = 'Getting Started'`,
+			name:          "document_nested_corpus_section",
+			celExpr:       `documents.content.metadata.corpus.section == "Getting Started"`,
+			table:         "documents",
+			expectedSQL:   `documents.content->'metadata'->'corpus'->>'section' = 'Getting Started'`,
 			expectedCount: 1, // Introduction to APIs
-			description: "Test deeply nested JSONB access in documents table",
+			description:   "Test deeply nested JSONB access in documents table",
 		},
 		{
-			name:    "document_nested_stats_total_words",
-			celExpr: `documents.content.metadata.stats.totalWords > 500`,
-			table:   "documents",
-			expectedSQL: `(documents.content->'metadata'->'stats'->>'totalWords')::numeric > 500`,
+			name:          "document_nested_stats_total_words",
+			celExpr:       `documents.content.metadata.stats.totalWords > 500`,
+			table:         "documents",
+			expectedSQL:   `(documents.content->'metadata'->'stats'->>'totalWords')::numeric > 500`,
 			expectedCount: 2, // Authentication Best Practices and Troubleshooting Common Issues
-			description: "Test deeply nested JSONB access with numeric comparison",
+			description:   "Test deeply nested JSONB access with numeric comparison",
 		},
 		{
-			name:    "nested_jsonb_classification_security_level",
-			celExpr: `information_assets.classification.security.level == "public"`,
-			table:   "information_assets",
-			expectedSQL: `information_assets.classification->'security'->>'level' = 'public'`,
+			name:          "nested_jsonb_classification_security_level",
+			celExpr:       `information_assets.classification.security.level == "public"`,
+			table:         "information_assets",
+			expectedSQL:   `information_assets.classification->'security'->>'level' = 'public'`,
 			expectedCount: 5, // Updated to match actual data
-			description: "Test nested JSONB access in classification field",
+			description:   "Test nested JSONB access in classification field",
 		},
 		{
-			name:    "complex_and_condition",
-			celExpr: `information_assets.metadata.corpus.section == "Getting Started" && information_assets.metadata.version.major == 2`,
-			table:   "information_assets",
-			expectedSQL: `information_assets.metadata->'corpus'->>'section' = 'Getting Started' AND (information_assets.metadata->'version'->>'major')::numeric = 2`,
+			name:          "complex_and_condition",
+			celExpr:       `information_assets.metadata.corpus.section == "Getting Started" && information_assets.metadata.version.major == 2`,
+			table:         "information_assets",
+			expectedSQL:   `information_assets.metadata->'corpus'->>'section' = 'Getting Started' AND (information_assets.metadata->'version'->>'major')::numeric = 2`,
 			expectedCount: 2, // User Guide Documentation and Migration Guide
-			description: "Test complex AND condition with nested JSONB access",
+			description:   "Test complex AND condition with nested JSONB access",
 		},
 		{
-			name:    "complex_or_condition",
-			celExpr: `information_assets.metadata.corpus.section == "Reference" || information_assets.metadata.corpus.section == "Tutorials"`,
-			table:   "information_assets",
-			expectedSQL: `information_assets.metadata->'corpus'->>'section' = 'Reference' OR information_assets.metadata->'corpus'->>'section' = 'Tutorials'`,
+			name:          "complex_or_condition",
+			celExpr:       `information_assets.metadata.corpus.section == "Reference" || information_assets.metadata.corpus.section == "Tutorials"`,
+			table:         "information_assets",
+			expectedSQL:   `information_assets.metadata->'corpus'->>'section' = 'Reference' OR information_assets.metadata->'corpus'->>'section' = 'Tutorials'`,
 			expectedCount: 3, // API Reference Manual, Developer Resources, and Advanced Tutorial Series
-			description: "Test complex OR condition with nested JSONB access",
+			description:   "Test complex OR condition with nested JSONB access",
 		},
 		{
-			name:    "nested_array_access_corpus_tags",
-			celExpr: `"documentation" in information_assets.metadata.corpus.tags`,
-			table:   "information_assets",
-			expectedSQL: `EXISTS (SELECT 1 FROM jsonb_array_elements_text(information_assets.metadata->'corpus'->'tags') AS tag WHERE tag = 'documentation')`,
+			name:          "nested_array_access_corpus_tags",
+			celExpr:       `"documentation" in information_assets.metadata.corpus.tags`,
+			table:         "information_assets",
+			expectedSQL:   `EXISTS (SELECT 1 FROM jsonb_array_elements_text(information_assets.metadata->'corpus'->'tags') AS tag WHERE tag = 'documentation')`,
 			expectedCount: 1, // User Guide Documentation
-			description: "Test nested JSONB array access with 'in' operator",
+			description:   "Test nested JSONB array access with 'in' operator",
 		},
 	}
 
@@ -956,7 +1255,7 @@ func TestJSONNestedPathExpressions(t *testing.T) {
 				if tc.table == "documents" {
 					nameColumn = "title"
 				}
-				
+
 				sampleQuery := fmt.Sprintf("SELECT id, %s FROM %s WHERE %s LIMIT 3", nameColumn, tc.table, sqlCondition)
 				rows, err := pool.Query(ctx, sampleQuery)
 				require.NoError(t, err)
@@ -978,7 +1277,7 @@ func TestJSONNestedPathExpressions(t *testing.T) {
 	t.Run("nested_null_handling", func(t *testing.T) {
 		// Test handling of null values in nested JSON paths
 		celExpr := `information_assets.metadata.nonexistent.field == "value"`
-		
+
 		env, err := cel.NewEnv(
 			cel.CustomTypeProvider(provider),
 			cel.Variable("information_assets", cel.ObjectType("information_assets")),
@@ -1002,7 +1301,7 @@ func TestJSONNestedPathExpressions(t *testing.T) {
 	t.Run("nested_type_mixing", func(t *testing.T) {
 		// Test mixing JSON and JSONB access in the same expression
 		celExpr := `information_assets.metadata.corpus.section == "Reference" && information_assets.properties.visibility == "public"`
-		
+
 		env, err := cel.NewEnv(
 			cel.CustomTypeProvider(provider),
 			cel.Variable("information_assets", cel.ObjectType("information_assets")),
@@ -1027,7 +1326,7 @@ func TestJSONNestedPathExpressions(t *testing.T) {
 	t.Run("deeply_nested_json_paths", func(t *testing.T) {
 		// Test very deep nesting (4+ levels)
 		celExpr := `documents.content.metadata.corpus.section == "Getting Started"`
-		
+
 		env, err := cel.NewEnv(
 			cel.CustomTypeProvider(provider),
 			cel.Variable("documents", cel.ObjectType("documents")),
@@ -1042,7 +1341,7 @@ func TestJSONNestedPathExpressions(t *testing.T) {
 
 		// Should handle 4-level deep nesting correctly
 		assert.Contains(t, sqlCondition, "content->'metadata'->'corpus'", "Should generate correct deep nesting path")
-		
+
 		query := "SELECT COUNT(*) FROM documents WHERE " + sqlCondition
 		var count int
 		err = pool.QueryRow(ctx, query).Scan(&count)
