@@ -1,5 +1,20 @@
 # Changelog
 
+## [2.7.1] - 2025-07-19
+
+### Dependencies
+- **Updated Dependencies**: Upgraded core dependencies for security and compatibility
+  - Bumped `github.com/google/cel-go` from v0.25.0 to v0.26.0 for improved CEL expression handling
+  - Bumped `github.com/testcontainers/testcontainers-go/modules/postgres` to v0.38.0 for enhanced PostgreSQL testing support
+- **Improved Compatibility**: All dependency updates maintain backward compatibility
+- **Security**: Updated dependencies include latest security patches and improvements
+
+### Technical Details
+- No breaking changes - fully backward compatible
+- All existing APIs and functionality remain unchanged
+- Enhanced performance and reliability from dependency updates
+- Maintained 100% test coverage with all tests passing
+
 ## [2.7.0] - 2025-01-20
 
 ### Added
