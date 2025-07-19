@@ -1,5 +1,40 @@
 # Changelog
 
+## [2.7.2] - 2025-07-19
+
+### BREAKING CHANGES
+- **Module Path Update**: Updated module path to `github.com/spandigital/cel2sql/v2` for Go module versioning compliance
+- **Import Changes Required**: All users must update their imports to include the `/v2` suffix
+
+### Fixed
+- **Go Module Compliance**: Fixed "module contains a go.mod file, so module path must match major version" error
+- **Module Versioning**: Proper Go module versioning for v2+ releases according to Go module standards
+
+### Migration Required
+Users must update their import statements:
+
+```go
+// OLD (v2.7.1 and earlier)
+import "github.com/spandigital/cel2sql"
+import "github.com/spandigital/cel2sql/pg"
+import "github.com/spandigital/cel2sql/sqltypes"
+
+// NEW (v2.7.2 and later)
+import "github.com/spandigital/cel2sql/v2"
+import "github.com/spandigital/cel2sql/v2/pg"
+import "github.com/spandigital/cel2sql/v2/sqltypes"
+```
+
+### Technical Details
+- Updated `go.mod` module path to include `/v2` suffix
+- Updated all internal package imports throughout codebase
+- Updated documentation and examples to reflect new import paths
+- All functionality remains unchanged - only import paths have changed
+- Maintains full backward compatibility at API level
+
+### Note
+This change is required for proper Go module versioning compliance. Go modules v2+ must include the major version in the module path when the module contains a go.mod file.
+
 ## [2.7.1] - 2025-07-19
 
 ### Dependencies
