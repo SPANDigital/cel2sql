@@ -1,5 +1,35 @@
 # Changelog
 
+## [2.7.0] - 2025-01-20
+
+### Added
+- 🚀 **Comprehensive JSON/JSONB Nested Path Support**: Full support for deep nested JSON path expressions in PostgreSQL
+- **Advanced JSON Path Generation**: Automatic conversion of CEL expressions like `table.metadata.corpus.section` to PostgreSQL JSON paths `table.metadata->'corpus'->>'section'`
+- **Intelligent JSON Operator Selection**: Automatic selection between `->` (JSON navigation) and `->>` (text extraction) operators
+- **Automatic Type Casting**: Smart detection and casting for numeric comparisons (e.g., `(version.major)::numeric > 1`)
+- **Complex Nested Structure Support**: Support for 4+ levels of JSON nesting with proper path generation
+- **JSON Array Membership**: Enhanced support for array membership operations with `jsonb_array_elements_text()`
+- **Mixed JSON/JSONB Support**: Seamless handling of both JSON and JSONB column types in the same query
+
+### Enhanced
+- **JSON Field Detection**: Improved detection of JSON/JSONB fields in table schemas for automatic path generation
+- **Nested Path Building**: Recursive path building with proper PostgreSQL JSON operator precedence
+- **Test Coverage**: Added comprehensive test suite with 15+ JSON/JSONB nested path test cases
+- **Error Handling**: Better error messages for invalid JSON path expressions
+
+### Technical Details
+- Enhanced `json.go` with `shouldUseJSONPath()`, `hasJSONFieldInChain()`, and `buildJSONPath()` functions
+- Updated `cel2sql.go` with automatic numeric casting detection for JSON text extractions
+- Added comprehensive PostgreSQL test data with complex nested JSON/JSONB structures
+- Improved type checking and validation for nested JSON field access
+- Added utilities for JSON field type detection and path validation
+
+### Testing
+- Added `create_json_nested_path_test_data.sql` with comprehensive test scenarios
+- Created `TestJSONNestedPathExpressions` with 15 test cases covering various nesting patterns
+- Enhanced testcontainer integration for PostgreSQL JSON/JSONB testing
+- Verified compatibility with PostgreSQL 15+ JSON features
+
 ## [2.6.1] - 2025-07-14
 
 ### Improved

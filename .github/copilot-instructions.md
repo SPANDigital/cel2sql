@@ -12,12 +12,48 @@ This project converts [CEL (Common Expression Language)](https://opensource.goog
 2. **`pg/provider.go`** - PostgreSQL type provider for CEL type system integration
 3. **`sqltypes/types.go`** - Custom SQL type definitions for CEL (Date, Time, DateTime)
 4. **`test/testdata.go`** - PostgreSQL schema definitions for testing
+5. **`json.go`** - JSON/JSONB nested path handling and PostgreSQL operator generation
+
+### JSON/JSONB Support
+
+The system provides comprehensive support for nested JSON/JSONB field access:
+
+- **Nested Path Generation**: Converts CEL expressions like `table.metadata.corpus.section` to PostgreSQL JSON paths `table.metadata->'corpus'->>'section'`
+- **Automatic Type Casting**: Detects numeric comparisons and adds `::numeric` casting where needed
+- **Array Operations**: Handles array membership with `jsonb_array_elements_text()` functions
+- **Mixed JSON Types**: Supports both JSON and JSONB columns with appropriate operators
+
+#### JSON Path Operators
+
+- `->` - JSON object field access (returns JSON)
+- `->>` - JSON object field access (returns text)
+- Rule: Use `->` for intermediate navigation, `->>` for final text extraction
+
+#### Supported Patterns
+
+```cel
+// String comparisons
+information_assets.metadata.corpus.section == "Getting Started"
+// → information_assets.metadata->'corpus'->>'section' = 'Getting Started'
+
+// Numeric comparisons (with automatic casting)
+information_assets.metadata.version.major > 1
+// → (information_assets.metadata->'version'->>'major')::numeric > 1
+
+// Array membership
+"documentation" in information_assets.metadata.corpus.tags
+// → 'documentation' = ANY(ARRAY(SELECT jsonb_array_elements_text(...)))
+
+// Complex nested conditions
+info.metadata.corpus.section == "Guide" && info.metadata.version.major == 2
+```
 
 ### Type System Integration
 
 - Uses CEL's protobuf-based type system (`exprpb.Type`, `exprpb.Expr`)
 - Maps PostgreSQL types to CEL types through the `pg.TypeProvider`
 - Supports composite types, arrays, and nested schemas
+- Handles JSON/JSONB fields with automatic path detection and operator selection
 
 ## Development Guidelines
 
@@ -46,6 +82,8 @@ This project converts [CEL (Common Expression Language)](https://opensource.goog
 - Use `pg.NewTypeProvider()` with `pg.Schema` definitions
 - Include tests for nested types and arrays
 - Verify SQL output matches PostgreSQL syntax
+- Test JSON/JSONB nested path expressions with `testcontainers-go`
+- Include comprehensive tests for complex nested structures
 
 ### Dependencies
 
@@ -53,6 +91,7 @@ This project converts [CEL (Common Expression Language)](https://opensource.goog
 - **PostgreSQL**: `github.com/jackc/pgx/v5` - Database driver
 - **Protobuf**: Required for CEL (don't remove these dependencies)
 - **Testing**: `github.com/stretchr/testify`
+- **Test Containers**: `github.com/testcontainers/testcontainers-go` - PostgreSQL integration tests
 
 ## Common Patterns
 
@@ -63,6 +102,7 @@ schema := pg.Schema{
     {Name: "field_name", Type: "text", Repeated: false},
     {Name: "array_field", Type: "text", Repeated: true},
     {Name: "composite_field", Type: "composite", Schema: []pg.FieldSchema{...}},
+    {Name: "json_field", Type: "jsonb", Repeated: false}, // For JSON/JSONB fields
 }
 provider := pg.NewTypeProvider(map[string]pg.Schema{"TableName": schema})
 ```
@@ -74,6 +114,16 @@ env, err := cel.NewEnv(
     cel.CustomTypeProvider(provider),
     cel.Variable("table", cel.ObjectType("TableName")),
 )
+```
+
+### JSON/JSONB Field Configuration
+
+```go
+// Configure tables with JSON/JSONB fields for nested path detection
+jsonFields := map[string][]string{
+    "information_assets": {"metadata", "properties", "classification"},
+    "documents": {"content", "structure", "taxonomy", "analytics"},
+}
 ```
 
 ### Adding New SQL Functions
@@ -113,6 +163,8 @@ This project was recently migrated from BigQuery to PostgreSQL:
 - Check `typeMap` in converter for type resolution issues
 - PostgreSQL arrays use `[]` suffix in type names
 - Composite types require proper nested schema navigation
+- For JSON path issues, check `shouldUseJSONPath()` and `hasJSONFieldInChain()` functions
+- Verify JSON field detection in `isJSONArrayField()` and `isJSONBField()` functions
 
 ## Security Considerations
 

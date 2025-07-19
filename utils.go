@@ -105,3 +105,23 @@ func bytesToOctets(byteVal []byte) string {
 	}
 	return b.String()
 }
+
+// Numeric comparison utilities
+
+// isNumericComparison checks if an operator is a numeric comparison
+func isNumericComparison(op string) bool {
+	return op == operators.Greater || op == operators.GreaterEquals || 
+		   op == operators.Less || op == operators.LessEquals ||
+		   op == operators.Equals || op == operators.NotEquals
+}
+
+// isNumericType checks if a type represents a numeric value
+func isNumericType(typ *exprpb.Type) bool {
+	if typ == nil {
+		return false
+	}
+	primitive := typ.GetPrimitive()
+	return primitive == exprpb.Type_INT64 || 
+		   primitive == exprpb.Type_UINT64 || 
+		   primitive == exprpb.Type_DOUBLE
+}

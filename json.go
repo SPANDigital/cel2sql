@@ -27,14 +27,57 @@ func (con *converter) shouldUseJSONPath(operand *exprpb.Expr, _ string) bool {
 	if selectExpr := operand.GetSelectExpr(); selectExpr != nil {
 		// Nested field access - check if the parent field is a JSON field
 		parentField := selectExpr.GetField()
-		jsonFields := []string{"preferences", "metadata", "profile", "details", "settings", "properties", "analytics"}
+		jsonFields := []string{"preferences", "metadata", "profile", "details", "settings", "properties", "analytics", 
+		                      "content", "structure", "taxonomy", "classification", "content_structure"}
 		for _, jsonField := range jsonFields {
 			if parentField == jsonField {
 				return true
 			}
 		}
+		
+		// Also check if we have deeper nesting where a JSON field appears earlier in the chain
+		if con.hasJSONFieldInChain(operand) {
+			return true
+		}
 	}
 
+	return false
+}
+
+// hasJSONFieldInChain checks if there's a JSON field anywhere in the select expression chain
+func (con *converter) hasJSONFieldInChain(expr *exprpb.Expr) bool {
+	if selectExpr := expr.GetSelectExpr(); selectExpr != nil {
+		field := selectExpr.GetField()
+		operand := selectExpr.GetOperand()
+		
+		// Check if current field is a JSON field
+		jsonFields := []string{"preferences", "metadata", "profile", "details", "settings", "properties", "analytics", 
+		                      "content", "structure", "taxonomy", "classification", "content_structure"}
+		for _, jsonField := range jsonFields {
+			if field == jsonField {
+				return true
+			}
+		}
+		
+		// Recursively check the operand
+		return con.hasJSONFieldInChain(operand)
+	}
+	
+	return false
+}
+
+// isJSONTextExtraction checks if an expression represents a JSON field extraction that returns text
+// This is used to determine if we need numeric casting for comparisons
+func (con *converter) isJSONTextExtraction(expr *exprpb.Expr) bool {
+	// Check if this is a select expression that would use JSON path operators
+	if selectExpr := expr.GetSelectExpr(); selectExpr != nil {
+		operand := selectExpr.GetOperand()
+		field := selectExpr.GetField()
+		
+		// If this would trigger JSON path generation, it's a text extraction
+		return con.shouldUseJSONPath(operand, field)
+	}
+	
 	return false
 }
 
@@ -68,16 +111,8 @@ func (con *converter) isNumericJSONField(fieldName string) bool {
 // isNestedJSONAccess checks if this is nested JSON field access like settings.permissions
 func (con *converter) isNestedJSONAccess(expr *exprpb.Expr) bool {
 	if selectExpr := expr.GetSelectExpr(); selectExpr != nil {
-		if operandSelect := selectExpr.GetOperand().GetSelectExpr(); operandSelect != nil {
-			// This is a nested select like json_users.settings.permissions
-			parentField := operandSelect.GetField()
-			jsonObjectFields := []string{"settings", "properties", "metadata", "analytics"}
-			for _, jsonField := range jsonObjectFields {
-				if parentField == jsonField {
-					return true
-				}
-			}
-		}
+		// Check if there's a JSON field somewhere in the chain
+		return con.hasJSONFieldInChain(selectExpr.GetOperand())
 	}
 	return false
 }
@@ -89,17 +124,53 @@ func (con *converter) visitNestedJSONForArray(expr *exprpb.Expr) error {
 		return errors.New("expected select expression for nested JSON access")
 	}
 
-	// Visit the operand (like json_users.settings)
-	if err := con.visit(selectExpr.GetOperand()); err != nil {
-		return err
+	// For array operations, we need to use -> throughout to preserve JSON type
+	// Use a specialized builder that doesn't convert to text
+	return con.buildJSONPathForArray(expr)
+}
+
+// buildJSONPathForArray constructs a JSON path for array operations, using -> throughout
+func (con *converter) buildJSONPathForArray(expr *exprpb.Expr) error {
+	selectExpr := expr.GetSelectExpr()
+	if selectExpr == nil {
+		return errors.New("expected select expression for JSON array path")
 	}
 
-	// Use -> instead of ->> to preserve JSONB type for array operations
-	con.str.WriteString("->")
-	con.str.WriteString("'")
-	con.str.WriteString(selectExpr.GetField())
-	con.str.WriteString("'")
+	operand := selectExpr.GetOperand()
+	field := selectExpr.GetField()
 
+	// Check if the operand is also a select expression (nested access)
+	if operandSelect := operand.GetSelectExpr(); operandSelect != nil {
+		// This is nested access - recursively build the path for the operand
+		if con.hasJSONFieldInChain(operand) {
+			if err := con.buildJSONPathForArray(operand); err != nil {
+				return err
+			}
+			// Add intermediate JSON path operator (always -> for arrays)
+			con.str.WriteString("->'")
+			con.str.WriteString(field)
+			con.str.WriteString("'")
+			return nil
+		}
+	}
+
+	// Check if this is the base table.jsonfield access
+	if operandIdent := operand.GetIdentExpr(); operandIdent != nil {
+		// This is table.jsonfield - use normal table.field syntax for the base
+		tableName := operandIdent.GetName()
+		con.str.WriteString(tableName)
+		con.str.WriteString(".")
+		con.str.WriteString(field)
+		return nil
+	}
+
+	// For other cases, visit the operand and add JSON operator
+	if err := con.visit(operand); err != nil {
+		return err
+	}
+	con.str.WriteString("->'")
+	con.str.WriteString(field)
+	con.str.WriteString("'")
 	return nil
 }
 
@@ -146,10 +217,12 @@ func (con *converter) isJSONArrayField(expr *exprpb.Expr) bool {
 
 			// Check for known JSON array fields in our test schemas
 			jsonArrayFields := map[string][]string{
-				"json_users":    {"tags", "scores", "attributes"},
-				"json_products": {"features", "reviews", "categories"},
-				"users":         {"preferences", "profile"}, // existing test data
-				"products":      {"metadata", "details"},    // existing test data
+				"json_users":         {"tags", "scores", "attributes"},
+				"json_products":      {"features", "reviews", "categories"},
+				"users":              {"preferences", "profile"}, // existing test data
+				"products":           {"metadata", "details"},    // existing test data
+				"information_assets": {"metadata", "properties", "classification", "content_structure"}, // nested path test data
+				"documents":          {"content", "structure", "taxonomy", "analytics"},                  // nested path test data
 			}
 
 			if fields, exists := jsonArrayFields[tableName]; exists {
@@ -161,23 +234,19 @@ func (con *converter) isJSONArrayField(expr *exprpb.Expr) bool {
 			}
 		}
 
-		// Check for nested JSON field access (e.g., json_users.settings.permissions)
-		if nestedSelectExpr := operand.GetSelectExpr(); nestedSelectExpr != nil {
-			parentField := nestedSelectExpr.GetField()
-			jsonObjectFields := []string{"settings", "properties", "metadata", "analytics"}
-			for _, jsonObjectField := range jsonObjectFields {
-				if parentField == jsonObjectField {
-					// This is accessing a field within a JSON object that could be an array
-					arrayFields := []string{"permissions", "features", "tags", "categories"}
-					for _, arrayField := range arrayFields {
-						if field == arrayField {
-							return true
-						}
-					}
+		// Check for nested JSON field access (e.g., information_assets.metadata.corpus.tags)
+		// If there's a JSON field in the chain, this could be a nested array
+		if con.hasJSONFieldInChain(expr) {
+			// For nested access, we assume certain field names are arrays
+			arrayFieldNames := []string{"tags", "permissions", "features", "categories", "scores", "attributes"}
+			for _, arrayField := range arrayFieldNames {
+				if field == arrayField {
+					return true
 				}
 			}
 		}
 	}
+
 	return false
 }
 
@@ -194,8 +263,10 @@ func (con *converter) isJSONBField(expr *exprpb.Expr) bool {
 
 			// Define which fields are JSONB vs JSON in our test schemas
 			jsonbFields := map[string][]string{
-				"json_users":    {"settings", "tags", "scores"},       // JSONB fields
-				"json_products": {"features", "reviews", "properties"}, // JSONB fields
+				"json_users":         {"settings", "tags", "scores"},       // JSONB fields
+				"json_products":      {"features", "reviews", "properties"}, // JSONB fields
+				"information_assets": {"metadata", "classification"},        // JSONB fields
+				"documents":          {"content", "taxonomy"},               // JSONB fields
 			}
 
 			if fields, exists := jsonbFields[tableName]; exists {
@@ -266,4 +337,56 @@ func (con *converter) getJSONArrayFunction(expr *exprpb.Expr) string {
 		return jsonbArrayElements
 	}
 	return jsonArrayElements
+}
+
+// buildJSONPath constructs the full JSON path for nested field access
+func (con *converter) buildJSONPath(expr *exprpb.Expr) error {
+	return con.buildJSONPathInternal(expr, true)
+}
+
+// buildJSONPathInternal is the internal implementation that tracks if this is the final field
+func (con *converter) buildJSONPathInternal(expr *exprpb.Expr, isFinalField bool) error {
+	selectExpr := expr.GetSelectExpr()
+	if selectExpr == nil {
+		return errors.New("expected select expression for JSON path")
+	}
+
+	operand := selectExpr.GetOperand()
+	field := selectExpr.GetField()
+
+	// Check if the operand is also a select expression (nested access)
+	if operandSelect := operand.GetSelectExpr(); operandSelect != nil {
+		// This is nested access like table.jsonfield.subfield.finalfield
+		// We need to determine if the operand is JSON-related
+		if con.shouldUseJSONPath(operandSelect.GetOperand(), operandSelect.GetField()) {
+			// Recursively build the path for the operand (not final since we have more fields)
+			if err := con.buildJSONPathInternal(operand, false); err != nil {
+				return err
+			}
+			// Add appropriate JSON path operator based on whether this is the final field
+			if isFinalField {
+				con.str.WriteString("->>'")  // Final field: extract as text
+			} else {
+				con.str.WriteString("->'")   // Intermediate field: keep as JSON
+			}
+			con.str.WriteString(field)
+			con.str.WriteString("'")
+			return nil
+		}
+	}
+
+	// Visit the base operand (like table.jsonfield)
+	if err := con.visit(operand); err != nil {
+		return err
+	}
+
+	// Add the appropriate JSON path operator based on whether this is the final field
+	if isFinalField {
+		con.str.WriteString("->>'")  // Final field: extract as text
+	} else {
+		con.str.WriteString("->'")   // Intermediate field: keep as JSON
+	}
+	con.str.WriteString(field)
+	con.str.WriteString("'")
+	return nil
 }

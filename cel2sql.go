@@ -112,8 +112,20 @@ func (con *converter) visitCallBinary(expr *exprpb.Expr) error {
 	if !rhsParen && isLeftRecursive(fun) {
 		rhsParen = isSamePrecedence(fun, rhs)
 	}
+	
+	// Check if we need numeric casting for JSON text extraction
+	needsNumericCasting := false
+	if con.isJSONTextExtraction(lhs) && isNumericComparison(fun) && isNumericType(rhsType) {
+		needsNumericCasting = true
+		con.str.WriteString("(")
+	}
+	
 	if err := con.visitMaybeNested(lhs, lhsParen); err != nil {
 		return err
+	}
+	
+	if needsNumericCasting {
+		con.str.WriteString(")::numeric")
 	}
 	var operator string
 	if fun == operators.Add && (lhsType.GetPrimitive() == exprpb.Type_STRING && rhsType.GetPrimitive() == exprpb.Type_STRING) {
@@ -918,6 +930,12 @@ func (con *converter) visitSelect(expr *exprpb.Expr) error {
 	// We need to determine if the operand is a JSON/JSONB field
 	useJSONPath := con.shouldUseJSONPath(sel.GetOperand(), sel.GetField())
 	useJSONObjectAccess := con.isJSONObjectFieldAccess(expr)
+
+	// Check if this is a nested JSON path that requires special handling
+	if useJSONPath && !useJSONObjectAccess {
+		// Use the specialized JSON path builder for nested access
+		return con.buildJSONPath(expr)
+	}
 
 	nested := !sel.GetTestOnly() && isBinaryOrTernaryOperator(sel.GetOperand())
 
