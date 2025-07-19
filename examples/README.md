@@ -70,4 +70,4 @@ When adding new examples:
 
 - [Main README](../README.md) - Project overview and usage
 - [Contributing Guide](../CONTRIBUTING.md) - Development setup and testing patterns
-- [API Documentation](https://pkg.go.dev/github.com/spandigital/cel2sql) - Detailed API reference
+- [API Documentation](https://pkg.go.dev/github.com/spandigital/cel2sql/v2) - Detailed API reference

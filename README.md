@@ -39,9 +39,9 @@ import (
     "context"
     "fmt"
     
-    "github.com/spandigital/cel2sql"
-    "github.com/spandigital/cel2sql/pg"
-    "github.com/spandigital/cel2sql/sqltypes"
+    "github.com/spandigital/cel2sql/v2"
+    "github.com/spandigital/cel2sql/v2/pg"
+    "github.com/spandigital/cel2sql/v2/sqltypes"
     "github.com/google/cel-go/cel"
 )
 
@@ -77,9 +77,9 @@ import (
     "context"
     "fmt"
     
-    "github.com/spandigital/cel2sql"
-    "github.com/spandigital/cel2sql/pg"
-    "github.com/spandigital/cel2sql/sqltypes"
+    "github.com/spandigital/cel2sql/v2"
+    "github.com/spandigital/cel2sql/v2/pg"
+    "github.com/spandigital/cel2sql/v2/sqltypes"
     "github.com/google/cel-go/cel"
 )
 
@@ -1212,8 +1212,8 @@ package main
 import (
     "fmt"
     "github.com/google/cel-go/cel"
-    "github.com/spandigital/cel2sql"
-    "github.com/spandigital/cel2sql/pg"
+    "github.com/spandigital/cel2sql/v2"
+    "github.com/spandigital/cel2sql/v2/pg"
 )
 
 func main() {

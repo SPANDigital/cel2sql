@@ -13,7 +13,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	exprpb "google.golang.org/genproto/googleapis/api/expr/v1alpha1"
 
-	"github.com/spandigital/cel2sql/sqltypes"
+	"github.com/spandigital/cel2sql/v2/sqltypes"
 )
 
 // FieldSchema represents a PostgreSQL field type with name, type, and optional nested schema.
