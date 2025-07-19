@@ -1349,3 +1349,191 @@ func TestJSONNestedPathExpressions(t *testing.T) {
 		assert.Equal(t, 1, count, "Deep nested query should find the introduction document")
 	})
 }
+
+func TestRegexPatternMatching(t *testing.T) {
+	ctx := context.Background()
+
+	// Create a PostgreSQL container
+	container, err := postgres.Run(ctx,
+		"postgres:15",
+		postgres.WithDatabase("testdb"),
+		postgres.WithUsername("testuser"),
+		postgres.WithPassword("testpass"),
+		testcontainers.WithWaitStrategy(
+			wait.ForLog("database system is ready to accept connections").
+				WithOccurrence(2).
+				WithStartupTimeout(time.Second*60),
+		),
+	)
+	require.NoError(t, err)
+
+	// Cleanup container after test
+	defer func() {
+		if err := container.Terminate(ctx); err != nil {
+			t.Errorf("failed to terminate container: %v", err)
+		}
+	}()
+
+	// Get connection string
+	connStr, err := container.ConnectionString(ctx, "sslmode=disable")
+	require.NoError(t, err)
+
+	// Connect to the database
+	pool, err := pgxpool.New(ctx, connStr)
+	require.NoError(t, err)
+	defer pool.Close()
+
+	// Create test table with sample data for regex testing
+	_, err = pool.Exec(ctx, `
+		CREATE TABLE test_regex (
+			id SERIAL PRIMARY KEY,
+			name TEXT NOT NULL,
+			email TEXT NOT NULL,
+			code TEXT NOT NULL,
+			phone TEXT NOT NULL,
+			description TEXT NOT NULL
+		)
+	`)
+	require.NoError(t, err)
+
+	// Insert test data
+	_, err = pool.Exec(ctx, `
+		INSERT INTO test_regex (name, email, code, phone, description) VALUES
+		('John Doe', 'john.doe@example.com', 'ABC123', '555-1234', 'This is a test description'),
+		('Jane Smith', 'jane.smith@company.org', 'XYZ789', '555-5678', 'Another example text here'),
+		('Bob Johnson', 'bob@invalid-email', 'DEF456', '123.456.7890', 'Some pattern matching content'),
+		('Alice Brown', 'alice.brown@test.net', 'GHI999', '(555) 123-4567', 'Contains word test and other words'),
+		('Charlie Davis', 'charlie@domain.co.uk', 'JKL111', '+1-555-999-8888', 'No special patterns here')
+	`)
+	require.NoError(t, err)
+
+	// Define the CEL environment with test_regex table structure
+	schema := pg.Schema{
+		{Name: "id", Type: "bigint", Repeated: false},
+		{Name: "name", Type: "text", Repeated: false},
+		{Name: "email", Type: "text", Repeated: false},
+		{Name: "code", Type: "text", Repeated: false},
+		{Name: "phone", Type: "text", Repeated: false},
+		{Name: "description", Type: "text", Repeated: false},
+	}
+
+	// Create the type provider with the schema
+	schemas := map[string]pg.Schema{
+		"test_regex": schema,
+	}
+	typeProvider := pg.NewTypeProvider(schemas)
+
+	structType, found := typeProvider.FindStructType("test_regex")
+	require.True(t, found, "test_regex type should be found")
+
+	env, err := cel.NewEnv(
+		cel.CustomTypeProvider(typeProvider),
+		cel.Variable("test_regex", structType),
+	)
+	require.NoError(t, err)
+
+	tests := []struct {
+		name        string
+		celExpr     string
+		expectedSQL string
+		description string
+		expectedCount int
+	}{
+		{
+			name:        "email_domain_pattern",
+			celExpr:     `test_regex.email.matches(".*@example\\.com")`,
+			expectedSQL: "test_regex.email ~ '.*@example\\.com'",
+			description: "Match emails with example.com domain",
+			expectedCount: 1, // john.doe@example.com
+		},
+		{
+			name:        "code_pattern_alpha_numeric",
+			celExpr:     `test_regex.code.matches("^[A-Z]{3}\\d{3}$")`,
+			expectedSQL: "test_regex.code ~ '^[A-Z]{3}[[:digit:]]{3}$'",
+			description: "Match 3 uppercase letters followed by 3 digits",
+			expectedCount: 5, // ABC123, XYZ789, DEF456, GHI999, JKL111
+		},
+		{
+			name:        "phone_basic_format",
+			celExpr:     `test_regex.phone.matches("^\\d{3}-\\d{4}$")`,
+			expectedSQL: "test_regex.phone ~ '^[[:digit:]]{3}-[[:digit:]]{4}$'",
+			description: "Match basic phone format XXX-XXXX",
+			expectedCount: 2, // 555-1234, 555-5678
+		},
+		{
+			name:        "description_word_boundary",
+			celExpr:     `test_regex.description.matches("\\btest\\b")`,
+			expectedSQL: "test_regex.description ~ '\\ytest\\y'",
+			description: "Match whole word 'test' using word boundaries",
+			expectedCount: 2, // Contains 'test' as whole word
+		},
+		{
+			name:        "email_function_style",
+			celExpr:     `matches(test_regex.email, ".*\\.org$")`,
+			expectedSQL: "test_regex.email ~ '.*\\.org$'",
+			description: "Function-style matches for .org domains",
+			expectedCount: 1, // jane.smith@company.org
+		},
+		{
+			name:        "complex_pattern_whitespace",
+			celExpr:     `test_regex.description.matches("\\w+\\s+\\w+")`,
+			expectedSQL: "test_regex.description ~ '[[:alnum:]_]+[[:space:]]+[[:alnum:]_]+'",
+			description: "Match two words separated by whitespace",
+			expectedCount: 5, // All descriptions have at least two words
+		},
+		{
+			name:        "negated_pattern_no_digits",
+			celExpr:     `!test_regex.name.matches("\\d")`,
+			expectedSQL: "NOT test_regex.name ~ '[[:digit:]]'",
+			description: "Names that don't contain any digits",
+			expectedCount: 5, // All names in test data contain no digits
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Compile CEL expression
+			ast, issues := env.Compile(tt.celExpr)
+			require.NoError(t, issues.Err(), "CEL compilation should succeed")
+
+			// Convert to SQL
+			sqlCondition, err := cel2sql.Convert(ast)
+			require.NoError(t, err, "CEL to SQL conversion should succeed")
+
+			t.Logf("CEL Expression: %s", tt.celExpr)
+			t.Logf("Generated SQL: %s", sqlCondition)
+			t.Logf("Expected SQL pattern: %s", tt.expectedSQL)
+			t.Logf("Description: %s", tt.description)
+
+			// Verify SQL pattern (allowing for minor variations)
+			assert.Contains(t, sqlCondition, "~", "Should use PostgreSQL regex operator")
+
+			// Execute query and verify results
+			query := "SELECT COUNT(*) FROM test_regex WHERE " + sqlCondition
+			t.Logf("Executing query: %s", query)
+
+			var count int
+			err = pool.QueryRow(ctx, query).Scan(&count)
+			require.NoError(t, err, "Query should execute successfully")
+
+			assert.Equal(t, tt.expectedCount, count, "Expected count should match actual results")
+
+			// For debugging: show some sample matching records
+			if count > 0 && count <= 5 {
+				sampleQuery := "SELECT id, name, email, code, phone, description FROM test_regex WHERE " + sqlCondition + " LIMIT 3"
+				rows, err := pool.Query(ctx, sampleQuery)
+				require.NoError(t, err)
+				defer rows.Close()
+
+				t.Logf("Sample matching records:")
+				for rows.Next() {
+					var id int
+					var name, email, code, phone, description string
+					err := rows.Scan(&id, &name, &email, &code, &phone, &description)
+					require.NoError(t, err)
+					t.Logf("  - ID: %d, Name: %s, Email: %s, Code: %s, Phone: %s", id, name, email, code, phone)
+				}
+			}
+		})
+	}
+}

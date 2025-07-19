@@ -7,8 +7,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/spandigital/cel2sql"
-	"github.com/spandigital/cel2sql/sqltypes"
+	"github.com/spandigital/cel2sql/v2"
+	"github.com/spandigital/cel2sql/v2/sqltypes"
 )
 
 func TestConvert(t *testing.T) {
@@ -99,7 +99,37 @@ func TestConvert(t *testing.T) {
 		{
 			name:    "matches",
 			args:    args{source: `name.matches("a+")`},
-			want:    "REGEXP_CONTAINS(name, 'a+')",
+			want:    "name ~ 'a+'",
+			wantErr: false,
+		},
+		{
+			name:    "matches_function_style",
+			args:    args{source: `matches(name, "^[0-9]+$")`},
+			want:    "name ~ '^[0-9]+$'",
+			wantErr: false,
+		},
+		{
+			name:    "matches_with_word_boundary",
+			args:    args{source: `name.matches("\\btest\\b")`},
+			want:    "name ~ '\\ytest\\y'",
+			wantErr: false,
+		},
+		{
+			name:    "matches_with_digit_class",
+			args:    args{source: `name.matches("\\d{3}-\\d{4}")`},
+			want:    "name ~ '[[:digit:]]{3}-[[:digit:]]{4}'",
+			wantErr: false,
+		},
+		{
+			name:    "matches_with_word_class",
+			args:    args{source: `name.matches("\\w+@\\w+\\.\\w+")`},
+			want:    "name ~ '[[:alnum:]_]+@[[:alnum:]_]+\\.[[:alnum:]_]+'",
+			wantErr: false,
+		},
+		{
+			name:    "matches_complex_pattern",
+			args:    args{source: `name.matches(".*pattern.*")`},
+			want:    "name ~ '.*pattern.*'",
 			wantErr: false,
 		},
 		{

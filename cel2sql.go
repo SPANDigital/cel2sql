@@ -291,6 +291,60 @@ func (con *converter) callCasting(function string, _ *exprpb.Expr, args []*exprp
 	return nil
 }
 
+// callMatches handles CEL matches() function with RE2 to POSIX regex conversion
+func (con *converter) callMatches(target *exprpb.Expr, args []*exprpb.Expr) error {
+	// CEL matches function: string.matches(pattern) or matches(string, pattern)
+	// Convert to PostgreSQL: string ~ 'posix_pattern'
+	
+	// Get the string to match against
+	var stringExpr *exprpb.Expr
+	var patternExpr *exprpb.Expr
+	
+	if target != nil {
+		// Method call: string.matches(pattern)
+		stringExpr = target
+		if len(args) > 0 {
+			patternExpr = args[0]
+		}
+	} else if len(args) >= 2 {
+		// Function call: matches(string, pattern)
+		stringExpr = args[0]
+		patternExpr = args[1]
+	}
+	
+	if stringExpr == nil || patternExpr == nil {
+		return errors.New("matches function requires both string and pattern arguments")
+	}
+	
+	// Visit the string expression
+	if err := con.visit(stringExpr); err != nil {
+		return err
+	}
+	
+	con.str.WriteString(" ~ ")
+	
+	// Visit the pattern expression and convert from RE2 to POSIX if it's a string literal
+	if constExpr := patternExpr.GetConstExpr(); constExpr != nil && constExpr.GetStringValue() != "" {
+		// Convert RE2 pattern to POSIX
+		re2Pattern := constExpr.GetStringValue()
+		posixPattern := convertRE2ToPOSIX(re2Pattern)
+		
+		// Write the converted pattern as a string literal
+		escaped := strings.ReplaceAll(posixPattern, "'", "''")
+		con.str.WriteString("'")
+		con.str.WriteString(escaped)
+		con.str.WriteString("'")
+	} else {
+		// For non-literal patterns, we can't convert at compile time
+		// Just use the pattern as-is and hope it's POSIX compatible
+		if err := con.visit(patternExpr); err != nil {
+			return err
+		}
+	}
+	
+	return nil
+}
+
 func (con *converter) visitCallFunc(expr *exprpb.Expr) error {
 	c := expr.GetCallExpr()
 	fun := c.GetFunction()
@@ -299,6 +353,8 @@ func (con *converter) visitCallFunc(expr *exprpb.Expr) error {
 	switch fun {
 	case overloads.Contains:
 		return con.callContains(target, args)
+	case overloads.Matches:
+		return con.callMatches(target, args)
 	case overloads.TypeConvertDuration:
 		return con.callDuration(target, args)
 	case "interval":
@@ -1023,7 +1079,7 @@ func (con *converter) visitHasFunction(expr *exprpb.Expr) error {
 }
 
 // isDirectJSONFieldAccess checks if this represents a direct JSON field access (table.json_column.key)
-func (con *converter) isDirectJSONFieldAccess(operand *exprpb.Expr, field string) bool {
+func (con *converter) isDirectJSONFieldAccess(operand *exprpb.Expr, _ string) bool {
 	// Check if operand is a select expression that refers to a JSON column
 	if selectExpr := operand.GetSelectExpr(); selectExpr != nil {
 		parentField := selectExpr.GetField()
@@ -1111,11 +1167,10 @@ func (con *converter) getJSONRootAndPath(expr *exprpb.Expr) (*exprpb.Expr, []str
 					},
 				}
 				return jsonColumnExpr, pathSegments
-			} else {
-				// This field is part of the path, continue up the chain
-				pathSegments = append([]string{fieldName}, pathSegments...)
-				current = operand
 			}
+			// This field is part of the path, continue up the chain
+			pathSegments = append([]string{fieldName}, pathSegments...)
+			current = operand
 		} else {
 			break
 		}
@@ -1283,4 +1338,51 @@ func isBinaryOrTernaryOperator(expr *exprpb.Expr) bool {
 	}
 	_, isBinaryOp := operators.FindReverseBinaryOperator(expr.GetCallExpr().GetFunction())
 	return isBinaryOp || isSamePrecedence(operators.Conditional, expr)
+}
+
+// convertRE2ToPOSIX converts a subset of RE2 regex patterns to POSIX ERE (Extended Regular Expression)
+// Note: This is a basic conversion for common patterns. Full RE2 to POSIX conversion is complex.
+func convertRE2ToPOSIX(re2Pattern string) string {
+	posixPattern := re2Pattern
+	
+	// Basic conversions for common differences between RE2 and POSIX:
+	
+	// 1. Word boundaries: \b -> [[:<:]] and [[:<:]] (PostgreSQL extension)
+	//    Note: PostgreSQL supports \y for word boundaries in some contexts
+	posixPattern = strings.ReplaceAll(posixPattern, `\b`, `\y`)
+	
+	// 2. Non-word boundaries: \B -> [^[:alnum:]_] (approximate)
+	//    This is a simplification; exact conversion is complex
+	posixPattern = strings.ReplaceAll(posixPattern, `\B`, `[^[:alnum:]_]`)
+	
+	// 3. Digit shortcuts: \d -> [[:digit:]] or [0-9]
+	posixPattern = strings.ReplaceAll(posixPattern, `\d`, `[[:digit:]]`)
+	
+	// 4. Non-digit shortcuts: \D -> [^[:digit:]] or [^0-9]
+	posixPattern = strings.ReplaceAll(posixPattern, `\D`, `[^[:digit:]]`)
+	
+	// 5. Word character shortcuts: \w -> [[:alnum:]_]
+	posixPattern = strings.ReplaceAll(posixPattern, `\w`, `[[:alnum:]_]`)
+	
+	// 6. Non-word character shortcuts: \W -> [^[:alnum:]_]
+	posixPattern = strings.ReplaceAll(posixPattern, `\W`, `[^[:alnum:]_]`)
+	
+	// 7. Whitespace shortcuts: \s -> [[:space:]]
+	posixPattern = strings.ReplaceAll(posixPattern, `\s`, `[[:space:]]`)
+	
+	// 8. Non-whitespace shortcuts: \S -> [^[:space:]]
+	posixPattern = strings.ReplaceAll(posixPattern, `\S`, `[^[:space:]]`)
+	
+	// Note: Many RE2 features are not directly convertible to POSIX ERE:
+	// - Lookahead/lookbehind assertions (?=...), (?!...), (?<=...), (?<!...)
+	// - Non-capturing groups (?:...)
+	// - Named groups (?P<name>...)
+	// - Case-insensitive flags (?i)
+	// - Multiline flags (?m)
+	// - Unicode character classes
+	// 
+	// For these cases, the pattern is returned as-is, which may cause PostgreSQL errors
+	// if the pattern uses unsupported RE2 features.
+	
+	return posixPattern
 }

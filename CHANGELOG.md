@@ -1,5 +1,47 @@
 # Changelog
 
+## [2.8.0] - 2025-07-19
+
+### Added
+- **Regex Pattern Matching**: Comprehensive support for CEL `matches()` function with automatic RE2 to POSIX conversion
+  - Support for both `string.matches(pattern)` and `matches(string, pattern)` syntax
+  - Automatic conversion of RE2 regex patterns to PostgreSQL POSIX ERE format
+  - Character class conversions: `\d` → `[[:digit:]]`, `\w` → `[[:alnum:]_]`, `\s` → `[[:space:]]`
+  - Word boundary conversion: `\b` → `\y` (PostgreSQL extension)
+  - Comprehensive test coverage with 6 unit tests and 7 PostgreSQL integration tests
+- **JSON/JSONB Field Existence**: Enhanced `has()` macro support for JSON/JSONB field existence checks
+  - Direct field access: `has(table.json_column.field)` using `?` operator for JSONB
+  - Nested path existence: `has(table.json_column.nested.field)` using `jsonb_extract_path_text()`
+  - Mixed JSON/JSONB support with appropriate operator selection
+  - Comprehensive validation with real PostgreSQL database tests
+
+### Examples
+```cel
+// Regex pattern matching
+user.email.matches(".*@example\\.com")          // → user.email ~ '.*@example\.com'
+user.code.matches("^[A-Z]{3}\\d{3}$")          // → user.code ~ '^[A-Z]{3}[[:digit:]]{3}$'
+user.phone.matches("^\\d{3}-\\d{4}$")          // → user.phone ~ '^[[:digit:]]{3}-[[:digit:]]{4}$'
+matches(user.description, "\\btest\\b")         // → user.description ~ '\ytest\y'
+
+// JSON field existence checks
+has(metadata.corpus)                            // → metadata ? 'corpus'
+has(metadata.corpus.section)                   // → jsonb_extract_path_text(metadata, 'corpus', 'section') IS NOT NULL
+has(properties.visibility)                     // → properties->'visibility' IS NOT NULL
+```
+
+### Fixed
+- **Code Quality**: Resolved all golangci-lint issues for improved code maintainability
+  - Simplified conditional logic (replaced else-if patterns)
+  - Optimized error handling (use `errors.New` where appropriate)
+  - Cleaned unused parameters and improved code flow
+
+### Technical Details
+- Uses PostgreSQL's `~` operator for regex pattern matching with POSIX ERE syntax
+- Automatic RE2 to POSIX pattern conversion for common regex features
+- Enhanced JSON path handling for both JSON and JSONB data types
+- All existing functionality remains unchanged and fully backward compatible
+- Comprehensive test coverage including real PostgreSQL database validation
+
 ## [2.7.2] - 2025-07-19
 
 ### BREAKING CHANGES

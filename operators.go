@@ -22,5 +22,5 @@ var standardSQLFunctions = map[string]string{
 	operators.Modulo:     "MOD",
 	overloads.StartsWith: "STARTS_WITH",
 	overloads.EndsWith:   "ENDS_WITH",
-	overloads.Matches:    "REGEXP_CONTAINS",
+	// Note: overloads.Matches is handled specially in visitCallFunc with RE2 to POSIX conversion
 }
