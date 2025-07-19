@@ -3,9 +3,15 @@
 cel2sql converts [CEL (Common Expression Language)](https://cel.dev/) [Github Reoi](https://opensource.google/projects/cel) to SQL condition.
 It is specifically targeting PostgreSQL standard SQL.
 
-## Latest Release - v2.6.0
+## Latest Release - v2.8.0
 
-🚀 **Major New Features:**
+🚀 **Latest New Features:**
+- **🔥 Regex Pattern Matching Support**: Full support for CEL `matches()` function with RE2 to POSIX regex conversion
+- **Enhanced JSON Field Existence**: Improved `has()` macro support for JSON/JSONB fields with proper path checking
+- **PostgreSQL Pattern Compatibility**: Automatic conversion of RE2 regex patterns to PostgreSQL-compatible POSIX format
+- **Advanced Text Search**: Support for complex regex operations with proper escaping and PostgreSQL syntax
+
+**Recent Features (v2.6.0):**
 - **🔥 JSON/JSONB Comprehensions Support**: Full support for CEL comprehensions on JSON/JSONB arrays
 - **Advanced JSON Array Operations**: Support for `exists()`, `all()`, `exists_one()` on JSON/JSONB arrays  
 - **Numeric JSON Field Casting**: Automatic casting of numeric JSON fields (e.g., `(score)::numeric`)
@@ -181,6 +187,87 @@ fmt.Println(sqlCondition) // user.profile->>'settings'->>'notifications' = 'enab
 - Nested access: `user.profile.settings.key` → `user.profile->>'settings'->>'key'`
 - Works with both `json` and `jsonb` column types
 - Automatically detects JSON columns and applies proper PostgreSQL syntax 
+
+## Regex Pattern Matching
+
+cel2sql provides comprehensive support for CEL `matches()` function with automatic RE2 to POSIX regex conversion:
+
+```go
+// Define schema with text fields for pattern matching
+schema := pg.Schema{
+    {Name: "email", Type: "text", Repeated: false},
+    {Name: "phone", Type: "text", Repeated: false},
+    {Name: "description", Type: "text", Repeated: false},
+}
+
+env, _ := cel.NewEnv(
+    cel.CustomTypeProvider(pg.NewTypeProvider(map[string]pg.Schema{
+        "Contact": schema,
+    })),
+    cel.Variable("contact", cel.ObjectType("Contact")),
+)
+
+// Email validation pattern
+ast, _ := env.Compile(`contact.email.matches(r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$")`)
+sqlCondition, _ := cel2sql.Convert(ast)
+fmt.Println(sqlCondition) 
+// Output: contact.email ~ '^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+
+// Phone number pattern matching
+ast, _ = env.Compile(`contact.phone.matches(r"^\+?1?[-.\s]?\(?([0-9]{3})\)?[-.\s]?([0-9]{3})[-.\s]?([0-9]{4})$")`)
+sqlCondition, _ = cel2sql.Convert(ast)
+fmt.Println(sqlCondition)
+// Output: contact.phone ~ '^\+?1?[-.\s]?\(?([0-9]{3})\)?[-.\s]?([0-9]{3})[-.\s]?([0-9]{4})$'
+
+// Case-insensitive pattern matching
+ast, _ = env.Compile(`contact.description.matches(r"(?i)urgent|priority")`)
+sqlCondition, _ = cel2sql.Convert(ast)
+fmt.Println(sqlCondition)
+// Output: contact.description ~* 'urgent|priority'
+```
+
+**Supported Regex Features:**
+- **RE2 to POSIX Conversion**: Automatic conversion of CEL RE2 patterns to PostgreSQL-compatible POSIX regex
+- **Case-insensitive Matching**: `(?i)` flag converts to PostgreSQL `~*` operator
+- **Standard Patterns**: Email validation, phone numbers, URLs, and custom text patterns
+- **Escape Handling**: Proper escaping of special characters for PostgreSQL
+- **Pattern Optimization**: Efficient regex compilation and execution in PostgreSQL
+
+**Regex Operators:**
+- `~` - Case-sensitive POSIX regex match
+- `~*` - Case-insensitive POSIX regex match (when `(?i)` flag detected)
+- `!~` - Case-sensitive POSIX regex non-match
+- `!~*` - Case-insensitive POSIX regex non-match
+
+## Enhanced JSON Field Existence
+
+The `has()` macro provides enhanced support for checking JSON/JSONB field existence:
+
+```go
+// Check if JSON field exists
+ast, _ := env.Compile(`has(user.preferences.theme)`)
+sqlCondition, _ := cel2sql.Convert(ast)
+fmt.Println(sqlCondition) 
+// Output: user.preferences ? 'theme'
+
+// Check nested JSON field existence
+ast, _ = env.Compile(`has(user.profile.settings.notifications)`)
+sqlCondition, _ := cel2sql.Convert(ast)
+fmt.Println(sqlCondition)
+// Output: user.profile->'settings' ? 'notifications'
+
+// Combined existence and value check
+ast, _ = env.Compile(`has(user.preferences.theme) && user.preferences.theme == "dark"`)
+sqlCondition, _ = cel2sql.Convert(ast)
+fmt.Println(sqlCondition)
+// Output: user.preferences ? 'theme' AND user.preferences->>'theme' = 'dark'
+```
+
+**JSON Field Existence Features:**
+- **Path-aware Checking**: Properly handles nested JSON path existence
+- **JSONB Optimization**: Uses PostgreSQL's efficient `?` operator for JSONB fields
+- **Null Safety**: Prevents errors when accessing non-existent JSON fields
+- **Combined Operations**: Works seamlessly with value comparisons and other JSON operations
 
 ## Supported CEL Operators/Functions
 
@@ -952,6 +1039,17 @@ fmt.Println(sqlCondition) // user.profile->>'settings'->>'notifications' = 'enab
     </td>
   </tr>
   <tr>
+    <th rowspan="1">
+      has
+    </th>
+    <td>
+      (map) -> bool
+    </td>
+    <td>
+      JSON/JSONB field <code>?</code> 'key' <code>OR</code> nested_path <code>-></code> 'parent' <code>?</code> 'key'
+    </td>
+  </tr>
+  <tr>
     <th rowspan="4">
       int
     </th>
@@ -994,7 +1092,7 @@ fmt.Println(sqlCondition) // user.profile->>'settings'->>'notifications' = 'enab
       string.(string) -> bool
     </td>
     <td>
-      <code>REGEXP_LIKE(</code>string<code>, </code>string<code>)</code>
+      string <code>~</code> regex_pattern <code>OR</code> string <code>~*</code> regex_pattern (case-insensitive)
     </td>
   </tr>
   <tr>
