@@ -6,7 +6,7 @@ require (
 	github.com/google/cel-go v0.26.0
 	github.com/jackc/pgx/v5 v5.7.5
 	github.com/spandigital/cel2sql v0.0.0-20250719023919-4359e01a942f
-	github.com/stretchr/testify v1.10.0
+	github.com/stretchr/testify v1.11.1
 	github.com/testcontainers/testcontainers-go v0.38.0
 	github.com/testcontainers/testcontainers-go/modules/postgres v0.38.0
 	google.golang.org/genproto/googleapis/api v0.0.0-20250603155806-513f23925822
