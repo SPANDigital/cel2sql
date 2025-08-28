@@ -3,7 +3,7 @@ module github.com/spandigital/cel2sql/v2
 go 1.24
 
 require (
-	github.com/google/cel-go v0.26.0
+	github.com/google/cel-go v0.26.1
 	github.com/jackc/pgx/v5 v5.7.5
 	github.com/spandigital/cel2sql v0.0.0-20250719023919-4359e01a942f
 	github.com/stretchr/testify v1.10.0
