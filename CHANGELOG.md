@@ -1,5 +1,24 @@
 # Changelog
 
+## [2.8.1] - 2025-10-09
+
+### Fixed
+- **String Functions**: Fixed `startsWith()` and `endsWith()` functions to generate valid PostgreSQL SQL
+  - Previously generated non-existent `STARTS_WITH()` and `ENDS_WITH()` functions
+  - Now correctly converts to PostgreSQL `LIKE` patterns:
+    - `string.startsWith("prefix")` → `string LIKE 'prefix%'`
+    - `string.endsWith("suffix")` → `string LIKE '%suffix'`
+  - Added proper escaping for LIKE special characters (`%`, `_`, `\`)
+  - Updated all test cases to reflect correct PostgreSQL syntax
+
+### Examples
+```cel
+// String function fixes
+name.startsWith("John")                             // → name LIKE 'John%'
+path.endsWith("/module1")                          // → path LIKE '%/module1'
+dcType == "Article" && isPartOf.endsWith("/docs") // → dcType = 'Article' AND isPartOf LIKE '%/docs'
+```
+
 ## [2.8.0] - 2025-07-19
 
 ### Added
