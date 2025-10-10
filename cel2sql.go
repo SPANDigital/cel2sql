@@ -279,6 +279,10 @@ func (con *converter) callStartsWith(target *exprpb.Expr, args []*exprpb.Expr) e
 	// If it's a constant string, we can append % directly
 	if constExpr := args[0].GetConstExpr(); constExpr != nil && constExpr.GetStringValue() != "" {
 		prefix := constExpr.GetStringValue()
+		// Reject patterns containing null bytes
+		if strings.Contains(prefix, "\x00") {
+			return errors.New("LIKE patterns cannot contain null bytes")
+		}
 		// Escape special LIKE characters: %, _, \
 		escaped := escapeLikePattern(prefix)
 		con.str.WriteString("'")
@@ -316,6 +320,10 @@ func (con *converter) callEndsWith(target *exprpb.Expr, args []*exprpb.Expr) err
 	// If it's a constant string, we can prepend % directly
 	if constExpr := args[0].GetConstExpr(); constExpr != nil && constExpr.GetStringValue() != "" {
 		suffix := constExpr.GetStringValue()
+		// Reject patterns containing null bytes
+		if strings.Contains(suffix, "\x00") {
+			return errors.New("LIKE patterns cannot contain null bytes")
+		}
 		// Escape special LIKE characters: %, _, \
 		escaped := escapeLikePattern(suffix)
 		con.str.WriteString("'%")

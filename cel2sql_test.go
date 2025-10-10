@@ -562,3 +562,75 @@ func TestNullByteRejection(t *testing.T) {
 		})
 	}
 }
+
+// TestNullByteInLikePatterns tests that LIKE patterns with null bytes are rejected
+func TestNullByteInLikePatterns(t *testing.T) {
+	env, err := cel.NewEnv(
+		cel.Variable("name", cel.StringType),
+	)
+	require.NoError(t, err)
+
+	tests := []struct {
+		name    string
+		expr    string
+		wantErr string
+	}{
+		{
+			name:    "startsWith with null byte at start",
+			expr:    `name.startsWith("\x00test")`,
+			wantErr: "LIKE patterns cannot contain null bytes",
+		},
+		{
+			name:    "startsWith with null byte in middle",
+			expr:    `name.startsWith("test\x00value")`,
+			wantErr: "LIKE patterns cannot contain null bytes",
+		},
+		{
+			name:    "startsWith with only null byte",
+			expr:    `name.startsWith("\x00")`,
+			wantErr: "LIKE patterns cannot contain null bytes",
+		},
+		{
+			name:    "endsWith with null byte at end",
+			expr:    `name.endsWith("test\x00")`,
+			wantErr: "LIKE patterns cannot contain null bytes",
+		},
+		{
+			name:    "endsWith with null byte in middle",
+			expr:    `name.endsWith("\x00value")`,
+			wantErr: "LIKE patterns cannot contain null bytes",
+		},
+		{
+			name:    "endsWith with only null byte",
+			expr:    `name.endsWith("\x00")`,
+			wantErr: "LIKE patterns cannot contain null bytes",
+		},
+		{
+			name:    "startsWith valid pattern",
+			expr:    `name.startsWith("valid")`,
+			wantErr: "",
+		},
+		{
+			name:    "endsWith valid pattern",
+			expr:    `name.endsWith("valid")`,
+			wantErr: "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ast, issues := env.Compile(tt.expr)
+			require.NoError(t, issues.Err())
+
+			got, err := cel2sql.Convert(ast)
+			if tt.wantErr != "" {
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), tt.wantErr)
+			} else {
+				require.NoError(t, err)
+				// Just verify it doesn't error - actual SQL format tested elsewhere
+				assert.NotEmpty(t, got)
+			}
+		})
+	}
+}
