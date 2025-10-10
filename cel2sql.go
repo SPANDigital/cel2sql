@@ -409,8 +409,12 @@ func (con *converter) callMatches(target *exprpb.Expr, args []*exprpb.Expr) erro
 	if constExpr := patternExpr.GetConstExpr(); constExpr != nil && constExpr.GetStringValue() != "" {
 		// Convert RE2 pattern to POSIX
 		re2Pattern := constExpr.GetStringValue()
+		// Reject patterns containing null bytes
+		if strings.Contains(re2Pattern, "\x00") {
+			return errors.New("regex patterns cannot contain null bytes")
+		}
 		posixPattern := convertRE2ToPOSIX(re2Pattern)
-		
+
 		// Write the converted pattern as a string literal
 		escaped := strings.ReplaceAll(posixPattern, "'", "''")
 		con.str.WriteString("'")

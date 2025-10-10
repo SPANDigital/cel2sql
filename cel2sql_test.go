@@ -634,3 +634,75 @@ func TestNullByteInLikePatterns(t *testing.T) {
 		})
 	}
 }
+
+// TestNullByteInRegexPatterns tests that regex patterns with null bytes are rejected
+func TestNullByteInRegexPatterns(t *testing.T) {
+	env, err := cel.NewEnv(
+		cel.Variable("email", cel.StringType),
+	)
+	require.NoError(t, err)
+
+	tests := []struct {
+		name    string
+		expr    string
+		wantErr string
+	}{
+		{
+			name:    "matches with only null byte",
+			expr:    `email.matches("\x00")`,
+			wantErr: "regex patterns cannot contain null bytes",
+		},
+		{
+			name:    "matches with null byte at start",
+			expr:    `email.matches("\x00test")`,
+			wantErr: "regex patterns cannot contain null bytes",
+		},
+		{
+			name:    "matches with null byte at end",
+			expr:    `email.matches("test\x00")`,
+			wantErr: "regex patterns cannot contain null bytes",
+		},
+		{
+			name:    "matches with null byte in middle",
+			expr:    `email.matches("te\x00st")`,
+			wantErr: "regex patterns cannot contain null bytes",
+		},
+		{
+			name:    "matches function style with null byte",
+			expr:    `matches(email, "\x00")`,
+			wantErr: "regex patterns cannot contain null bytes",
+		},
+		{
+			name:    "matches with multiple null bytes",
+			expr:    `email.matches("\x00\x00\x00")`,
+			wantErr: "regex patterns cannot contain null bytes",
+		},
+		{
+			name:    "matches with valid pattern",
+			expr:    `email.matches(r"^[a-z]+@.*\.com$")`,
+			wantErr: "",
+		},
+		{
+			name:    "matches with valid complex pattern",
+			expr:    `email.matches(r".*")`,
+			wantErr: "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ast, issues := env.Compile(tt.expr)
+			require.NoError(t, issues.Err())
+
+			got, err := cel2sql.Convert(ast)
+			if tt.wantErr != "" {
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), tt.wantErr)
+			} else {
+				require.NoError(t, err)
+				// Just verify it doesn't error - actual SQL format tested elsewhere
+				assert.NotEmpty(t, got)
+			}
+		})
+	}
+}
