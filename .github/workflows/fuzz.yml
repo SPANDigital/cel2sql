@@ -1,0 +1,96 @@
+name: Fuzzing
+
+on:
+  pull_request:
+    branches: [ main ]
+  push:
+    branches: [ main ]
+  schedule:
+    # Run fuzzing weekly on Sundays at 2 AM UTC
+    - cron: '0 2 * * 0'
+  workflow_dispatch:
+    inputs:
+      fuzz_time:
+        description: 'Fuzzing duration (e.g., 60s, 5m, 1h)'
+        required: false
+        default: '60s'
+
+jobs:
+  fuzz:
+    name: Fuzz Testing
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
+          cache: true
+
+      - name: Download dependencies
+        run: go mod download
+
+      - name: Run fuzzing (PR/Push - 60s)
+        if: github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref == 'refs/heads/main')
+        run: |
+          echo "Running fuzzing for 60 seconds..."
+          go test -fuzz=FuzzConvert -fuzztime=60s -timeout=5m
+          go test -fuzz=FuzzEscapeLikePattern -fuzztime=60s -timeout=5m
+          go test -fuzz=FuzzConvertRE2ToPOSIX -fuzztime=60s -timeout=5m
+        continue-on-error: false
+
+      - name: Run fuzzing (Weekly - 10 minutes)
+        if: github.event_name == 'schedule'
+        run: |
+          echo "Running extended fuzzing for 10 minutes per function..."
+          go test -fuzz=FuzzConvert -fuzztime=10m -timeout=15m
+          go test -fuzz=FuzzEscapeLikePattern -fuzztime=10m -timeout=15m
+          go test -fuzz=FuzzConvertRE2ToPOSIX -fuzztime=10m -timeout=15m
+        continue-on-error: false
+
+      - name: Run fuzzing (Manual)
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          FUZZ_TIME="${{ github.event.inputs.fuzz_time }}"
+          echo "Running fuzzing for ${FUZZ_TIME}..."
+          go test -fuzz=FuzzConvert -fuzztime="${FUZZ_TIME}"
+          go test -fuzz=FuzzEscapeLikePattern -fuzztime="${FUZZ_TIME}"
+          go test -fuzz=FuzzConvertRE2ToPOSIX -fuzztime="${FUZZ_TIME}"
+        continue-on-error: false
+
+      - name: Upload crash artifacts
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fuzz-crashes
+          path: |
+            testdata/fuzz/*/
+            !testdata/fuzz/**/corpus/
+          retention-days: 30
+
+  regression:
+    name: Fuzz Regression Tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
+          cache: true
+
+      - name: Download dependencies
+        run: go mod download
+
+      - name: Run regression tests against known crash inputs
+        run: |
+          echo "Running fuzz regression tests..."
+          go test -v -run=TestFuzz
+        continue-on-error: false

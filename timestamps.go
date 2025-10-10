@@ -53,7 +53,7 @@ func (con *converter) callTimestampOperation(fun string, lhs *exprpb.Expr, rhs *
 		timestamp, duration = rhs, lhs
 		timestampParen, durationParen = rhsParen, lhsParen
 	default:
-		panic("lhs or rhs must be timestamp related type")
+		return fmt.Errorf("timestamp operation requires at least one timestamp-related operand, got lhs type %v and rhs type %v", lhsType, rhsType)
 	}
 
 	// PostgreSQL uses simple + and - operators for date arithmetic
