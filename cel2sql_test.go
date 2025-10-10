@@ -501,3 +501,64 @@ func TestConvert(t *testing.T) {
 		})
 	}
 }
+
+// TestNullByteRejection tests that string literals with null bytes are rejected
+func TestNullByteRejection(t *testing.T) {
+	env, err := cel.NewEnv(
+		cel.Variable("name", cel.StringType),
+	)
+	require.NoError(t, err)
+
+	tests := []struct {
+		name    string
+		expr    string
+		wantErr string
+	}{
+		{
+			name:    "null byte at start",
+			expr:    `name == "\x00test"`,
+			wantErr: "string literals cannot contain null bytes",
+		},
+		{
+			name:    "null byte in middle",
+			expr:    `name == "test\x00value"`,
+			wantErr: "string literals cannot contain null bytes",
+		},
+		{
+			name:    "null byte at end",
+			expr:    `name == "test\x00"`,
+			wantErr: "string literals cannot contain null bytes",
+		},
+		{
+			name:    "only null byte",
+			expr:    `name == "\x00"`,
+			wantErr: "string literals cannot contain null bytes",
+		},
+		{
+			name:    "multiple null bytes",
+			expr:    `name == "\x00\x00\x00"`,
+			wantErr: "string literals cannot contain null bytes",
+		},
+		{
+			name:    "valid string without null byte",
+			expr:    `name == "valid"`,
+			wantErr: "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ast, issues := env.Compile(tt.expr)
+			require.NoError(t, issues.Err())
+
+			got, err := cel2sql.Convert(ast)
+			if tt.wantErr != "" {
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), tt.wantErr)
+			} else {
+				require.NoError(t, err)
+				assert.Equal(t, "name = 'valid'", got)
+			}
+		})
+	}
+}

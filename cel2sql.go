@@ -1008,6 +1008,10 @@ func (con *converter) visitConst(expr *exprpb.Expr) error {
 	case *exprpb.Constant_StringValue:
 		// Use single quotes for PostgreSQL string literals
 		str := c.GetStringValue()
+		// Reject strings containing null bytes
+		if strings.Contains(str, "\x00") {
+			return errors.New("string literals cannot contain null bytes")
+		}
 		// Escape single quotes by doubling them
 		escaped := strings.ReplaceAll(str, "'", "''")
 		con.str.WriteString("'")
