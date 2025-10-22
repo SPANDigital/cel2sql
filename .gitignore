@@ -17,3 +17,12 @@
 # Example binaries
 examples/*/main
 examples/*/main.exe
+
+# Claude Code settings
+.claude/settings.local.json
+
+# IDE files
+.idea/
+
+# Coverage reports
+coverage.html
