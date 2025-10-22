@@ -11,6 +11,8 @@ import (
 	"github.com/google/cel-go/common/operators"
 	"github.com/google/cel-go/common/overloads"
 	exprpb "google.golang.org/genproto/googleapis/api/expr/v1alpha1"
+
+	"github.com/spandigital/cel2sql/v2/pg"
 )
 
 // Implementations based on `google/cel-go`'s unparser
@@ -18,12 +20,19 @@ import (
 
 // Convert converts a CEL AST to a PostgreSQL SQL WHERE clause condition.
 func Convert(ast *cel.Ast) (string, error) {
+	return ConvertWithSchemas(ast, nil)
+}
+
+// ConvertWithSchemas converts a CEL AST to a PostgreSQL SQL WHERE clause condition,
+// using schema information to properly handle JSON/JSONB fields.
+func ConvertWithSchemas(ast *cel.Ast, schemas map[string]pg.Schema) (string, error) {
 	checkedExpr, err := cel.AstToCheckedExpr(ast)
 	if err != nil {
 		return "", err
 	}
 	un := &converter{
 		typeMap: checkedExpr.TypeMap,
+		schemas: schemas,
 	}
 	if err := un.visit(checkedExpr.Expr); err != nil {
 		return "", err
@@ -34,6 +43,7 @@ func Convert(ast *cel.Ast) (string, error) {
 type converter struct {
 	str     strings.Builder
 	typeMap map[int64]*exprpb.Type
+	schemas map[string]pg.Schema
 }
 
 func (con *converter) visit(expr *exprpb.Expr) error {
@@ -55,6 +65,46 @@ func (con *converter) visit(expr *exprpb.Expr) error {
 		return con.visitStruct(expr)
 	}
 	return fmt.Errorf("unsupported expr: %v", expr)
+}
+
+// isFieldJSON checks if a field in a table is a JSON/JSONB type using schema information
+func (con *converter) isFieldJSON(tableName, fieldName string) bool {
+	if con.schemas == nil {
+		return false
+	}
+
+	schema, ok := con.schemas[tableName]
+	if !ok {
+		return false
+	}
+
+	for _, field := range schema {
+		if field.Name == fieldName {
+			return field.IsJSON
+		}
+	}
+
+	return false
+}
+
+// getTableAndFieldFromSelectChain extracts the table name and field name from a select expression chain
+// For obj.metadata, it returns ("obj", "metadata")
+func (con *converter) getTableAndFieldFromSelectChain(expr *exprpb.Expr) (string, string, bool) {
+	selectExpr := expr.GetSelectExpr()
+	if selectExpr == nil {
+		return "", "", false
+	}
+
+	fieldName := selectExpr.GetField()
+	operand := selectExpr.GetOperand()
+
+	// Check if the operand is an identifier (table name)
+	if identExpr := operand.GetIdentExpr(); identExpr != nil {
+		tableName := identExpr.GetName()
+		return tableName, fieldName, true
+	}
+
+	return "", "", false
 }
 
 func (con *converter) visitCall(expr *exprpb.Expr) error {
@@ -377,11 +427,11 @@ func (con *converter) callCasting(function string, _ *exprpb.Expr, args []*exprp
 func (con *converter) callMatches(target *exprpb.Expr, args []*exprpb.Expr) error {
 	// CEL matches function: string.matches(pattern) or matches(string, pattern)
 	// Convert to PostgreSQL: string ~ 'posix_pattern'
-	
+
 	// Get the string to match against
 	var stringExpr *exprpb.Expr
 	var patternExpr *exprpb.Expr
-	
+
 	if target != nil {
 		// Method call: string.matches(pattern)
 		stringExpr = target
@@ -393,18 +443,18 @@ func (con *converter) callMatches(target *exprpb.Expr, args []*exprpb.Expr) erro
 		stringExpr = args[0]
 		patternExpr = args[1]
 	}
-	
+
 	if stringExpr == nil || patternExpr == nil {
 		return errors.New("matches function requires both string and pattern arguments")
 	}
-	
+
 	// Visit the string expression
 	if err := con.visit(stringExpr); err != nil {
 		return err
 	}
-	
+
 	con.str.WriteString(" ~ ")
-	
+
 	// Visit the pattern expression and convert from RE2 to POSIX if it's a string literal
 	if constExpr := patternExpr.GetConstExpr(); constExpr != nil && constExpr.GetStringValue() != "" {
 		// Convert RE2 pattern to POSIX
@@ -427,7 +477,7 @@ func (con *converter) callMatches(target *exprpb.Expr, args []*exprpb.Expr) erro
 			return err
 		}
 	}
-	
+
 	return nil
 }
 
@@ -1442,35 +1492,35 @@ func isBinaryOrTernaryOperator(expr *exprpb.Expr) bool {
 // Note: This is a basic conversion for common patterns. Full RE2 to POSIX conversion is complex.
 func convertRE2ToPOSIX(re2Pattern string) string {
 	posixPattern := re2Pattern
-	
+
 	// Basic conversions for common differences between RE2 and POSIX:
-	
+
 	// 1. Word boundaries: \b -> [[:<:]] and [[:<:]] (PostgreSQL extension)
 	//    Note: PostgreSQL supports \y for word boundaries in some contexts
 	posixPattern = strings.ReplaceAll(posixPattern, `\b`, `\y`)
-	
+
 	// 2. Non-word boundaries: \B -> [^[:alnum:]_] (approximate)
 	//    This is a simplification; exact conversion is complex
 	posixPattern = strings.ReplaceAll(posixPattern, `\B`, `[^[:alnum:]_]`)
-	
+
 	// 3. Digit shortcuts: \d -> [[:digit:]] or [0-9]
 	posixPattern = strings.ReplaceAll(posixPattern, `\d`, `[[:digit:]]`)
-	
+
 	// 4. Non-digit shortcuts: \D -> [^[:digit:]] or [^0-9]
 	posixPattern = strings.ReplaceAll(posixPattern, `\D`, `[^[:digit:]]`)
-	
+
 	// 5. Word character shortcuts: \w -> [[:alnum:]_]
 	posixPattern = strings.ReplaceAll(posixPattern, `\w`, `[[:alnum:]_]`)
-	
+
 	// 6. Non-word character shortcuts: \W -> [^[:alnum:]_]
 	posixPattern = strings.ReplaceAll(posixPattern, `\W`, `[^[:alnum:]_]`)
-	
+
 	// 7. Whitespace shortcuts: \s -> [[:space:]]
 	posixPattern = strings.ReplaceAll(posixPattern, `\s`, `[[:space:]]`)
-	
+
 	// 8. Non-whitespace shortcuts: \S -> [^[:space:]]
 	posixPattern = strings.ReplaceAll(posixPattern, `\S`, `[^[:space:]]`)
-	
+
 	// Note: Many RE2 features are not directly convertible to POSIX ERE:
 	// - Lookahead/lookbehind assertions (?=...), (?!...), (?<=...), (?<!...)
 	// - Non-capturing groups (?:...)
@@ -1478,9 +1528,9 @@ func convertRE2ToPOSIX(re2Pattern string) string {
 	// - Case-insensitive flags (?i)
 	// - Multiline flags (?m)
 	// - Unicode character classes
-	// 
+	//
 	// For these cases, the pattern is returned as-is, which may cause PostgreSQL errors
 	// if the pattern uses unsupported RE2 features.
-	
+
 	return posixPattern
 }

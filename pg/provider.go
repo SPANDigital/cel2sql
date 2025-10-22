@@ -22,6 +22,7 @@ type FieldSchema struct {
 	Type     string        // PostgreSQL type name (text, integer, boolean, etc.)
 	Repeated bool          // true for arrays
 	Schema   []FieldSchema // for composite types
+	IsJSON   bool          // true for json/jsonb types
 }
 
 // Schema represents a PostgreSQL table schema as a slice of field schemas.
@@ -31,6 +32,7 @@ type Schema []FieldSchema
 type TypeProvider interface {
 	types.Provider
 	LoadTableSchema(ctx context.Context, tableName string) error
+	GetSchemas() map[string]Schema
 	Close()
 }
 
@@ -103,8 +105,9 @@ func (p *typeProvider) LoadTableSchema(ctx context.Context, tableName string) er
 
 		field := FieldSchema{
 			Name:     columnName,
-			Type:     elementType,         // Use element type for arrays, or data_type for non-arrays
-			Repeated: dataType == "ARRAY", // PostgreSQL returns "ARRAY" for array columns
+			Type:     elementType,                                     // Use element type for arrays, or data_type for non-arrays
+			Repeated: dataType == "ARRAY",                             // PostgreSQL returns "ARRAY" for array columns
+			IsJSON:   elementType == "json" || elementType == "jsonb", // Mark JSON/JSONB fields
 		}
 
 		schema = append(schema, field)
@@ -123,6 +126,11 @@ func (p *typeProvider) Close() {
 	if p.pool != nil {
 		p.pool.Close()
 	}
+}
+
+// GetSchemas returns the schema map
+func (p *typeProvider) GetSchemas() map[string]Schema {
+	return p.schemas
 }
 
 func (p *typeProvider) EnumValue(enumName string) ref.Val {
