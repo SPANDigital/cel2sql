@@ -1683,10 +1683,11 @@ func convertRE2ToPOSIX(re2Pattern string) (string, error) {
 			continue
 		}
 
-		if char == '(' {
+		switch char {
+		case '(':
 			depth++
 			groupHasQuantifier = append(groupHasQuantifier, false)
-		} else if char == ')' {
+		case ')':
 			if depth > 0 {
 				depth--
 				// Check if the closing paren is followed by a quantifier
@@ -1710,12 +1711,12 @@ func convertRE2ToPOSIX(re2Pattern string) (string, error) {
 					groupHasQuantifier = groupHasQuantifier[:len(groupHasQuantifier)-1]
 				}
 			}
-		} else if char == '*' || char == '+' || char == '?' {
+		case '*', '+', '?':
 			// Mark that current group contains a quantifier
 			if len(groupHasQuantifier) > 0 {
 				groupHasQuantifier[len(groupHasQuantifier)-1] = true
 			}
-		} else if char == '{' {
+		case '{':
 			// Brace quantifier {n,m}
 			if len(groupHasQuantifier) > 0 {
 				groupHasQuantifier[len(groupHasQuantifier)-1] = true
