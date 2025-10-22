@@ -315,10 +315,13 @@ func TestValidateFieldName_AllReservedKeywords(t *testing.T) {
 			require.Error(t, err, "Should reject reserved keyword (uppercase): %s", strings.ToUpper(keyword))
 			require.Contains(t, err.Error(), "reserved SQL keyword")
 
-			// Test mixed case
-			err = validateFieldName(strings.Title(keyword))
-			require.Error(t, err, "Should reject reserved keyword (mixed case): %s", strings.Title(keyword))
-			require.Contains(t, err.Error(), "reserved SQL keyword")
+			// Test mixed case (capitalize first letter)
+			if len(keyword) > 0 {
+				mixedCase := strings.ToUpper(keyword[:1]) + keyword[1:]
+				err = validateFieldName(mixedCase)
+				require.Error(t, err, "Should reject reserved keyword (mixed case): %s", mixedCase)
+				require.Contains(t, err.Error(), "reserved SQL keyword")
+			}
 		})
 	}
 }

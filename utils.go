@@ -1,6 +1,7 @@
 package cel2sql
 
 import (
+	"errors"
 	"fmt"
 	"regexp"
 	"strings"
@@ -119,7 +120,7 @@ func validateFieldName(name string) error {
 
 	// Check if empty
 	if len(name) == 0 {
-		return fmt.Errorf("field name cannot be empty")
+		return errors.New("field name cannot be empty")
 	}
 
 	// Check format (must start with letter or underscore, contain only alphanumeric and underscore)
