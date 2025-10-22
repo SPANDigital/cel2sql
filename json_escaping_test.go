@@ -15,7 +15,7 @@ func TestJSONFieldNameEscaping_SingleQuote(t *testing.T) {
 	// Create a schema with a JSON field that might have field names with single quotes
 	testSchema := pg.Schema{
 		{Name: "id", Type: "integer"},
-		{Name: "metadata", Type: "jsonb", IsJSON: true},
+		{Name: "metadata", Type: "jsonb", IsJSON: true, IsJSONB: true},
 	}
 
 	provider := pg.NewTypeProvider(map[string]pg.Schema{
@@ -77,7 +77,7 @@ func TestJSONFieldNameEscaping_Documentation(t *testing.T) {
 func TestJSONFieldNameEscaping_HasFunction(t *testing.T) {
 	testSchema := pg.Schema{
 		{Name: "id", Type: "integer"},
-		{Name: "settings", Type: "jsonb", IsJSON: true},
+		{Name: "settings", Type: "jsonb", IsJSON: true, IsJSONB: true},
 	}
 
 	provider := pg.NewTypeProvider(map[string]pg.Schema{

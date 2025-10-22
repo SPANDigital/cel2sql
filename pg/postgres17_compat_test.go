@@ -169,11 +169,11 @@ func TestPostgreSQL17Compatibility(t *testing.T) {
 
 		// AT TIME ZONE test - simplified to just test the conversion happens
 		{
-			name:        "at_time_zone",
-			celExpr:     `test_compat.created_at > timestamp("2024-01-01T00:00:00Z")`,
-			expectedSQL: `test_compat.created_at > CAST('2024-01-01T00:00:00Z' AS TIMESTAMP WITH TIME ZONE)`,
+			name:          "at_time_zone",
+			celExpr:       `test_compat.created_at > timestamp("2024-01-01T00:00:00Z")`,
+			expectedSQL:   `test_compat.created_at > CAST('2024-01-01T00:00:00Z' AS TIMESTAMP WITH TIME ZONE)`,
 			expectedCount: 4, // All records after 2024-01-01
-			description: "Test timestamp() function converts to CAST AS TIMESTAMP WITH TIME ZONE",
+			description:   "Test timestamp() function converts to CAST AS TIMESTAMP WITH TIME ZONE",
 		},
 
 		// Complex combinations

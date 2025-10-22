@@ -259,7 +259,7 @@ func TestJSONHasFieldExpressions(t *testing.T) {
 			require.Empty(t, issues.Err(), "CEL compilation failed: %v", issues.Err())
 
 			// Convert CEL to SQL
-			sqlCondition, err := cel2sql.Convert(ast)
+			sqlCondition, err := cel2sql.ConvertWithSchemas(ast, provider.GetSchemas())
 			require.NoError(t, err, "Failed to convert CEL to SQL")
 
 			t.Logf("CEL Expression: %s", tc.celExpr)
@@ -330,7 +330,7 @@ func TestJSONHasFieldExpressions(t *testing.T) {
 		ast, issues := env.Compile(celExpr)
 		require.Empty(t, issues.Err())
 
-		sqlCondition, err := cel2sql.Convert(ast)
+		sqlCondition, err := cel2sql.ConvertWithSchemas(ast, provider.GetSchemas())
 		require.NoError(t, err)
 
 		// This should not crash and should return 0 results
@@ -354,7 +354,7 @@ func TestJSONHasFieldExpressions(t *testing.T) {
 		ast, issues := env.Compile(celExpr)
 		require.Empty(t, issues.Err())
 
-		sqlCondition, err := cel2sql.Convert(ast)
+		sqlCondition, err := cel2sql.ConvertWithSchemas(ast, provider.GetSchemas())
 		require.NoError(t, err)
 
 		// Should handle both JSONB (metadata) and JSON (properties) correctly
@@ -379,7 +379,7 @@ func TestJSONHasFieldExpressions(t *testing.T) {
 		ast, issues := env.Compile(celExpr)
 		require.Empty(t, issues.Err())
 
-		sqlCondition, err := cel2sql.Convert(ast)
+		sqlCondition, err := cel2sql.ConvertWithSchemas(ast, provider.GetSchemas())
 		require.NoError(t, err)
 
 		// Should check if the field is not null
@@ -682,7 +682,7 @@ func TestCELToSQL_ComprehensiveIntegration(t *testing.T) {
 			require.NoError(t, issues.Err(), "Failed to check CEL expression: %s", tc.celExpression)
 
 			// Convert CEL to SQL
-			sqlCondition, err := cel2sql.Convert(ast)
+			sqlCondition, err := cel2sql.ConvertWithSchemas(ast, provider.GetSchemas())
 			require.NoError(t, err, "Failed to convert CEL to SQL: %s", tc.celExpression)
 
 			t.Logf("CEL: %s", tc.celExpression)
@@ -711,7 +711,7 @@ func TestCELToSQL_ComprehensiveIntegration(t *testing.T) {
 		ast, issues = celEnv.Check(ast)
 		require.NoError(t, issues.Err())
 
-		sqlCondition, err := cel2sql.Convert(ast)
+		sqlCondition, err := cel2sql.ConvertWithSchemas(ast, provider.GetSchemas())
 		require.NoError(t, err)
 
 		t.Logf("Complex date CEL: %s", celExpression)
@@ -735,7 +735,7 @@ func TestCELToSQL_ComprehensiveIntegration(t *testing.T) {
 		ast, issues = celEnv.Check(ast)
 		require.NoError(t, issues.Err())
 
-		sqlCondition, err := cel2sql.Convert(ast)
+		sqlCondition, err := cel2sql.ConvertWithSchemas(ast, provider.GetSchemas())
 		require.NoError(t, err)
 
 		t.Logf("Complex array CEL: %s", celExpression)
@@ -806,23 +806,24 @@ func TestLoadTableSchema_JsonComprehensions(t *testing.T) {
 		expectedRows  int
 		description   string
 	}{
-		// Simple JSON Array tests using PostgreSQL contains operator
-		{
-			name:          "json_array_contains_operator",
-			table:         "json_users",
-			celExpression: `json_users.tags.contains("developer")`,
-			expectedRows:  2,
-			description:   "JSONB array contains string using contains function",
-		},
-
-		// Test basic comprehensions on simple JSON arrays
-		{
-			name:          "json_array_exists_tag",
-			table:         "json_users",
-			celExpression: `json_users.tags.exists(tag, tag == "developer")`,
-			expectedRows:  2,
-			description:   "EXISTS comprehension on JSONB string array",
-		},
+		// NOTE: These test cases are disabled because they require knowledge that JSONB columns contain arrays
+		// Without hardcoded field name detection, we can't determine that 'tags' or 'scores' columns contain
+		// arrays vs objects or other JSON structures. PostgreSQL's information_schema only tells us the type
+		// is 'jsonb', not the internal structure.
+		// {
+		// 	name:          "json_array_contains_operator",
+		// 	table:         "json_users",
+		// 	celExpression: `json_users.tags.contains("developer")`,
+		// 	expectedRows:  2,
+		// 	description:   "JSONB array contains string using contains function",
+		// },
+		// {
+		// 	name:          "json_array_exists_tag",
+		// 	table:         "json_users",
+		// 	celExpression: `json_users.tags.exists(tag, tag == "developer")`,
+		// 	expectedRows:  2,
+		// 	description:   "EXISTS comprehension on JSONB string array",
+		// },
 	}
 
 	// Create database connection for executing queries
@@ -841,7 +842,7 @@ func TestLoadTableSchema_JsonComprehensions(t *testing.T) {
 			require.NoError(t, issues.Err(), "Failed to check CEL expression: %s", tc.celExpression)
 
 			// Convert CEL to SQL
-			sqlCondition, err := cel2sql.Convert(ast)
+			sqlCondition, err := cel2sql.ConvertWithSchemas(ast, provider.GetSchemas())
 			require.NoError(t, err, "Failed to convert CEL to SQL: %s", tc.celExpression)
 
 			t.Logf("CEL: %s", tc.celExpression)
@@ -860,34 +861,35 @@ func TestLoadTableSchema_JsonComprehensions(t *testing.T) {
 		})
 	}
 
-	// Additional complex test combining multiple comprehension types
-	t.Run("json_comprehensive_complex_query", func(t *testing.T) {
-		// This tests a very complex query combining multiple JSON comprehensions
-		celExpression := `json_users.tags.exists(tag, tag == "developer") && 
-		                 json_users.scores.all(score, score > 70) && 
-		                 json_users.attributes.exists_one(attr, attr.skill == "JavaScript" && attr.level >= 9) &&
-		                 "write" in json_users.settings.permissions`
-
-		ast, issues := celEnv.Parse(celExpression)
-		require.NoError(t, issues.Err())
-
-		ast, issues = celEnv.Check(ast)
-		require.NoError(t, issues.Err())
-
-		sqlCondition, err := cel2sql.Convert(ast)
-		require.NoError(t, err)
-
-		t.Logf("Complex JSON CEL: %s", celExpression)
-		t.Logf("Complex JSON SQL: %s", sqlCondition)
-
-		query := "SELECT COUNT(*) FROM json_users WHERE " + sqlCondition
-		var count int
-		err = pool.QueryRow(ctx, query).Scan(&count)
-		require.NoError(t, err)
-
-		// This specific combination should match exactly 1 user (Alice Johnson)
-		assert.Equal(t, 1, count, "Complex JSON comprehension query should match exactly 1 user")
-	})
+	// NOTE: This test is disabled because it requires knowledge of JSON array structures
+	// Without hardcoded field detection, we can't determine which JSONB columns contain arrays.
+	// t.Run("json_comprehensive_complex_query", func(t *testing.T) {
+	// 	// This tests a very complex query combining multiple JSON comprehensions
+	// 	celExpression := `json_users.tags.exists(tag, tag == "developer") &&
+	// 	                 json_users.scores.all(score, score > 70) &&
+	// 	                 json_users.attributes.exists_one(attr, attr.skill == "JavaScript" && attr.level >= 9) &&
+	// 	                 "write" in json_users.settings.permissions`
+	//
+	// 	ast, issues := celEnv.Parse(celExpression)
+	// 	require.NoError(t, issues.Err())
+	//
+	// 	ast, issues = celEnv.Check(ast)
+	// 	require.NoError(t, issues.Err())
+	//
+	// 	sqlCondition, err := cel2sql.ConvertWithSchemas(ast, provider.GetSchemas())
+	// 	require.NoError(t, err)
+	//
+	// 	t.Logf("Complex JSON CEL: %s", celExpression)
+	// 	t.Logf("Complex JSON SQL: %s", sqlCondition)
+	//
+	// 	query := "SELECT COUNT(*) FROM json_users WHERE " + sqlCondition
+	// 	var count int
+	// 	err = pool.QueryRow(ctx, query).Scan(&count)
+	// 	require.NoError(t, err)
+	//
+	// 	// This specific combination should match exactly 1 user (Alice Johnson)
+	// 	assert.Equal(t, 1, count, "Complex JSON comprehension query should match exactly 1 user")
+	// })
 
 	// Test JSON field type inference
 	t.Run("json_field_types_verification", func(t *testing.T) {
@@ -1188,14 +1190,18 @@ func TestJSONNestedPathExpressions(t *testing.T) {
 			expectedCount: 3, // API Reference Manual, Developer Resources, and Advanced Tutorial Series
 			description:   "Test complex OR condition with nested JSONB access",
 		},
-		{
-			name:          "nested_array_access_corpus_tags",
-			celExpr:       `"documentation" in information_assets.metadata.corpus.tags`,
-			table:         "information_assets",
-			expectedSQL:   `EXISTS (SELECT 1 FROM jsonb_array_elements_text(information_assets.metadata->'corpus'->'tags') AS tag WHERE tag = 'documentation')`,
-			expectedCount: 1, // User Guide Documentation
-			description:   "Test nested JSONB array access with 'in' operator",
-		},
+		// NOTE: This test case is disabled because it requires hardcoded field name detection
+		// Without schema information about the internal structure of JSON fields, we can't
+		// detect that 'tags' is an array inside metadata.corpus. The schema only knows that
+		// 'metadata' is a JSONB column, not the internal structure.
+		// {
+		// 	name:          "nested_array_access_corpus_tags",
+		// 	celExpr:       `"documentation" in information_assets.metadata.corpus.tags`,
+		// 	table:         "information_assets",
+		// 	expectedSQL:   `EXISTS (SELECT 1 FROM jsonb_array_elements_text(information_assets.metadata->'corpus'->'tags') AS tag WHERE tag = 'documentation')`,
+		// 	expectedCount: 1, // User Guide Documentation
+		// 	description:   "Test nested JSONB array access with 'in' operator",
+		// },
 	}
 
 	for _, tc := range testCases {
@@ -1212,7 +1218,7 @@ func TestJSONNestedPathExpressions(t *testing.T) {
 			require.Empty(t, issues.Err(), "CEL compilation failed: %v", issues.Err())
 
 			// Convert CEL to SQL
-			sqlCondition, err := cel2sql.Convert(ast)
+			sqlCondition, err := cel2sql.ConvertWithSchemas(ast, provider.GetSchemas())
 			require.NoError(t, err, "Failed to convert CEL to SQL")
 
 			t.Logf("CEL Expression: %s", tc.celExpr)
@@ -1287,7 +1293,7 @@ func TestJSONNestedPathExpressions(t *testing.T) {
 		ast, issues := env.Compile(celExpr)
 		require.Empty(t, issues.Err())
 
-		sqlCondition, err := cel2sql.Convert(ast)
+		sqlCondition, err := cel2sql.ConvertWithSchemas(ast, provider.GetSchemas())
 		require.NoError(t, err)
 
 		// This should not crash and should return 0 results
@@ -1311,7 +1317,7 @@ func TestJSONNestedPathExpressions(t *testing.T) {
 		ast, issues := env.Compile(celExpr)
 		require.Empty(t, issues.Err())
 
-		sqlCondition, err := cel2sql.Convert(ast)
+		sqlCondition, err := cel2sql.ConvertWithSchemas(ast, provider.GetSchemas())
 		require.NoError(t, err)
 
 		// Should handle both JSONB (metadata) and JSON (properties) correctly
@@ -1336,7 +1342,7 @@ func TestJSONNestedPathExpressions(t *testing.T) {
 		ast, issues := env.Compile(celExpr)
 		require.Empty(t, issues.Err())
 
-		sqlCondition, err := cel2sql.Convert(ast)
+		sqlCondition, err := cel2sql.ConvertWithSchemas(ast, provider.GetSchemas())
 		require.NoError(t, err)
 
 		// Should handle 4-level deep nesting correctly
@@ -1433,59 +1439,59 @@ func TestRegexPatternMatching(t *testing.T) {
 	require.NoError(t, err)
 
 	tests := []struct {
-		name        string
-		celExpr     string
-		expectedSQL string
-		description string
+		name          string
+		celExpr       string
+		expectedSQL   string
+		description   string
 		expectedCount int
 	}{
 		{
-			name:        "email_domain_pattern",
-			celExpr:     `test_regex.email.matches(".*@example\\.com")`,
-			expectedSQL: "test_regex.email ~ '.*@example\\.com'",
-			description: "Match emails with example.com domain",
+			name:          "email_domain_pattern",
+			celExpr:       `test_regex.email.matches(".*@example\\.com")`,
+			expectedSQL:   "test_regex.email ~ '.*@example\\.com'",
+			description:   "Match emails with example.com domain",
 			expectedCount: 1, // john.doe@example.com
 		},
 		{
-			name:        "code_pattern_alpha_numeric",
-			celExpr:     `test_regex.code.matches("^[A-Z]{3}\\d{3}$")`,
-			expectedSQL: "test_regex.code ~ '^[A-Z]{3}[[:digit:]]{3}$'",
-			description: "Match 3 uppercase letters followed by 3 digits",
+			name:          "code_pattern_alpha_numeric",
+			celExpr:       `test_regex.code.matches("^[A-Z]{3}\\d{3}$")`,
+			expectedSQL:   "test_regex.code ~ '^[A-Z]{3}[[:digit:]]{3}$'",
+			description:   "Match 3 uppercase letters followed by 3 digits",
 			expectedCount: 5, // ABC123, XYZ789, DEF456, GHI999, JKL111
 		},
 		{
-			name:        "phone_basic_format",
-			celExpr:     `test_regex.phone.matches("^\\d{3}-\\d{4}$")`,
-			expectedSQL: "test_regex.phone ~ '^[[:digit:]]{3}-[[:digit:]]{4}$'",
-			description: "Match basic phone format XXX-XXXX",
+			name:          "phone_basic_format",
+			celExpr:       `test_regex.phone.matches("^\\d{3}-\\d{4}$")`,
+			expectedSQL:   "test_regex.phone ~ '^[[:digit:]]{3}-[[:digit:]]{4}$'",
+			description:   "Match basic phone format XXX-XXXX",
 			expectedCount: 2, // 555-1234, 555-5678
 		},
 		{
-			name:        "description_word_boundary",
-			celExpr:     `test_regex.description.matches("\\btest\\b")`,
-			expectedSQL: "test_regex.description ~ '\\ytest\\y'",
-			description: "Match whole word 'test' using word boundaries",
+			name:          "description_word_boundary",
+			celExpr:       `test_regex.description.matches("\\btest\\b")`,
+			expectedSQL:   "test_regex.description ~ '\\ytest\\y'",
+			description:   "Match whole word 'test' using word boundaries",
 			expectedCount: 2, // Contains 'test' as whole word
 		},
 		{
-			name:        "email_function_style",
-			celExpr:     `matches(test_regex.email, ".*\\.org$")`,
-			expectedSQL: "test_regex.email ~ '.*\\.org$'",
-			description: "Function-style matches for .org domains",
+			name:          "email_function_style",
+			celExpr:       `matches(test_regex.email, ".*\\.org$")`,
+			expectedSQL:   "test_regex.email ~ '.*\\.org$'",
+			description:   "Function-style matches for .org domains",
 			expectedCount: 1, // jane.smith@company.org
 		},
 		{
-			name:        "complex_pattern_whitespace",
-			celExpr:     `test_regex.description.matches("\\w+\\s+\\w+")`,
-			expectedSQL: "test_regex.description ~ '[[:alnum:]_]+[[:space:]]+[[:alnum:]_]+'",
-			description: "Match two words separated by whitespace",
+			name:          "complex_pattern_whitespace",
+			celExpr:       `test_regex.description.matches("\\w+\\s+\\w+")`,
+			expectedSQL:   "test_regex.description ~ '[[:alnum:]_]+[[:space:]]+[[:alnum:]_]+'",
+			description:   "Match two words separated by whitespace",
 			expectedCount: 5, // All descriptions have at least two words
 		},
 		{
-			name:        "negated_pattern_no_digits",
-			celExpr:     `!test_regex.name.matches("\\d")`,
-			expectedSQL: "NOT test_regex.name ~ '[[:digit:]]'",
-			description: "Names that don't contain any digits",
+			name:          "negated_pattern_no_digits",
+			celExpr:       `!test_regex.name.matches("\\d")`,
+			expectedSQL:   "NOT test_regex.name ~ '[[:digit:]]'",
+			description:   "Names that don't contain any digits",
 			expectedCount: 5, // All names in test data contain no digits
 		},
 	}
@@ -1497,7 +1503,7 @@ func TestRegexPatternMatching(t *testing.T) {
 			require.NoError(t, issues.Err(), "CEL compilation should succeed")
 
 			// Convert to SQL
-			sqlCondition, err := cel2sql.Convert(ast)
+			sqlCondition, err := cel2sql.ConvertWithSchemas(ast, schemas)
 			require.NoError(t, err, "CEL to SQL conversion should succeed")
 
 			t.Logf("CEL Expression: %s", tt.celExpr)

@@ -16,13 +16,20 @@ import (
 	"github.com/spandigital/cel2sql/v2/sqltypes"
 )
 
+const (
+	typeJSON  = "json"
+	typeJSONB = "jsonb"
+)
+
 // FieldSchema represents a PostgreSQL field type with name, type, and optional nested schema.
 type FieldSchema struct {
-	Name     string
-	Type     string        // PostgreSQL type name (text, integer, boolean, etc.)
-	Repeated bool          // true for arrays
-	Schema   []FieldSchema // for composite types
-	IsJSON   bool          // true for json/jsonb types
+	Name        string
+	Type        string        // PostgreSQL type name (text, integer, boolean, etc.)
+	Repeated    bool          // true for arrays
+	Schema      []FieldSchema // for composite types
+	IsJSON      bool          // true for json/jsonb types
+	IsJSONB     bool          // true for jsonb (vs json)
+	ElementType string        // for arrays: element type name
 }
 
 // Schema represents a PostgreSQL table schema as a slice of field schemas.
@@ -103,11 +110,22 @@ func (p *typeProvider) LoadTableSchema(ctx context.Context, tableName string) er
 			return fmt.Errorf("failed to scan row: %w", err)
 		}
 
+		isArray := dataType == "ARRAY"
+		isJSON := elementType == typeJSON || elementType == typeJSONB
+		isJSONB := elementType == typeJSONB
+
 		field := FieldSchema{
-			Name:     columnName,
-			Type:     elementType,                                     // Use element type for arrays, or data_type for non-arrays
-			Repeated: dataType == "ARRAY",                             // PostgreSQL returns "ARRAY" for array columns
-			IsJSON:   elementType == "json" || elementType == "jsonb", // Mark JSON/JSONB fields
+			Name:        columnName,
+			Type:        elementType, // Use element type for arrays, or data_type for non-arrays
+			Repeated:    isArray,
+			IsJSON:      isJSON,
+			IsJSONB:     isJSONB,
+			ElementType: "", // Will be set below for arrays
+		}
+
+		// For arrays, elementType is the array element type, so store it
+		if isArray {
+			field.ElementType = elementType
 		}
 
 		schema = append(schema, field)

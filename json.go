@@ -22,17 +22,7 @@ func (con *converter) shouldUseJSONPath(operand *exprpb.Expr, _ string) bool {
 		// For obj.metadata, check if metadata is a JSON column in obj table
 		if tableName, fieldName, ok := con.getTableAndFieldFromSelectChain(operand); ok {
 			// Use schema information to determine if this field is JSON
-			if con.isFieldJSON(tableName, fieldName) {
-				return true
-			}
-			// Fallback to hardcoded list for backward compatibility when schemas not provided
-			jsonFields := []string{"preferences", "metadata", "profile", "details", "settings", "properties", "analytics",
-				"content", "structure", "taxonomy", "classification", "content_structure"}
-			for _, jsonField := range jsonFields {
-				if fieldName == jsonField {
-					return true
-				}
-			}
+			return con.isFieldJSON(tableName, fieldName)
 		}
 
 		// Check if there's a JSON field somewhere in the operand chain
@@ -47,14 +37,13 @@ func (con *converter) shouldUseJSONPath(operand *exprpb.Expr, _ string) bool {
 // hasJSONFieldInChain checks if there's a JSON field anywhere in the select expression chain
 func (con *converter) hasJSONFieldInChain(expr *exprpb.Expr) bool {
 	if selectExpr := expr.GetSelectExpr(); selectExpr != nil {
-		field := selectExpr.GetField()
 		operand := selectExpr.GetOperand()
 
-		// Check if current field is a JSON field
-		jsonFields := []string{"preferences", "metadata", "profile", "details", "settings", "properties", "analytics",
-			"content", "structure", "taxonomy", "classification", "content_structure"}
-		for _, jsonField := range jsonFields {
-			if field == jsonField {
+		// Check if this is a table.field access where field is JSON
+		if identExpr := operand.GetIdentExpr(); identExpr != nil {
+			tableName := identExpr.GetName()
+			field := selectExpr.GetField()
+			if con.isFieldJSON(tableName, field) {
 				return true
 			}
 		}
@@ -215,36 +204,12 @@ func (con *converter) isJSONArrayField(expr *exprpb.Expr) bool {
 		if identExpr := operand.GetIdentExpr(); identExpr != nil {
 			tableName := identExpr.GetName()
 
-			// Check for known JSON array fields in our test schemas
-			jsonArrayFields := map[string][]string{
-				"json_users":         {"tags", "scores", "attributes"},
-				"json_products":      {"features", "reviews", "categories"},
-				"users":              {"preferences", "profile"},                                        // existing test data
-				"products":           {"metadata", "details"},                                           // existing test data
-				"information_assets": {"metadata", "properties", "classification", "content_structure"}, // nested path test data
-				"documents":          {"content", "structure", "taxonomy", "analytics"},                 // nested path test data
-			}
-
-			if fields, exists := jsonArrayFields[tableName]; exists {
-				for _, jsonField := range fields {
-					if field == jsonField {
-						return true
-					}
-				}
-			}
+			// Use schema information to check if this is an array field
+			return con.isFieldArray(tableName, field) && con.isFieldJSON(tableName, field)
 		}
 
-		// Check for nested JSON field access (e.g., information_assets.metadata.corpus.tags)
-		// If there's a JSON field in the chain, this could be a nested array
-		if con.hasJSONFieldInChain(expr) {
-			// For nested access, we assume certain field names are arrays
-			arrayFieldNames := []string{"tags", "permissions", "features", "categories", "scores", "attributes"}
-			for _, arrayField := range arrayFieldNames {
-				if field == arrayField {
-					return true
-				}
-			}
-		}
+		// For nested JSON access, we can't determine array status without schema
+		// Return false - schema must be provided for JSON array detection
 	}
 
 	return false
@@ -260,32 +225,16 @@ func (con *converter) isJSONBField(expr *exprpb.Expr) bool {
 		// Check if the operand is an identifier (table name)
 		if identExpr := operand.GetIdentExpr(); identExpr != nil {
 			tableName := identExpr.GetName()
-
-			// Define which fields are JSONB vs JSON in our test schemas
-			jsonbFields := map[string][]string{
-				"json_users":         {"settings", "tags", "scores"},        // JSONB fields
-				"json_products":      {"features", "reviews", "properties"}, // JSONB fields
-				"information_assets": {"metadata", "classification"},        // JSONB fields
-				"documents":          {"content", "taxonomy"},               // JSONB fields
-			}
-
-			if fields, exists := jsonbFields[tableName]; exists {
-				for _, jsonbField := range fields {
-					if field == jsonbField {
-						return true
-					}
-				}
-			}
+			// Use schema information to check if this is a JSONB field
+			return con.isFieldJSONB(tableName, field)
 		}
 
-		// For nested access, check if the parent is JSONB
+		// For nested access, check if the parent is JSONB using schema
 		if nestedSelectExpr := operand.GetSelectExpr(); nestedSelectExpr != nil {
-			parentField := nestedSelectExpr.GetField()
-			jsonbParentFields := []string{"settings", "properties"}
-			for _, jsonbParent := range jsonbParentFields {
-				if parentField == jsonbParent {
-					return true
-				}
+			if parentIdentExpr := nestedSelectExpr.GetOperand().GetIdentExpr(); parentIdentExpr != nil {
+				tableName := parentIdentExpr.GetName()
+				parentField := nestedSelectExpr.GetField()
+				return con.isFieldJSONB(tableName, parentField)
 			}
 		}
 	}
@@ -299,40 +248,44 @@ func (con *converter) getJSONArrayFunction(expr *exprpb.Expr) string {
 
 	if selectExpr := expr.GetSelectExpr(); selectExpr != nil {
 		field := selectExpr.GetField()
+		operand := selectExpr.GetOperand()
 
-		// Fields that contain simple values (strings, numbers)
-		simpleArrayFields := []string{"tags", "scores", "categories"}
-		for _, simpleField := range simpleArrayFields {
-			if field == simpleField {
-				// For all simple fields, use text extraction to avoid casting issues
-				if isJSONB {
-					return jsonbArrayElementsText
+		// Use schema information to determine element type
+		if identExpr := operand.GetIdentExpr(); identExpr != nil {
+			tableName := identExpr.GetName()
+			elementType := con.getFieldElementType(tableName, field)
+
+			if elementType != "" {
+				// Determine if this is a simple type (text, numbers) or complex (json/jsonb)
+				simpleTypes := map[string]bool{
+					"text":    true,
+					"varchar": true,
+					"integer": true,
+					"bigint":  true,
+					"numeric": true,
+					"decimal": true,
+					"real":    true,
+					"double":  true,
 				}
-				return jsonArrayElementsText
-			}
-		}
 
-		// Fields that contain complex objects
-		complexArrayFields := []string{"attributes", "features", "reviews"}
-		for _, complexField := range complexArrayFields {
-			if field == complexField {
+				if simpleTypes[elementType] {
+					// Simple types: use text extraction
+					if isJSONB {
+						return jsonbArrayElementsText
+					}
+					return jsonArrayElementsText
+				}
+
+				// Complex types (json, jsonb, composite): use object extraction
 				if isJSONB {
 					return jsonbArrayElements
 				}
 				return jsonArrayElements
 			}
 		}
-
-		// For nested JSON access, use appropriate array elements function
-		if operand := selectExpr.GetOperand(); operand.GetSelectExpr() != nil {
-			if isJSONB {
-				return jsonbArrayElements
-			}
-			return jsonArrayElements
-		}
 	}
 
-	// Default based on field type
+	// Default based on field type when schema not available
 	if isJSONB {
 		return jsonbArrayElements
 	}

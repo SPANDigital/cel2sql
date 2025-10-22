@@ -107,6 +107,66 @@ func (con *converter) getTableAndFieldFromSelectChain(expr *exprpb.Expr) (string
 	return "", "", false
 }
 
+// isFieldJSONB checks if a field in a table is specifically JSONB (vs JSON) using schema information
+func (con *converter) isFieldJSONB(tableName, fieldName string) bool {
+	if con.schemas == nil {
+		return false
+	}
+
+	schema, ok := con.schemas[tableName]
+	if !ok {
+		return false
+	}
+
+	for _, field := range schema {
+		if field.Name == fieldName {
+			return field.IsJSONB
+		}
+	}
+
+	return false
+}
+
+// isFieldArray checks if a field in a table is an array using schema information
+func (con *converter) isFieldArray(tableName, fieldName string) bool {
+	if con.schemas == nil {
+		return false
+	}
+
+	schema, ok := con.schemas[tableName]
+	if !ok {
+		return false
+	}
+
+	for _, field := range schema {
+		if field.Name == fieldName {
+			return field.Repeated
+		}
+	}
+
+	return false
+}
+
+// getFieldElementType returns the element type of an array field using schema information
+func (con *converter) getFieldElementType(tableName, fieldName string) string {
+	if con.schemas == nil {
+		return ""
+	}
+
+	schema, ok := con.schemas[tableName]
+	if !ok {
+		return ""
+	}
+
+	for _, field := range schema {
+		if field.Name == fieldName && field.Repeated {
+			return field.ElementType
+		}
+	}
+
+	return ""
+}
+
 func (con *converter) visitCall(expr *exprpb.Expr) error {
 	c := expr.GetCallExpr()
 	fun := c.GetFunction()

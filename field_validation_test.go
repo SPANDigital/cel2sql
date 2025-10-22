@@ -24,9 +24,9 @@ func TestFieldNameValidation_Integration(t *testing.T) {
 	})
 
 	tests := []struct {
-		name        string
-		celExpr     string
-		expectError bool
+		name          string
+		celExpr       string
+		expectError   bool
 		errorContains string
 	}{
 		// Valid field names should work
@@ -43,33 +43,33 @@ func TestFieldNameValidation_Integration(t *testing.T) {
 
 		// Reserved keywords should be rejected
 		{
-			name:        "reserved keyword: select",
-			celExpr:     `obj.select == "test"`,
-			expectError: true,
+			name:          "reserved keyword: select",
+			celExpr:       `obj.select == "test"`,
+			expectError:   true,
 			errorContains: "reserved SQL keyword",
 		},
 		{
-			name:        "reserved keyword: where",
-			celExpr:     `obj.where == "test"`,
-			expectError: true,
+			name:          "reserved keyword: where",
+			celExpr:       `obj.where == "test"`,
+			expectError:   true,
 			errorContains: "reserved SQL keyword",
 		},
 		{
-			name:        "reserved keyword: from",
-			celExpr:     `obj.from == "test"`,
-			expectError: true,
+			name:          "reserved keyword: from",
+			celExpr:       `obj.from == "test"`,
+			expectError:   true,
 			errorContains: "reserved SQL keyword",
 		},
 		{
-			name:        "reserved keyword: union",
-			celExpr:     `obj.union == "test"`,
-			expectError: true,
+			name:          "reserved keyword: union",
+			celExpr:       `obj.union == "test"`,
+			expectError:   true,
 			errorContains: "reserved SQL keyword",
 		},
 		{
-			name:        "reserved keyword: drop",
-			celExpr:     `obj.drop == "test"`,
-			expectError: true,
+			name:          "reserved keyword: drop",
+			celExpr:       `obj.drop == "test"`,
+			expectError:   true,
 			errorContains: "reserved SQL keyword",
 		},
 	}
@@ -111,10 +111,10 @@ func TestFieldNameValidation_Integration(t *testing.T) {
 // TestFieldNameValidation_Identifiers tests identifier validation
 func TestFieldNameValidation_Identifiers(t *testing.T) {
 	tests := []struct {
-		name        string
-		varName     string
-		celExpr     string
-		expectError bool
+		name          string
+		varName       string
+		celExpr       string
+		expectError   bool
 		errorContains string
 	}{
 		{
@@ -130,17 +130,17 @@ func TestFieldNameValidation_Identifiers(t *testing.T) {
 			expectError: false,
 		},
 		{
-			name:        "reserved keyword identifier",
-			varName:     "select",
-			celExpr:     `select == "test"`,
-			expectError: true,
+			name:          "reserved keyword identifier",
+			varName:       "select",
+			celExpr:       `select == "test"`,
+			expectError:   true,
 			errorContains: "reserved SQL keyword",
 		},
 		{
-			name:        "reserved keyword: table",
-			varName:     "table",
-			celExpr:     `table == 5`,
-			expectError: true,
+			name:          "reserved keyword: table",
+			varName:       "table",
+			celExpr:       `table == 5`,
+			expectError:   true,
 			errorContains: "reserved SQL keyword",
 		},
 	}
@@ -218,9 +218,9 @@ func TestFieldNameValidation_PreventsSQLInjection(t *testing.T) {
 	// Comprehensive validation testing is in utils_test.go
 
 	maliciousPatterns := []struct {
-		name      string
-		celExpr   string
-		reason    string
+		name    string
+		celExpr string
+		reason  string
 	}{
 		{
 			name:    "cannot use semicolon in field name",
@@ -254,9 +254,9 @@ func TestFieldNameValidation_PreventsSQLInjection(t *testing.T) {
 // TestFieldNameValidation_EdgeCases tests edge cases
 func TestFieldNameValidation_EdgeCases(t *testing.T) {
 	tests := []struct {
-		name        string
-		fieldName   string
-		shouldPass  bool
+		name       string
+		fieldName  string
+		shouldPass bool
 	}{
 		{
 			name:       "single character",
