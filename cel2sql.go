@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"regexp"
 	"strconv"
 	"strings"
 
@@ -18,6 +19,21 @@ import (
 
 // Implementations based on `google/cel-go`'s unparser
 // https://github.com/google/cel-go/blob/master/parser/unparser.go
+
+// Regex pattern complexity limits to prevent ReDoS attacks (CWE-1333).
+const (
+	// maxRegexPatternLength is the maximum allowed length for regex patterns
+	// to prevent processing extremely long patterns that could cause DoS.
+	maxRegexPatternLength = 500
+
+	// maxRegexGroups is the maximum number of capture groups allowed in a pattern
+	// to prevent memory exhaustion and slow matching.
+	maxRegexGroups = 20
+
+	// maxRegexNestingDepth is the maximum nesting depth for groups and quantifiers
+	// to prevent catastrophic backtracking.
+	maxRegexNestingDepth = 10
+)
 
 // ConvertOption is a functional option for configuring the Convert function.
 type ConvertOption func(*convertOptions)
@@ -600,7 +616,12 @@ func (con *converter) callMatches(target *exprpb.Expr, args []*exprpb.Expr) erro
 		if strings.Contains(re2Pattern, "\x00") {
 			return errors.New("regex patterns cannot contain null bytes")
 		}
-		posixPattern := convertRE2ToPOSIX(re2Pattern)
+
+		// Convert RE2 to POSIX with security validation
+		posixPattern, err := convertRE2ToPOSIX(re2Pattern)
+		if err != nil {
+			return fmt.Errorf("invalid regex pattern: %w", err)
+		}
 
 		// Write the converted pattern as a string literal
 		escaped := strings.ReplaceAll(posixPattern, "'", "''")
@@ -1630,9 +1651,110 @@ func isBinaryOrTernaryOperator(expr *exprpb.Expr) bool {
 	return isBinaryOp || isSamePrecedence(operators.Conditional, expr)
 }
 
-// convertRE2ToPOSIX converts a subset of RE2 regex patterns to POSIX ERE (Extended Regular Expression)
+// convertRE2ToPOSIX converts an RE2 regex pattern to POSIX ERE format for PostgreSQL.
+// It performs security validation to prevent ReDoS attacks (CWE-1333).
 // Note: This is a basic conversion for common patterns. Full RE2 to POSIX conversion is complex.
-func convertRE2ToPOSIX(re2Pattern string) string {
+func convertRE2ToPOSIX(re2Pattern string) (string, error) {
+	// 1. Check pattern length to prevent processing extremely long patterns
+	if len(re2Pattern) > maxRegexPatternLength {
+		return "", fmt.Errorf("regex pattern exceeds maximum length of %d characters", maxRegexPatternLength)
+	}
+
+	// 2. Detect catastrophic nested quantifiers that cause exponential backtracking
+	// Patterns like (a+)+, (a*)*,  (x+x+)+, ((a)+b)+, etc. are extremely dangerous
+
+	// Check for doubled quantifiers
+	if matched, _ := regexp.MatchString(`[*+][*+]`, re2Pattern); matched {
+		return "", errors.New("regex contains catastrophic nested quantifiers that could cause ReDoS")
+	}
+
+	// Check for groups that contain quantifiers and are themselves quantified
+	// This catches patterns like (a+)+, ((a)+b)+, (a*b*)*, etc.
+	// We need to check if any opening paren eventually leads to a closing paren followed by a quantifier,
+	// and if there are quantifiers between those parens.
+	depth := 0
+	groupHasQuantifier := make([]bool, 0)
+
+	for i := 0; i < len(re2Pattern); i++ {
+		char := re2Pattern[i]
+
+		// Skip escaped characters
+		if i > 0 && re2Pattern[i-1] == '\\' {
+			continue
+		}
+
+		if char == '(' {
+			depth++
+			groupHasQuantifier = append(groupHasQuantifier, false)
+		} else if char == ')' {
+			if depth > 0 {
+				depth--
+				// Check if the closing paren is followed by a quantifier
+				if i+1 < len(re2Pattern) {
+					nextChar := re2Pattern[i+1]
+					if nextChar == '*' || nextChar == '+' || nextChar == '?' || nextChar == '{' {
+						// This group is quantified. Check if it contains quantifiers
+						if len(groupHasQuantifier) > 0 && groupHasQuantifier[len(groupHasQuantifier)-1] {
+							return "", errors.New("regex contains catastrophic nested quantifiers that could cause ReDoS")
+						}
+					}
+				}
+				if len(groupHasQuantifier) > 0 {
+					// Pop the last group
+					if len(groupHasQuantifier) > 1 {
+						// If inner group had quantifier, mark outer group as having quantifier too
+						if groupHasQuantifier[len(groupHasQuantifier)-1] {
+							groupHasQuantifier[len(groupHasQuantifier)-2] = true
+						}
+					}
+					groupHasQuantifier = groupHasQuantifier[:len(groupHasQuantifier)-1]
+				}
+			}
+		} else if char == '*' || char == '+' || char == '?' {
+			// Mark that current group contains a quantifier
+			if len(groupHasQuantifier) > 0 {
+				groupHasQuantifier[len(groupHasQuantifier)-1] = true
+			}
+		} else if char == '{' {
+			// Brace quantifier {n,m}
+			if len(groupHasQuantifier) > 0 {
+				groupHasQuantifier[len(groupHasQuantifier)-1] = true
+			}
+		}
+	}
+
+	// 3. Count and limit capture groups to prevent memory exhaustion
+	groupCount := strings.Count(re2Pattern, "(") - strings.Count(re2Pattern, `\(`)
+	if groupCount > maxRegexGroups {
+		return "", fmt.Errorf("regex contains %d capture groups, exceeds maximum of %d", groupCount, maxRegexGroups)
+	}
+
+	// 4. Detect exponential alternation patterns like (a|a)*b or (a|ab)*
+	alternationPattern := regexp.MustCompile(`\([^)]*\|[^)]*\)[*+]`)
+	if alternationPattern.MatchString(re2Pattern) {
+		// Check if alternation has overlapping branches (more dangerous)
+		// This is a simple heuristic - full analysis would be more complex
+		return "", errors.New("regex contains quantified alternation that could cause ReDoS")
+	}
+
+	// 5. Check nesting depth to prevent deeply nested patterns
+	maxDepth := 0
+	currentDepth := 0
+	for _, char := range re2Pattern {
+		if char == '(' && !strings.HasSuffix(re2Pattern[:strings.LastIndex(re2Pattern, string(char))], `\`) {
+			currentDepth++
+			if currentDepth > maxDepth {
+				maxDepth = currentDepth
+			}
+		} else if char == ')' && !strings.HasSuffix(re2Pattern[:strings.LastIndex(re2Pattern, string(char))], `\`) {
+			currentDepth--
+		}
+	}
+	if maxDepth > maxRegexNestingDepth {
+		return "", fmt.Errorf("regex nesting depth %d exceeds maximum of %d", maxDepth, maxRegexNestingDepth)
+	}
+
+	// Passed all security checks - proceed with conversion
 	posixPattern := re2Pattern
 
 	// Basic conversions for common differences between RE2 and POSIX:
@@ -1674,5 +1796,5 @@ func convertRE2ToPOSIX(re2Pattern string) string {
 	// For these cases, the pattern is returned as-is, which may cause PostgreSQL errors
 	// if the pattern uses unsupported RE2 features.
 
-	return posixPattern
+	return posixPattern, nil
 }
