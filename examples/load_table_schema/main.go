@@ -65,7 +65,8 @@ func exampleWithPredefinedSchema() {
 			continue
 		}
 
-		sqlCondition, err := cel2sql.Convert(ast)
+		// Convert to SQL with schema information for JSON field detection
+		sqlCondition, err := cel2sql.Convert(ast, cel2sql.WithSchemas(provider.GetSchemas()))
 		if err != nil {
 			log.Printf("Error converting %s: %v", expr, err)
 			continue

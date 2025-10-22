@@ -259,7 +259,7 @@ func TestJSONHasFieldExpressions(t *testing.T) {
 			require.Empty(t, issues.Err(), "CEL compilation failed: %v", issues.Err())
 
 			// Convert CEL to SQL
-			sqlCondition, err := cel2sql.ConvertWithSchemas(ast, provider.GetSchemas())
+			sqlCondition, err := cel2sql.Convert(ast, cel2sql.WithSchemas(provider.GetSchemas()))
 			require.NoError(t, err, "Failed to convert CEL to SQL")
 
 			t.Logf("CEL Expression: %s", tc.celExpr)
@@ -330,7 +330,7 @@ func TestJSONHasFieldExpressions(t *testing.T) {
 		ast, issues := env.Compile(celExpr)
 		require.Empty(t, issues.Err())
 
-		sqlCondition, err := cel2sql.ConvertWithSchemas(ast, provider.GetSchemas())
+		sqlCondition, err := cel2sql.Convert(ast, cel2sql.WithSchemas(provider.GetSchemas()))
 		require.NoError(t, err)
 
 		// This should not crash and should return 0 results
@@ -354,7 +354,7 @@ func TestJSONHasFieldExpressions(t *testing.T) {
 		ast, issues := env.Compile(celExpr)
 		require.Empty(t, issues.Err())
 
-		sqlCondition, err := cel2sql.ConvertWithSchemas(ast, provider.GetSchemas())
+		sqlCondition, err := cel2sql.Convert(ast, cel2sql.WithSchemas(provider.GetSchemas()))
 		require.NoError(t, err)
 
 		// Should handle both JSONB (metadata) and JSON (properties) correctly
@@ -379,7 +379,7 @@ func TestJSONHasFieldExpressions(t *testing.T) {
 		ast, issues := env.Compile(celExpr)
 		require.Empty(t, issues.Err())
 
-		sqlCondition, err := cel2sql.ConvertWithSchemas(ast, provider.GetSchemas())
+		sqlCondition, err := cel2sql.Convert(ast, cel2sql.WithSchemas(provider.GetSchemas()))
 		require.NoError(t, err)
 
 		// Should check if the field is not null
@@ -682,7 +682,7 @@ func TestCELToSQL_ComprehensiveIntegration(t *testing.T) {
 			require.NoError(t, issues.Err(), "Failed to check CEL expression: %s", tc.celExpression)
 
 			// Convert CEL to SQL
-			sqlCondition, err := cel2sql.ConvertWithSchemas(ast, provider.GetSchemas())
+			sqlCondition, err := cel2sql.Convert(ast, cel2sql.WithSchemas(provider.GetSchemas()))
 			require.NoError(t, err, "Failed to convert CEL to SQL: %s", tc.celExpression)
 
 			t.Logf("CEL: %s", tc.celExpression)
@@ -711,7 +711,7 @@ func TestCELToSQL_ComprehensiveIntegration(t *testing.T) {
 		ast, issues = celEnv.Check(ast)
 		require.NoError(t, issues.Err())
 
-		sqlCondition, err := cel2sql.ConvertWithSchemas(ast, provider.GetSchemas())
+		sqlCondition, err := cel2sql.Convert(ast, cel2sql.WithSchemas(provider.GetSchemas()))
 		require.NoError(t, err)
 
 		t.Logf("Complex date CEL: %s", celExpression)
@@ -735,7 +735,7 @@ func TestCELToSQL_ComprehensiveIntegration(t *testing.T) {
 		ast, issues = celEnv.Check(ast)
 		require.NoError(t, issues.Err())
 
-		sqlCondition, err := cel2sql.ConvertWithSchemas(ast, provider.GetSchemas())
+		sqlCondition, err := cel2sql.Convert(ast, cel2sql.WithSchemas(provider.GetSchemas()))
 		require.NoError(t, err)
 
 		t.Logf("Complex array CEL: %s", celExpression)
@@ -842,7 +842,7 @@ func TestLoadTableSchema_JsonComprehensions(t *testing.T) {
 			require.NoError(t, issues.Err(), "Failed to check CEL expression: %s", tc.celExpression)
 
 			// Convert CEL to SQL
-			sqlCondition, err := cel2sql.ConvertWithSchemas(ast, provider.GetSchemas())
+			sqlCondition, err := cel2sql.Convert(ast, cel2sql.WithSchemas(provider.GetSchemas()))
 			require.NoError(t, err, "Failed to convert CEL to SQL: %s", tc.celExpression)
 
 			t.Logf("CEL: %s", tc.celExpression)
@@ -876,7 +876,7 @@ func TestLoadTableSchema_JsonComprehensions(t *testing.T) {
 	// 	ast, issues = celEnv.Check(ast)
 	// 	require.NoError(t, issues.Err())
 	//
-	// 	sqlCondition, err := cel2sql.ConvertWithSchemas(ast, provider.GetSchemas())
+	// 	sqlCondition, err := cel2sql.Convert(ast, cel2sql.WithSchemas(provider.GetSchemas()))
 	// 	require.NoError(t, err)
 	//
 	// 	t.Logf("Complex JSON CEL: %s", celExpression)
@@ -1218,7 +1218,7 @@ func TestJSONNestedPathExpressions(t *testing.T) {
 			require.Empty(t, issues.Err(), "CEL compilation failed: %v", issues.Err())
 
 			// Convert CEL to SQL
-			sqlCondition, err := cel2sql.ConvertWithSchemas(ast, provider.GetSchemas())
+			sqlCondition, err := cel2sql.Convert(ast, cel2sql.WithSchemas(provider.GetSchemas()))
 			require.NoError(t, err, "Failed to convert CEL to SQL")
 
 			t.Logf("CEL Expression: %s", tc.celExpr)
@@ -1293,7 +1293,7 @@ func TestJSONNestedPathExpressions(t *testing.T) {
 		ast, issues := env.Compile(celExpr)
 		require.Empty(t, issues.Err())
 
-		sqlCondition, err := cel2sql.ConvertWithSchemas(ast, provider.GetSchemas())
+		sqlCondition, err := cel2sql.Convert(ast, cel2sql.WithSchemas(provider.GetSchemas()))
 		require.NoError(t, err)
 
 		// This should not crash and should return 0 results
@@ -1317,7 +1317,7 @@ func TestJSONNestedPathExpressions(t *testing.T) {
 		ast, issues := env.Compile(celExpr)
 		require.Empty(t, issues.Err())
 
-		sqlCondition, err := cel2sql.ConvertWithSchemas(ast, provider.GetSchemas())
+		sqlCondition, err := cel2sql.Convert(ast, cel2sql.WithSchemas(provider.GetSchemas()))
 		require.NoError(t, err)
 
 		// Should handle both JSONB (metadata) and JSON (properties) correctly
@@ -1342,7 +1342,7 @@ func TestJSONNestedPathExpressions(t *testing.T) {
 		ast, issues := env.Compile(celExpr)
 		require.Empty(t, issues.Err())
 
-		sqlCondition, err := cel2sql.ConvertWithSchemas(ast, provider.GetSchemas())
+		sqlCondition, err := cel2sql.Convert(ast, cel2sql.WithSchemas(provider.GetSchemas()))
 		require.NoError(t, err)
 
 		// Should handle 4-level deep nesting correctly
@@ -1503,7 +1503,7 @@ func TestRegexPatternMatching(t *testing.T) {
 			require.NoError(t, issues.Err(), "CEL compilation should succeed")
 
 			// Convert to SQL
-			sqlCondition, err := cel2sql.ConvertWithSchemas(ast, schemas)
+			sqlCondition, err := cel2sql.Convert(ast, cel2sql.WithSchemas(schemas))
 			require.NoError(t, err, "CEL to SQL conversion should succeed")
 
 			t.Logf("CEL Expression: %s", tt.celExpr)

@@ -58,7 +58,7 @@ func TestJSONFieldNameEscaping_SingleQuote(t *testing.T) {
 			schemas := map[string]pg.Schema{
 				"obj": testSchema,
 			}
-			sqlCondition, err := cel2sql.ConvertWithSchemas(ast, schemas)
+			sqlCondition, err := cel2sql.Convert(ast, cel2sql.WithSchemas(schemas))
 			require.NoError(t, err, "Should convert CEL to SQL: %s", tt.description)
 			require.Equal(t, tt.expectedSQL, sqlCondition, "SQL should match expected output")
 		})
@@ -112,7 +112,7 @@ func TestJSONFieldNameEscaping_HasFunction(t *testing.T) {
 			schemas := map[string]pg.Schema{
 				"obj": testSchema,
 			}
-			sqlCondition, err := cel2sql.ConvertWithSchemas(ast, schemas)
+			sqlCondition, err := cel2sql.Convert(ast, cel2sql.WithSchemas(schemas))
 			require.NoError(t, err, "Should convert CEL to SQL: %s", tt.description)
 			require.NotEmpty(t, sqlCondition, "Should generate SQL")
 			t.Logf("Generated SQL: %s", sqlCondition)

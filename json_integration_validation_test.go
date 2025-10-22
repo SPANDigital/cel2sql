@@ -116,7 +116,7 @@ func TestGeneratedSQLAgainstPostgreSQL(t *testing.T) {
 			schemas := map[string]pg.Schema{
 				"obj": testSchema,
 			}
-			sqlCondition, err := cel2sql.ConvertWithSchemas(ast, schemas)
+			sqlCondition, err := cel2sql.Convert(ast, cel2sql.WithSchemas(schemas))
 			require.NoError(t, err)
 
 			t.Logf("CEL Expression: %s", tt.celExpr)
