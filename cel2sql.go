@@ -1116,12 +1116,12 @@ func (con *converter) visitSelect(expr *exprpb.Expr) error {
 		// Use ->> for text extraction
 		con.str.WriteString("->>")
 		con.str.WriteString("'")
-		con.str.WriteString(fieldName)
+		con.str.WriteString(escapeJSONFieldName(fieldName))
 		con.str.WriteString("'")
 	case useJSONObjectAccess:
 		// Use -> for JSON object field access in comprehensions
 		con.str.WriteString("->>'")
-		con.str.WriteString(fieldName)
+		con.str.WriteString(escapeJSONFieldName(fieldName))
 		con.str.WriteString("'")
 		if con.isNumericJSONField(fieldName) {
 			// Close parentheses and add numeric cast
@@ -1154,12 +1154,12 @@ func (con *converter) visitHasFunction(expr *exprpb.Expr) error {
 		if con.isJSONBField(operand) {
 			// Use JSONB's ? operator for existence check
 			con.str.WriteString(" ? '")
-			con.str.WriteString(field)
+			con.str.WriteString(escapeJSONFieldName(field))
 			con.str.WriteString("'")
 		} else {
 			// For JSON fields, check if the field is not null
 			con.str.WriteString("->'")
-			con.str.WriteString(field)
+			con.str.WriteString(escapeJSONFieldName(field))
 			con.str.WriteString("' IS NOT NULL")
 		}
 		return nil
@@ -1217,7 +1217,7 @@ func (con *converter) visitNestedJSONHas(expr *exprpb.Expr) error {
 	// Add path segments as arguments
 	for _, segment := range pathSegments {
 		con.str.WriteString(", '")
-		con.str.WriteString(segment)
+		con.str.WriteString(escapeJSONFieldName(segment))
 		con.str.WriteString("'")
 	}
 

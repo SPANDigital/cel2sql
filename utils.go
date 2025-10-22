@@ -193,3 +193,9 @@ func escapeLikePattern(pattern string) string {
 	escaped = strings.ReplaceAll(escaped, `'`, `''`)
 	return escaped
 }
+
+// escapeJSONFieldName escapes single quotes in JSON field names for safe use in PostgreSQL JSON path operators
+// In PostgreSQL, single quotes within string literals must be escaped by doubling them
+func escapeJSONFieldName(fieldName string) string {
+	return strings.ReplaceAll(fieldName, "'", "''")
+}

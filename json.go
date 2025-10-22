@@ -148,7 +148,7 @@ func (con *converter) buildJSONPathForArray(expr *exprpb.Expr) error {
 			}
 			// Add intermediate JSON path operator (always -> for arrays)
 			con.str.WriteString("->'")
-			con.str.WriteString(field)
+			con.str.WriteString(escapeJSONFieldName(field))
 			con.str.WriteString("'")
 			return nil
 		}
@@ -169,7 +169,7 @@ func (con *converter) buildJSONPathForArray(expr *exprpb.Expr) error {
 		return err
 	}
 	con.str.WriteString("->'")
-	con.str.WriteString(field)
+	con.str.WriteString(escapeJSONFieldName(field))
 	con.str.WriteString("'")
 	return nil
 }
@@ -369,7 +369,7 @@ func (con *converter) buildJSONPathInternal(expr *exprpb.Expr, isFinalField bool
 			} else {
 				con.str.WriteString("->'")   // Intermediate field: keep as JSON
 			}
-			con.str.WriteString(field)
+			con.str.WriteString(escapeJSONFieldName(field))
 			con.str.WriteString("'")
 			return nil
 		}
@@ -386,7 +386,7 @@ func (con *converter) buildJSONPathInternal(expr *exprpb.Expr, isFinalField bool
 	} else {
 		con.str.WriteString("->'")   // Intermediate field: keep as JSON
 	}
-	con.str.WriteString(field)
+	con.str.WriteString(escapeJSONFieldName(field))
 	con.str.WriteString("'")
 	return nil
 }

@@ -325,3 +325,64 @@ func TestValidateFieldName_AllReservedKeywords(t *testing.T) {
 		})
 	}
 }
+
+func TestEscapeJSONFieldName(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		expected string
+	}{
+		{
+			name:     "no quotes",
+			input:    "fieldname",
+			expected: "fieldname",
+		},
+		{
+			name:     "single quote at start",
+			input:    "'field",
+			expected: "''field",
+		},
+		{
+			name:     "single quote in middle",
+			input:    "field'name",
+			expected: "field''name",
+		},
+		{
+			name:     "single quote at end",
+			input:    "field'",
+			expected: "field''",
+		},
+		{
+			name:     "multiple single quotes",
+			input:    "field'name'test",
+			expected: "field''name''test",
+		},
+		{
+			name:     "SQL injection attempt",
+			input:    "' OR '1'='1",
+			expected: "'' OR ''1''=''1",
+		},
+		{
+			name:     "empty string",
+			input:    "",
+			expected: "",
+		},
+		{
+			name:     "only single quote",
+			input:    "'",
+			expected: "''",
+		},
+		{
+			name:     "double quotes not affected",
+			input:    "field\"name",
+			expected: "field\"name",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := escapeJSONFieldName(tt.input)
+			require.Equal(t, tt.expected, result, "escapeJSONFieldName should properly escape: %s", tt.input)
+		})
+	}
+}
