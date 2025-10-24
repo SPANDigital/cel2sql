@@ -839,8 +839,6 @@ func (con *converter) callMatches(target *exprpb.Expr, args []*exprpb.Expr) erro
 		return err
 	}
 
-	con.str.WriteString(" ~ ")
-
 	// Visit the pattern expression and convert from RE2 to POSIX if it's a string literal
 	if constExpr := patternExpr.GetConstExpr(); constExpr != nil && constExpr.GetStringValue() != "" {
 		// Convert RE2 pattern to POSIX
@@ -851,13 +849,10 @@ func (con *converter) callMatches(target *exprpb.Expr, args []*exprpb.Expr) erro
 		}
 
 		// Convert RE2 to POSIX with security validation
-		posixPattern, err := convertRE2ToPOSIX(re2Pattern)
+		posixPattern, caseInsensitive, err := convertRE2ToPOSIX(re2Pattern)
 		if err != nil {
 			return fmt.Errorf("invalid regex pattern: %w", err)
 		}
-
-		// Determine case sensitivity
-		caseInsensitive := strings.HasPrefix(re2Pattern, "(?i)")
 
 		con.logger.LogAttrs(context.Background(), slog.LevelDebug,
 			"regex pattern conversion",
@@ -866,6 +861,13 @@ func (con *converter) callMatches(target *exprpb.Expr, args []*exprpb.Expr) erro
 			slog.Bool("case_insensitive", caseInsensitive),
 		)
 
+		// Use ~* for case-insensitive matching, ~ for case-sensitive
+		if caseInsensitive {
+			con.str.WriteString(" ~* ")
+		} else {
+			con.str.WriteString(" ~ ")
+		}
+
 		// Write the converted pattern as a string literal
 		escaped := strings.ReplaceAll(posixPattern, "'", "''")
 		con.str.WriteString("'")
@@ -873,7 +875,8 @@ func (con *converter) callMatches(target *exprpb.Expr, args []*exprpb.Expr) erro
 		con.str.WriteString("'")
 	} else {
 		// For non-literal patterns, we can't convert at compile time
-		// Just use the pattern as-is and hope it's POSIX compatible
+		// Just use the pattern as-is with case-sensitive operator
+		con.str.WriteString(" ~ ")
 		if err := con.visit(patternExpr); err != nil {
 			return err
 		}
@@ -1947,19 +1950,45 @@ func isBinaryOrTernaryOperator(expr *exprpb.Expr) bool {
 
 // convertRE2ToPOSIX converts an RE2 regex pattern to POSIX ERE format for PostgreSQL.
 // It performs security validation to prevent ReDoS attacks (CWE-1333).
+// Returns: (posixPattern, caseInsensitive, error)
 // Note: This is a basic conversion for common patterns. Full RE2 to POSIX conversion is complex.
-func convertRE2ToPOSIX(re2Pattern string) (string, error) {
+func convertRE2ToPOSIX(re2Pattern string) (string, bool, error) {
 	// 1. Check pattern length to prevent processing extremely long patterns
 	if len(re2Pattern) > maxRegexPatternLength {
-		return "", fmt.Errorf("regex pattern exceeds maximum length of %d characters", maxRegexPatternLength)
+		return "", false, fmt.Errorf("regex pattern exceeds maximum length of %d characters", maxRegexPatternLength)
 	}
 
-	// 2. Detect catastrophic nested quantifiers that cause exponential backtracking
+	// 2. Extract case-insensitive flag if present
+	caseInsensitive := false
+	if strings.HasPrefix(re2Pattern, "(?i)") {
+		caseInsensitive = true
+		re2Pattern = strings.TrimPrefix(re2Pattern, "(?i)")
+	}
+
+	// 3. Detect unsupported RE2 features and return errors
+	// Lookahead assertions
+	if strings.Contains(re2Pattern, "(?=") || strings.Contains(re2Pattern, "(?!") {
+		return "", false, errors.New("lookahead assertions (?=...), (?!...) are not supported in PostgreSQL POSIX regex")
+	}
+	// Lookbehind assertions
+	if strings.Contains(re2Pattern, "(?<=") || strings.Contains(re2Pattern, "(?<!") {
+		return "", false, errors.New("lookbehind assertions (?<=...), (?<!...) are not supported in PostgreSQL POSIX regex")
+	}
+	// Named capture groups
+	if strings.Contains(re2Pattern, "(?P<") {
+		return "", false, errors.New("named capture groups (?P<name>...) are not supported in PostgreSQL POSIX regex")
+	}
+	// Other inline flags (after we've already handled (?i))
+	if strings.Contains(re2Pattern, "(?m") || strings.Contains(re2Pattern, "(?s") || strings.Contains(re2Pattern, "(?-") {
+		return "", false, errors.New("inline flags other than (?i) are not supported in PostgreSQL POSIX regex")
+	}
+
+	// 4. Detect catastrophic nested quantifiers that cause exponential backtracking
 	// Patterns like (a+)+, (a*)*,  (x+x+)+, ((a)+b)+, etc. are extremely dangerous
 
 	// Check for doubled quantifiers
 	if matched, _ := regexp.MatchString(`[*+][*+]`, re2Pattern); matched {
-		return "", errors.New("regex contains catastrophic nested quantifiers that could cause ReDoS")
+		return "", false, errors.New("regex contains catastrophic nested quantifiers that could cause ReDoS")
 	}
 
 	// Check for groups that contain quantifiers and are themselves quantified
@@ -1990,7 +2019,7 @@ func convertRE2ToPOSIX(re2Pattern string) (string, error) {
 					if nextChar == '*' || nextChar == '+' || nextChar == '?' || nextChar == '{' {
 						// This group is quantified. Check if it contains quantifiers
 						if len(groupHasQuantifier) > 0 && groupHasQuantifier[len(groupHasQuantifier)-1] {
-							return "", errors.New("regex contains catastrophic nested quantifiers that could cause ReDoS")
+							return "", false, errors.New("regex contains catastrophic nested quantifiers that could cause ReDoS")
 						}
 					}
 				}
@@ -2018,21 +2047,21 @@ func convertRE2ToPOSIX(re2Pattern string) (string, error) {
 		}
 	}
 
-	// 3. Count and limit capture groups to prevent memory exhaustion
+	// 5. Count and limit capture groups to prevent memory exhaustion
 	groupCount := strings.Count(re2Pattern, "(") - strings.Count(re2Pattern, `\(`)
 	if groupCount > maxRegexGroups {
-		return "", fmt.Errorf("regex contains %d capture groups, exceeds maximum of %d", groupCount, maxRegexGroups)
+		return "", false, fmt.Errorf("regex contains %d capture groups, exceeds maximum of %d", groupCount, maxRegexGroups)
 	}
 
-	// 4. Detect exponential alternation patterns like (a|a)*b or (a|ab)*
+	// 6. Detect exponential alternation patterns like (a|a)*b or (a|ab)*
 	alternationPattern := regexp.MustCompile(`\([^)]*\|[^)]*\)[*+]`)
 	if alternationPattern.MatchString(re2Pattern) {
 		// Check if alternation has overlapping branches (more dangerous)
 		// This is a simple heuristic - full analysis would be more complex
-		return "", errors.New("regex contains quantified alternation that could cause ReDoS")
+		return "", false, errors.New("regex contains quantified alternation that could cause ReDoS")
 	}
 
-	// 5. Check nesting depth to prevent deeply nested patterns
+	// 7. Check nesting depth to prevent deeply nested patterns
 	maxDepth := 0
 	currentDepth := 0
 	for _, char := range re2Pattern {
@@ -2046,7 +2075,7 @@ func convertRE2ToPOSIX(re2Pattern string) (string, error) {
 		}
 	}
 	if maxDepth > maxRegexNestingDepth {
-		return "", fmt.Errorf("regex nesting depth %d exceeds maximum of %d", maxDepth, maxRegexNestingDepth)
+		return "", false, fmt.Errorf("regex nesting depth %d exceeds maximum of %d", maxDepth, maxRegexNestingDepth)
 	}
 
 	// Passed all security checks - proceed with conversion
@@ -2080,16 +2109,19 @@ func convertRE2ToPOSIX(re2Pattern string) (string, error) {
 	// 8. Non-whitespace shortcuts: \S -> [^[:space:]]
 	posixPattern = strings.ReplaceAll(posixPattern, `\S`, `[^[:space:]]`)
 
-	// Note: Many RE2 features are not directly convertible to POSIX ERE:
-	// - Lookahead/lookbehind assertions (?=...), (?!...), (?<=...), (?<!...)
-	// - Non-capturing groups (?:...)
-	// - Named groups (?P<name>...)
-	// - Case-insensitive flags (?i)
-	// - Multiline flags (?m)
-	// - Unicode character classes
-	//
-	// For these cases, the pattern is returned as-is, which may cause PostgreSQL errors
-	// if the pattern uses unsupported RE2 features.
+	// 9. Non-capturing groups: (?:...) -> (...)
+	//    POSIX ERE doesn't have non-capturing groups, so convert to regular groups
+	posixPattern = strings.ReplaceAll(posixPattern, `(?:`, `(`)
 
-	return posixPattern, nil
+	// Note: Unsupported RE2 features that are now validated and return errors:
+	// - Lookahead/lookbehind assertions (?=...), (?!...), (?<=...), (?<!...) - ERROR
+	// - Named groups (?P<name>...) - ERROR
+	// - Case-insensitive flag (?i) - CONVERTED (returned as separate boolean)
+	// - Other inline flags (?m), (?s) - ERROR
+	//
+	// Converted features:
+	// - Non-capturing groups (?:...) - Converted to regular groups (...)
+	// - Character class shortcuts (\d, \w, \s, etc.) - Converted to POSIX equivalents
+
+	return posixPattern, caseInsensitive, nil
 }

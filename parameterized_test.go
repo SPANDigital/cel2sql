@@ -1,6 +1,7 @@
 package cel2sql_test
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/google/cel-go/cel"
@@ -434,9 +435,10 @@ func TestConvertParameterized_RegexPatterns(t *testing.T) {
 			// Assert parameter count
 			assert.Len(t, result.Parameters, tt.wantParamCount, "Parameter count should match")
 
-			// Assert SQL contains regex operator
+			// Assert SQL contains regex operator (~ or ~* for case-insensitive)
 			if tt.containsRegex {
-				assert.Contains(t, result.SQL, " ~ ", "SQL should contain regex operator")
+				hasRegexOperator := strings.Contains(result.SQL, " ~ ") || strings.Contains(result.SQL, " ~* ")
+				assert.True(t, hasRegexOperator, "SQL should contain regex operator (~ or ~*)")
 			}
 		})
 	}

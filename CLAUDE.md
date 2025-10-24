@@ -127,12 +127,26 @@ Full support for CEL comprehensions converted to PostgreSQL UNNEST patterns:
 
 Pattern recognition and conversion logic is in `comprehensions.go`.
 
-### Regex Pattern Matching (v2.8.0)
+### Regex Pattern Matching (v2.8.0+)
 
 Supports CEL `matches()` function with automatic RE2 to POSIX regex conversion:
 - `field.matches(r"pattern")` → `field ~ 'pattern'`
-- `field.matches(r"(?i)pattern")` → `field ~* 'pattern'` (case-insensitive)
-- Automatic conversion of RE2 patterns to PostgreSQL-compatible POSIX format
+- `field.matches(r"(?i)pattern")` → `field ~* 'pattern'` (case-insensitive, `(?i)` stripped from pattern)
+- `field.matches(r"(?:abc)")` → `field ~ '(abc)'` (non-capturing groups converted to regular groups)
+
+**Automatic Conversions:**
+- Case-insensitive flag `(?i)` → Uses `~*` operator, flag stripped from pattern
+- Non-capturing groups `(?:...)` → Converted to regular groups `(...)`
+- Character classes: `\d` → `[[:digit:]]`, `\w` → `[[:alnum:]_]`, `\s` → `[[:space:]]`
+- Word boundaries: `\b` → `\y`
+
+**Unsupported RE2 Features (will return errors):**
+- Lookahead assertions: `(?=...)`, `(?!...)`
+- Lookbehind assertions: `(?<=...)`, `(?<!...)`
+- Named capture groups: `(?P<name>...)`
+- Inline flags other than `(?i)`: `(?m)`, `(?s)`, `(?-i)`, etc.
+
+These validations prevent PostgreSQL syntax errors and ensure predictable behavior.
 
 ## Code Quality Requirements
 
