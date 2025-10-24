@@ -67,7 +67,8 @@ func wrapConversionError(err error, internalContext string) *ConversionError {
 		}
 	}
 
-	internalDetails := internalContext
+	// Build internal details with context if provided
+	var internalDetails string
 	if internalContext != "" {
 		internalDetails = fmt.Sprintf("%s: %v", internalContext, err)
 	} else {
