@@ -118,6 +118,84 @@ sql, err := cel2sql.Convert(ast,
 - `WithLogger(*slog.Logger)` - Enable structured logging
 - `WithMaxDepth(int)` - Set custom recursion depth limit (default: 100)
 
+## Parameterized Queries
+
+cel2sql supports **parameterized queries** (prepared statements) for improved performance, security, and monitoring.
+
+### Benefits
+
+🚀 **Performance** - PostgreSQL caches query plans for parameterized queries, enabling plan reuse across executions
+🔒 **Security** - Parameters are passed separately from SQL, providing defense-in-depth SQL injection protection
+📊 **Monitoring** - Same query pattern appears in logs/metrics, making analysis easier
+
+### Usage
+
+```go
+// Convert to parameterized SQL
+result, err := cel2sql.ConvertParameterized(ast)
+if err != nil {
+    log.Fatal(err)
+}
+
+fmt.Println(result.SQL)         // "user.age > $1 AND user.name = $2"
+fmt.Println(result.Parameters)  // [18 "John"]
+
+// Execute with database/sql
+rows, err := db.Query(
+    "SELECT * FROM users WHERE " + result.SQL,
+    result.Parameters...,
+)
+```
+
+### What Gets Parameterized?
+
+**Parameterized** (values become placeholders):
+- ✅ String literals: `'John'` → `$1`
+- ✅ Numeric literals: `42`, `3.14` → `$1`, `$2`
+- ✅ Byte literals: `b"data"` → `$1`
+
+**Kept Inline** (for query plan optimization):
+- ❌ `TRUE`, `FALSE` - Boolean constants
+- ❌ `NULL` - Null values
+
+PostgreSQL's query planner optimizes better when it knows boolean and null values at plan time.
+
+### Example Comparison
+
+```go
+celExpr := `user.age > 18 && user.active == true && user.name == "John"`
+ast, _ := env.Compile(celExpr)
+
+// Non-parameterized (inline values)
+sql, _ := cel2sql.Convert(ast)
+// SQL: user.age > 18 AND user.active IS TRUE AND user.name = 'John'
+
+// Parameterized (placeholders + parameters)
+result, _ := cel2sql.ConvertParameterized(ast)
+// SQL: user.age > $1 AND user.active IS TRUE AND user.name = $2
+// Parameters: [18 "John"]
+// Note: TRUE is kept inline for query plan efficiency
+```
+
+### Prepared Statements
+
+For maximum performance with repeated queries, use prepared statements:
+
+```go
+result, _ := cel2sql.ConvertParameterized(ast)
+
+// Prepare once
+stmt, err := db.Prepare("SELECT * FROM users WHERE " + result.SQL)
+defer stmt.Close()
+
+// Execute multiple times with different parameters
+rows1, _ := stmt.Query(25)  // age > 25
+rows2, _ := stmt.Query(30)  // age > 30
+rows3, _ := stmt.Query(35)  // age > 35 (reuses cached plan!)
+```
+
+See the [parameterized example](examples/parameterized/) for a complete working demo with PostgreSQL integration.
+
 ## Common Use Cases
 
 ### 1. User Filters

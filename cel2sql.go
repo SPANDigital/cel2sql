@@ -133,6 +133,13 @@ func WithMaxDepth(maxDepth int) ConvertOption {
 	}
 }
 
+// Result represents the output of a CEL to SQL conversion with parameterized queries.
+// It contains the SQL string with placeholders ($1, $2, etc.) and the corresponding parameter values.
+type Result struct {
+	SQL        string        // The generated SQL WHERE clause with placeholders
+	Parameters []interface{} // Parameter values in order ($1, $2, etc.)
+}
+
 // Convert converts a CEL AST to a PostgreSQL SQL WHERE clause condition.
 // Options can be provided to configure the conversion behavior.
 //
@@ -187,14 +194,89 @@ func Convert(ast *cel.Ast, opts ...ConvertOption) (string, error) {
 	return result, nil
 }
 
+// ConvertParameterized converts a CEL AST to a parameterized PostgreSQL SQL WHERE clause.
+// Returns both the SQL string with placeholders ($1, $2, etc.) and the parameter values.
+// This enables query plan caching and provides additional SQL injection protection.
+//
+// Constants that are parameterized:
+//   - String literals: 'John' → $1
+//   - Numeric literals: 42, 3.14 → $1, $2
+//   - Byte literals: b"data" → $1
+//
+// Constants kept inline (for query plan optimization):
+//   - TRUE, FALSE (boolean constants)
+//   - NULL
+//
+// Example:
+//
+//	result, err := cel2sql.ConvertParameterized(ast,
+//	    cel2sql.WithSchemas(schemas),
+//	    cel2sql.WithContext(ctx))
+//	// result.SQL: "user.age = $1 AND user.name = $2"
+//	// result.Parameters: []interface{}{18, "John"}
+//
+//	// Execute with database/sql
+//	rows, err := db.Query("SELECT * FROM users WHERE "+result.SQL, result.Parameters...)
+func ConvertParameterized(ast *cel.Ast, opts ...ConvertOption) (*Result, error) {
+	start := time.Now()
+
+	options := &convertOptions{
+		logger:   slog.New(slog.DiscardHandler), // Default: no-op logger with zero overhead
+		maxDepth: defaultMaxRecursionDepth,      // Default: 100 recursion depth limit
+	}
+	for _, opt := range opts {
+		opt(options)
+	}
+
+	options.logger.Debug("starting parameterized CEL to SQL conversion")
+
+	checkedExpr, err := cel.AstToCheckedExpr(ast)
+	if err != nil {
+		options.logger.Error("AST to CheckedExpr conversion failed", slog.Any("error", err))
+		return nil, err
+	}
+
+	un := &converter{
+		typeMap:      checkedExpr.TypeMap,
+		schemas:      options.schemas,
+		ctx:          options.ctx,
+		logger:       options.logger,
+		maxDepth:     options.maxDepth,
+		parameterize: true, // Enable parameterization
+	}
+
+	if err := un.visit(checkedExpr.Expr); err != nil {
+		options.logger.Error("conversion failed", slog.Any("error", err))
+		return nil, err
+	}
+
+	sql := un.str.String()
+	duration := time.Since(start)
+
+	options.logger.LogAttrs(context.Background(), slog.LevelDebug,
+		"parameterized conversion completed",
+		slog.String("sql", sql),
+		slog.Int("param_count", len(un.parameters)),
+		slog.Duration("duration", duration),
+	)
+
+	return &Result{
+		SQL:        sql,
+		Parameters: un.parameters,
+	}, nil
+}
+
 type converter struct {
-	str      strings.Builder
-	typeMap  map[int64]*exprpb.Type
-	schemas  map[string]pg.Schema
-	ctx      context.Context
-	logger   *slog.Logger
-	depth    int // Current recursion depth
-	maxDepth int // Maximum allowed recursion depth
+	str          strings.Builder
+	typeMap      map[int64]*exprpb.Type
+	schemas      map[string]pg.Schema
+	ctx          context.Context
+	logger       *slog.Logger
+	depth        int           // Current recursion depth
+	maxDepth     int           // Maximum allowed recursion depth
+	parameterize bool          // Enable parameterized output
+	parameters   []interface{} // Collected parameters for parameterized queries
+	paramCount   int           // Parameter counter for placeholders ($1, $2, etc.)
 }
 
 // checkContext checks if the context has been cancelled or expired.
@@ -1331,39 +1413,73 @@ func (con *converter) visitConst(expr *exprpb.Expr) error {
 	c := expr.GetConstExpr()
 	switch c.ConstantKind.(type) {
 	case *exprpb.Constant_BoolValue:
+		// Always inline TRUE/FALSE for PostgreSQL query plan efficiency
 		if c.GetBoolValue() {
 			con.str.WriteString("TRUE")
 		} else {
 			con.str.WriteString("FALSE")
 		}
-	case *exprpb.Constant_BytesValue:
-		b := c.GetBytesValue()
-		con.str.WriteString(`b"`)
-		con.str.WriteString(bytesToOctets(b))
-		con.str.WriteString(`"`)
-	case *exprpb.Constant_DoubleValue:
-		d := strconv.FormatFloat(c.GetDoubleValue(), 'g', -1, 64)
-		con.str.WriteString(d)
-	case *exprpb.Constant_Int64Value:
-		i := strconv.FormatInt(c.GetInt64Value(), 10)
-		con.str.WriteString(i)
 	case *exprpb.Constant_NullValue:
+		// Always inline NULL for PostgreSQL query plan efficiency
 		con.str.WriteString("NULL")
+	case *exprpb.Constant_Int64Value:
+		if con.parameterize {
+			con.paramCount++
+			con.str.WriteString(fmt.Sprintf("$%d", con.paramCount))
+			con.parameters = append(con.parameters, c.GetInt64Value())
+		} else {
+			i := strconv.FormatInt(c.GetInt64Value(), 10)
+			con.str.WriteString(i)
+		}
+	case *exprpb.Constant_Uint64Value:
+		if con.parameterize {
+			con.paramCount++
+			con.str.WriteString(fmt.Sprintf("$%d", con.paramCount))
+			con.parameters = append(con.parameters, c.GetUint64Value())
+		} else {
+			ui := strconv.FormatUint(c.GetUint64Value(), 10)
+			con.str.WriteString(ui)
+		}
+	case *exprpb.Constant_DoubleValue:
+		if con.parameterize {
+			con.paramCount++
+			con.str.WriteString(fmt.Sprintf("$%d", con.paramCount))
+			con.parameters = append(con.parameters, c.GetDoubleValue())
+		} else {
+			d := strconv.FormatFloat(c.GetDoubleValue(), 'g', -1, 64)
+			con.str.WriteString(d)
+		}
 	case *exprpb.Constant_StringValue:
-		// Use single quotes for PostgreSQL string literals
 		str := c.GetStringValue()
 		// Reject strings containing null bytes
 		if strings.Contains(str, "\x00") {
 			return errors.New("string literals cannot contain null bytes")
 		}
-		// Escape single quotes by doubling them
-		escaped := strings.ReplaceAll(str, "'", "''")
-		con.str.WriteString("'")
-		con.str.WriteString(escaped)
-		con.str.WriteString("'")
-	case *exprpb.Constant_Uint64Value:
-		ui := strconv.FormatUint(c.GetUint64Value(), 10)
-		con.str.WriteString(ui)
+
+		if con.parameterize {
+			con.paramCount++
+			con.str.WriteString(fmt.Sprintf("$%d", con.paramCount))
+			con.parameters = append(con.parameters, str)
+		} else {
+			// Use single quotes for PostgreSQL string literals
+			// Escape single quotes by doubling them
+			escaped := strings.ReplaceAll(str, "'", "''")
+			con.str.WriteString("'")
+			con.str.WriteString(escaped)
+			con.str.WriteString("'")
+		}
+	case *exprpb.Constant_BytesValue:
+		b := c.GetBytesValue()
+
+		if con.parameterize {
+			con.paramCount++
+			con.str.WriteString(fmt.Sprintf("$%d", con.paramCount))
+			con.parameters = append(con.parameters, b)
+		} else {
+			con.str.WriteString(`b"`)
+			con.str.WriteString(bytesToOctets(b))
+			con.str.WriteString(`"`)
+		}
 	default:
 		return newConversionErrorf(errMsgUnsupportedExpression, "constant type: %T", c.ConstantKind)
 	}
