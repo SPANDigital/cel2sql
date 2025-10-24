@@ -19,6 +19,11 @@ import (
 const (
 	typeJSON  = "json"
 	typeJSONB = "jsonb"
+
+	// MaxConnectionStringLength limits connection string length to prevent
+	// resource exhaustion and align with ODBC standard (1024 chars).
+	// Legitimate PostgreSQL connection strings rarely exceed a few hundred characters.
+	MaxConnectionStringLength = 1000
 )
 
 // FieldSchema represents a PostgreSQL field type with name, type, and optional nested schema.
@@ -55,9 +60,17 @@ func NewTypeProvider(schemas map[string]Schema) TypeProvider {
 
 // NewTypeProviderWithConnection creates a new PostgreSQL type provider that can introspect database schemas
 func NewTypeProviderWithConnection(ctx context.Context, connectionString string) (TypeProvider, error) {
+	// Validate connection string length to prevent DoS and align with industry standards
+	if len(connectionString) > MaxConnectionStringLength {
+		return nil, fmt.Errorf("connection string exceeds maximum length of %d characters", MaxConnectionStringLength)
+	}
+
 	pool, err := pgxpool.New(ctx, connectionString)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create connection pool: %w", err)
+		// Security: Don't wrap the error with %w to prevent exposing connection details
+		// (credentials, hostnames, database names) in error messages or logs.
+		// See pgx issues #1271 and #1428, CWE-209, CWE-532.
+		return nil, errors.New("failed to create connection pool")
 	}
 
 	return &typeProvider{
