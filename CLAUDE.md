@@ -386,6 +386,50 @@ field.matches(r"(((((((((((a"))    // Excessive nesting
 - CPU exhaustion from complex patterns
 - Service disruption from malicious regex
 
+#### Resource Exhaustion Protection
+
+cel2sql includes multiple layers of protection against resource exhaustion attacks (CWE-400):
+
+**Recursion Depth Limits:**
+- **Default limit**: 100 levels of expression nesting
+- **Configurable**: Use `WithMaxDepth()` to adjust
+- **Protection**: Prevents stack overflow from deeply nested expressions (CWE-674)
+
+**SQL Output Length Limits:**
+- **Default limit**: 50,000 characters of generated SQL
+- **Configurable**: Use `WithMaxOutputLength()` to adjust
+- **Protection**: Prevents memory exhaustion from extremely large SQL queries
+
+**Comprehension Depth Limits:**
+- **Fixed limit**: 3 levels of nested comprehensions
+- **Protection**: Prevents resource exhaustion from deeply nested UNNEST/subquery operations
+
+**Examples:**
+```go
+// Use default limits (recommended)
+sql, err := cel2sql.Convert(ast)
+
+// Custom recursion depth limit
+sql, err := cel2sql.Convert(ast,
+    cel2sql.WithMaxDepth(150))
+
+// Custom SQL output length limit
+sql, err := cel2sql.Convert(ast,
+    cel2sql.WithMaxOutputLength(100000))
+
+// Combine multiple limits
+sql, err := cel2sql.Convert(ast,
+    cel2sql.WithMaxDepth(75),
+    cel2sql.WithMaxOutputLength(25000),
+    cel2sql.WithContext(ctx))
+```
+
+**Protection Against:**
+- Stack overflow from deeply nested expressions
+- Memory exhaustion from extremely large SQL output
+- CPU/memory exhaustion from deeply nested comprehensions
+- DoS attacks via resource consumption
+
 #### Context Timeouts
 
 Use context timeouts as defense-in-depth:

@@ -43,6 +43,10 @@ const (
 	// maxComprehensionDepth is the maximum nesting depth for CEL comprehensions
 	// to prevent resource exhaustion from deeply nested UNNEST/subquery operations (CWE-400).
 	maxComprehensionDepth = 3
+
+	// defaultMaxSQLOutputLength is the default maximum length of generated SQL output
+	// to prevent resource exhaustion from extremely large SQL queries (CWE-400).
+	defaultMaxSQLOutputLength = 50000
 )
 
 // ConvertOption is a functional option for configuring the Convert function.
@@ -50,10 +54,11 @@ type ConvertOption func(*convertOptions)
 
 // convertOptions holds configuration options for the Convert function.
 type convertOptions struct {
-	schemas  map[string]pg.Schema
-	ctx      context.Context
-	logger   *slog.Logger
-	maxDepth int // Maximum recursion depth (0 = use default)
+	schemas       map[string]pg.Schema
+	ctx           context.Context
+	logger        *slog.Logger
+	maxDepth      int // Maximum recursion depth (0 = use default)
+	maxOutputLen  int // Maximum SQL output length (0 = use default)
 }
 
 // WithSchemas provides schema information for proper JSON/JSONB field handling.
@@ -137,6 +142,26 @@ func WithMaxDepth(maxDepth int) ConvertOption {
 	}
 }
 
+// WithMaxOutputLength sets the maximum length of generated SQL output.
+// If not provided, defaultMaxSQLOutputLength (50000) is used.
+// This protects against resource exhaustion from extremely large SQL queries (CWE-400).
+//
+// Example with custom output length limit:
+//
+//	sql, err := cel2sql.Convert(ast, cel2sql.WithMaxOutputLength(100000))
+//
+// Example with multiple options:
+//
+//	sql, err := cel2sql.Convert(ast,
+//	    cel2sql.WithMaxOutputLength(25000),
+//	    cel2sql.WithMaxDepth(50),
+//	    cel2sql.WithContext(ctx))
+func WithMaxOutputLength(maxLength int) ConvertOption {
+	return func(o *convertOptions) {
+		o.maxOutputLen = maxLength
+	}
+}
+
 // Result represents the output of a CEL to SQL conversion with parameterized queries.
 // It contains the SQL string with placeholders ($1, $2, etc.) and the corresponding parameter values.
 type Result struct {
@@ -158,8 +183,9 @@ func Convert(ast *cel.Ast, opts ...ConvertOption) (string, error) {
 	start := time.Now()
 
 	options := &convertOptions{
-		logger:   slog.New(slog.DiscardHandler), // Default: no-op logger with zero overhead
-		maxDepth: defaultMaxRecursionDepth,      // Default: 100 recursion depth limit
+		logger:       slog.New(slog.DiscardHandler), // Default: no-op logger with zero overhead
+		maxDepth:     defaultMaxRecursionDepth,      // Default: 100 recursion depth limit
+		maxOutputLen: defaultMaxSQLOutputLength,     // Default: 50000 character output limit
 	}
 	for _, opt := range opts {
 		opt(options)
@@ -174,11 +200,12 @@ func Convert(ast *cel.Ast, opts ...ConvertOption) (string, error) {
 	}
 
 	un := &converter{
-		typeMap:  checkedExpr.TypeMap,
-		schemas:  options.schemas,
-		ctx:      options.ctx,
-		logger:   options.logger,
-		maxDepth: options.maxDepth,
+		typeMap:       checkedExpr.TypeMap,
+		schemas:       options.schemas,
+		ctx:           options.ctx,
+		logger:        options.logger,
+		maxDepth:      options.maxDepth,
+		maxOutputLen:  options.maxOutputLen,
 	}
 
 	if err := un.visit(checkedExpr.Expr); err != nil {
@@ -225,8 +252,9 @@ func ConvertParameterized(ast *cel.Ast, opts ...ConvertOption) (*Result, error) 
 	start := time.Now()
 
 	options := &convertOptions{
-		logger:   slog.New(slog.DiscardHandler), // Default: no-op logger with zero overhead
-		maxDepth: defaultMaxRecursionDepth,      // Default: 100 recursion depth limit
+		logger:       slog.New(slog.DiscardHandler), // Default: no-op logger with zero overhead
+		maxDepth:     defaultMaxRecursionDepth,      // Default: 100 recursion depth limit
+		maxOutputLen: defaultMaxSQLOutputLength,     // Default: 50000 character output limit
 	}
 	for _, opt := range opts {
 		opt(options)
@@ -241,12 +269,13 @@ func ConvertParameterized(ast *cel.Ast, opts ...ConvertOption) (*Result, error) 
 	}
 
 	un := &converter{
-		typeMap:      checkedExpr.TypeMap,
-		schemas:      options.schemas,
-		ctx:          options.ctx,
-		logger:       options.logger,
-		maxDepth:     options.maxDepth,
-		parameterize: true, // Enable parameterization
+		typeMap:       checkedExpr.TypeMap,
+		schemas:       options.schemas,
+		ctx:           options.ctx,
+		logger:        options.logger,
+		maxDepth:      options.maxDepth,
+		maxOutputLen:  options.maxOutputLen,
+		parameterize:  true, // Enable parameterization
 	}
 
 	if err := un.visit(checkedExpr.Expr); err != nil {
@@ -278,6 +307,7 @@ type converter struct {
 	logger              *slog.Logger
 	depth               int           // Current recursion depth
 	maxDepth            int           // Maximum allowed recursion depth
+	maxOutputLen        int           // Maximum allowed SQL output length
 	comprehensionDepth  int           // Current comprehension nesting depth
 	parameterize        bool          // Enable parameterized output
 	parameters          []interface{} // Collected parameters for parameterized queries
@@ -311,6 +341,11 @@ func (con *converter) visit(expr *exprpb.Expr) error {
 	// Check for context cancellation at the main recursion entry point
 	if err := con.checkContext(); err != nil {
 		return err
+	}
+
+	// Check SQL output length limit to prevent resource exhaustion (CWE-400)
+	if con.str.Len() > con.maxOutputLen {
+		return fmt.Errorf("generated SQL exceeds maximum output length of %d", con.maxOutputLen)
 	}
 
 	switch expr.ExprKind.(type) {

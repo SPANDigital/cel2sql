@@ -75,6 +75,7 @@ cel2sql includes comprehensive security protections:
 - 🔒 **JSON Field Escaping** - Automatic quote escaping in JSON paths
 - 🚫 **ReDoS Protection** - Validates regex patterns to prevent catastrophic backtracking
 - 🔄 **Recursion Depth Limits** - Prevents stack overflow from deeply nested expressions (default: 100)
+- 📏 **SQL Output Length Limits** - Prevents memory exhaustion from extremely large SQL queries (default: 50,000 chars)
 - ⏱️ **Context Timeouts** - Optional timeout protection for complex expressions
 
 All security features are enabled by default with zero configuration required.
