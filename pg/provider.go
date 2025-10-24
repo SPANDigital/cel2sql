@@ -24,6 +24,10 @@ const (
 	// resource exhaustion and align with ODBC standard (1024 chars).
 	// Legitimate PostgreSQL connection strings rarely exceed a few hundred characters.
 	MaxConnectionStringLength = 1000
+
+	// Error messages (sanitized for end users per CWE-209)
+	errMsgUnknownEnum = "unknown enum value"
+	errMsgUnknownType = "unknown type in schema"
 )
 
 // FieldSchema represents a PostgreSQL field type with name, type, and optional nested schema.
@@ -164,8 +168,10 @@ func (p *typeProvider) GetSchemas() map[string]Schema {
 	return p.schemas
 }
 
-func (p *typeProvider) EnumValue(enumName string) ref.Val {
-	return types.NewErr("unknown enum name '%s'", enumName)
+func (p *typeProvider) EnumValue(_ string) ref.Val {
+	// Don't expose enum names to users - return generic message
+	// Internal details are not needed here since CEL runtime handles this
+	return types.NewErr(errMsgUnknownEnum)
 }
 
 func (p *typeProvider) FindIdent(_ string) (ref.Val, bool) {
@@ -284,8 +290,10 @@ func (p *typeProvider) FindStructFieldType(structType, fieldName string) (*types
 	}, true
 }
 
-func (p *typeProvider) NewValue(structType string, _ map[string]ref.Val) ref.Val {
-	return types.NewErr("unknown type '%s'", structType)
+func (p *typeProvider) NewValue(_ string, _ map[string]ref.Val) ref.Val {
+	// Don't expose type names to users - return generic message
+	// Internal details are not needed here since CEL runtime handles this
+	return types.NewErr(errMsgUnknownType)
 }
 
 var _ types.Provider = new(typeProvider)

@@ -53,7 +53,7 @@ func (con *converter) callTimestampOperation(fun string, lhs *exprpb.Expr, rhs *
 		timestamp, duration = rhs, lhs
 		timestampParen, durationParen = rhsParen, lhsParen
 	default:
-		return fmt.Errorf("timestamp operation requires at least one timestamp-related operand, got lhs type %v and rhs type %v", lhsType, rhsType)
+		return newConversionError(errMsgInvalidTimestampOp, "timestamp operation requires at least one timestamp operand")
 	}
 
 	// PostgreSQL uses simple + and - operators for date arithmetic
@@ -64,7 +64,7 @@ func (con *converter) callTimestampOperation(fun string, lhs *exprpb.Expr, rhs *
 	case operators.Subtract:
 		sqlOp = "-"
 	default:
-		return fmt.Errorf("unsupported operation (%s)", fun)
+		return newConversionError(errMsgInvalidTimestampOp, "unsupported timestamp operation")
 	}
 
 	if err := con.visitMaybeNested(timestamp, timestampParen); err != nil {
@@ -92,10 +92,10 @@ func (con *converter) callDuration(_ *exprpb.Expr, args []*exprpb.Expr) error {
 		case *exprpb.Constant_StringValue:
 			durationString = arg.GetConstExpr().GetStringValue()
 		default:
-			return fmt.Errorf("unsupported constant kind %t", arg.GetConstExpr().ConstantKind)
+			return newConversionError(errMsgInvalidDuration, "unsupported constant type for duration")
 		}
 	default:
-		return fmt.Errorf("unsupported kind %t", arg.ExprKind)
+		return newConversionError(errMsgInvalidDuration, "unsupported expression type for duration")
 	}
 	d, err := time.ParseDuration(durationString)
 	if err != nil {

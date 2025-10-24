@@ -3,7 +3,6 @@ package cel2sql
 import (
 	"context"
 	"errors"
-	"fmt"
 	"log/slog"
 
 	"github.com/google/cel-go/common/operators"
@@ -183,7 +182,7 @@ func (con *converter) analyzeComprehensionPattern(comp *exprpb.Expr_Comprehensio
 
 	// If we can't identify the pattern, mark as unknown for now
 	info.Type = ComprehensionUnknown
-	return info, fmt.Errorf("unrecognized comprehension pattern for %s", comp.String())
+	return info, newConversionError(errMsgUnsupportedComprehension, "unrecognized comprehension pattern")
 }
 
 // Helper functions to identify patterns in comprehension expressions
