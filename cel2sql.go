@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"math"
 	"regexp"
 	"strconv"
 	"strings"
@@ -1027,7 +1028,14 @@ func (con *converter) visitCallListIndex(expr *exprpb.Expr) error {
 	index := args[1]
 	// PostgreSQL arrays are 1-indexed, CEL is 0-indexed, so add 1
 	if constExpr := index.GetConstExpr(); constExpr != nil {
-		con.str.WriteString(strconv.FormatInt(constExpr.GetInt64Value()+1, 10))
+		idx := constExpr.GetInt64Value()
+		if idx == math.MaxInt64 {
+			return errors.New("array index overflow: cannot convert math.MaxInt64 to 1-based indexing")
+		}
+		if idx < 0 {
+			return fmt.Errorf("invalid negative array index: %d", idx)
+		}
+		con.str.WriteString(strconv.FormatInt(idx+1, 10))
 	} else {
 		if err := con.visit(index); err != nil {
 			return err

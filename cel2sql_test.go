@@ -223,6 +223,18 @@ func TestConvert(t *testing.T) {
 			wantErr: false,
 		},
 		{
+			name:    "array_index_overflow",
+			args:    args{source: `string_list[9223372036854775807]`}, // math.MaxInt64
+			want:    "",
+			wantErr: true,
+		},
+		{
+			name:    "array_index_negative",
+			args:    args{source: `string_list[-1]`},
+			want:    "",
+			wantErr: true,
+		},
+		{
 			name:    "map",
 			args:    args{source: `{"one": 1, "two": 2, "three": 3}["one"] == 1`},
 			want:    "ROW(1, 2, 3).one = 1",
