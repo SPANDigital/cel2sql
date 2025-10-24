@@ -115,7 +115,7 @@ func TestConstEdgeCases(t *testing.T) {
 		{
 			name:        "bytes_value",
 			expression:  `b"hello" != b""`,
-			expectedSQL: `b"\150\145\154\154\157" != b""`,
+			expectedSQL: `'\x68656c6c6f' != '\x'`,
 			description: "Bytes constant",
 		},
 		{

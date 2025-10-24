@@ -287,7 +287,7 @@ func TestBinaryOperatorAdditionalCases(t *testing.T) {
 		{
 			name:        "bytes_concatenation",
 			expression:  `b"hello" + b" world" != b""`,
-			expectedSQL: `b"\150\145\154\154\157" || b"\040\167\157\162\154\144" != b""`,
+			expectedSQL: `'\x68656c6c6f' || '\x20776f726c64' != '\x'`,
 			description: "Bytes concatenation with || operator",
 		},
 		{

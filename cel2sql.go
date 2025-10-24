@@ -3,6 +3,7 @@ package cel2sql
 
 import (
 	"context"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -1534,9 +1535,9 @@ func (con *converter) visitConst(expr *exprpb.Expr) error {
 			con.str.WriteString(fmt.Sprintf("$%d", con.paramCount))
 			con.parameters = append(con.parameters, b)
 		} else {
-			con.str.WriteString(`b"`)
-			con.str.WriteString(bytesToOctets(b))
-			con.str.WriteString(`"`)
+			con.str.WriteString("'\\x")
+			con.str.WriteString(hex.EncodeToString(b))
+			con.str.WriteString("'")
 		}
 	default:
 		return newConversionErrorf(errMsgUnsupportedExpression, "constant type: %T", c.ConstantKind)

@@ -148,18 +148,6 @@ func extractFieldName(node *exprpb.Expr) (string, error) {
 	return fieldName, nil
 }
 
-// Byte conversion utilities
-
-// bytesToOctets converts byte sequences to a string using a three digit octal encoded value
-// per byte.
-func bytesToOctets(byteVal []byte) string {
-	var b strings.Builder
-	for _, c := range byteVal {
-		_, _ = fmt.Fprintf(&b, "\\%03o", c)
-	}
-	return b.String()
-}
-
 // Numeric comparison utilities
 
 // isNumericComparison checks if an operator is a numeric comparison
