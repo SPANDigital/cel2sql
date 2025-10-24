@@ -35,6 +35,10 @@ const (
 	// maxRegexNestingDepth is the maximum nesting depth for groups and quantifiers
 	// to prevent catastrophic backtracking.
 	maxRegexNestingDepth = 10
+
+	// defaultMaxRecursionDepth is the default maximum recursion depth for visit()
+	// to prevent stack overflow from deeply nested expressions (CWE-674: Uncontrolled Recursion).
+	defaultMaxRecursionDepth = 100
 )
 
 // ConvertOption is a functional option for configuring the Convert function.
@@ -42,9 +46,10 @@ type ConvertOption func(*convertOptions)
 
 // convertOptions holds configuration options for the Convert function.
 type convertOptions struct {
-	schemas map[string]pg.Schema
-	ctx     context.Context
-	logger  *slog.Logger
+	schemas  map[string]pg.Schema
+	ctx      context.Context
+	logger   *slog.Logger
+	maxDepth int // Maximum recursion depth (0 = use default)
 }
 
 // WithSchemas provides schema information for proper JSON/JSONB field handling.
@@ -108,6 +113,26 @@ func WithLogger(logger *slog.Logger) ConvertOption {
 	}
 }
 
+// WithMaxDepth sets the maximum recursion depth for expression traversal.
+// If not provided, defaultMaxRecursionDepth (100) is used.
+// This protects against stack overflow from deeply nested expressions (CWE-674).
+//
+// Example with custom depth:
+//
+//	sql, err := cel2sql.Convert(ast, cel2sql.WithMaxDepth(150))
+//
+// Example with multiple options:
+//
+//	sql, err := cel2sql.Convert(ast,
+//	    cel2sql.WithMaxDepth(50),
+//	    cel2sql.WithContext(ctx),
+//	    cel2sql.WithSchemas(schemas))
+func WithMaxDepth(maxDepth int) ConvertOption {
+	return func(o *convertOptions) {
+		o.maxDepth = maxDepth
+	}
+}
+
 // Convert converts a CEL AST to a PostgreSQL SQL WHERE clause condition.
 // Options can be provided to configure the conversion behavior.
 //
@@ -122,7 +147,8 @@ func Convert(ast *cel.Ast, opts ...ConvertOption) (string, error) {
 	start := time.Now()
 
 	options := &convertOptions{
-		logger: slog.New(slog.DiscardHandler), // Default: no-op logger with zero overhead
+		logger:   slog.New(slog.DiscardHandler), // Default: no-op logger with zero overhead
+		maxDepth: defaultMaxRecursionDepth,      // Default: 100 recursion depth limit
 	}
 	for _, opt := range opts {
 		opt(options)
@@ -137,10 +163,11 @@ func Convert(ast *cel.Ast, opts ...ConvertOption) (string, error) {
 	}
 
 	un := &converter{
-		typeMap: checkedExpr.TypeMap,
-		schemas: options.schemas,
-		ctx:     options.ctx,
-		logger:  options.logger,
+		typeMap:  checkedExpr.TypeMap,
+		schemas:  options.schemas,
+		ctx:      options.ctx,
+		logger:   options.logger,
+		maxDepth: options.maxDepth,
 	}
 
 	if err := un.visit(checkedExpr.Expr); err != nil {
@@ -161,11 +188,13 @@ func Convert(ast *cel.Ast, opts ...ConvertOption) (string, error) {
 }
 
 type converter struct {
-	str     strings.Builder
-	typeMap map[int64]*exprpb.Type
-	schemas map[string]pg.Schema
-	ctx     context.Context
-	logger  *slog.Logger
+	str      strings.Builder
+	typeMap  map[int64]*exprpb.Type
+	schemas  map[string]pg.Schema
+	ctx      context.Context
+	logger   *slog.Logger
+	depth    int // Current recursion depth
+	maxDepth int // Maximum allowed recursion depth
 }
 
 // checkContext checks if the context has been cancelled or expired.
@@ -182,6 +211,16 @@ func (con *converter) checkContext() error {
 }
 
 func (con *converter) visit(expr *exprpb.Expr) error {
+	// Track recursion depth
+	con.depth++
+	defer func() { con.depth-- }()
+
+	// Check depth limit before context check (fail fast)
+	// Allow depths up to and including maxDepth
+	if con.depth > con.maxDepth {
+		return fmt.Errorf("expression exceeds maximum recursion depth of %d", con.maxDepth)
+	}
+
 	// Check for context cancellation at the main recursion entry point
 	if err := con.checkContext(); err != nil {
 		return err

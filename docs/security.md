@@ -8,6 +8,7 @@ cel2sql includes comprehensive security protections against common attack vector
 - [Field Name Validation](#field-name-validation)
 - [JSON Field Escaping](#json-field-escaping)
 - [ReDoS Protection](#redos-protection)
+- [Recursion Depth Limits](#recursion-depth-limits)
 - [Context Timeouts](#context-timeouts)
 - [Best Practices](#best-practices)
 - [Security Checklist](#security-checklist)
@@ -21,6 +22,7 @@ cel2sql protects against:
 | SQL Injection (field names) | Field name validation | ✅ Automatic |
 | SQL Injection (JSON fields) | Quote escaping | ✅ Automatic |
 | ReDoS (Regex DoS) | Pattern validation | ✅ Automatic |
+| Stack overflow (deep nesting) | Recursion depth limits | ✅ Automatic |
 | Resource exhaustion | Context timeouts | ⚙️ Optional |
 | Information disclosure | Schema minimization | 📋 Manual |
 
@@ -357,6 +359,120 @@ ast, _ = env.Compile(`field.matches(r"((((((((((a))))))))))")`)
 sql, err = cel2sql.Convert(ast)
 // err: "invalid regex pattern: pattern exceeds nesting depth limit of 10"
 ```
+
+## Recursion Depth Limits
+
+### What It Protects Against
+
+Deeply nested CEL expressions that could cause stack overflow or excessive resource consumption:
+
+```go
+// ❌ Attack: Deeply nested arithmetic (1000+ levels)
+((((((((((x + 1) + 1) + 1) + 1) + 1) + 1)...)))))
+
+// ❌ Attack: Nested boolean conditions
+(((((x > 0 && x < 100) && (x > 0 && x < 100))...)))))
+
+// ❌ Attack: Nested ternary operators
+(((x > 0 ? (x > 0 ? (x > 0 ? 1 : 0) : 0) : 0)...)))
+```
+
+### How It Works
+
+cel2sql tracks recursion depth during CEL expression tree traversal:
+
+1. **Depth Counter**: Increments on each `visit()` call to AST nodes
+2. **Automatic Limit**: Default maximum depth of **100** (configurable)
+3. **Fast Rejection**: Expressions exceeding limit are rejected immediately
+4. **CWE-674 Protection**: Guards against uncontrolled recursion
+
+**Implementation:**
+
+```go
+func (con *converter) visit(expr *exprpb.Expr) error {
+    con.depth++
+    defer func() { con.depth-- }()
+
+    if con.depth > con.maxDepth {
+        return fmt.Errorf("expression exceeds maximum recursion depth of %d", con.maxDepth)
+    }
+    // ... convert expression
+}
+```
+
+### Configuration
+
+The default limit of 100 provides strong protection while supporting realistic expressions:
+
+```go
+// Default: Automatic depth limit of 100
+sql, err := cel2sql.Convert(ast)
+
+// Custom: Adjust depth limit for specific use cases
+sql, err := cel2sql.Convert(ast,
+    cel2sql.WithMaxDepth(200))  // Allow deeper nesting
+
+// Conservative: Lower limit for untrusted input
+sql, err := cel2sql.Convert(ast,
+    cel2sql.WithMaxDepth(50))   // Stricter protection
+```
+
+### What Counts Toward Depth
+
+Every AST node visit increments the depth counter:
+
+| Expression Type | Approximate Depth per Level |
+|----------------|----------------------------|
+| Simple arithmetic `x + 1` | 3-5 nodes |
+| Nested calls `((x + 1) + 1)` | 2-3x per nesting |
+| Boolean logic `a && b` | 3-4 nodes |
+| Ternary `a ? b : c` | 4-6 nodes |
+| Function calls `int(x)` | 2-3 nodes |
+| Comprehensions `list.all(x, ...)` | 5-10 nodes |
+
+**Example:** A CEL expression like `((x + 1) + 1)` nested 50 times will consume approximately 150-200 depth units.
+
+### Defense in Depth
+
+Combine depth limits with other protections:
+
+```go
+ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+defer cancel()
+
+sql, err := cel2sql.Convert(ast,
+    cel2sql.WithContext(ctx),        // Timeout protection
+    cel2sql.WithMaxDepth(100),       // Recursion protection
+    cel2sql.WithSchemas(schemas))    // Type safety
+
+if err != nil {
+    // Handle: depth exceeded, timeout, or validation error
+}
+```
+
+### Error Messages
+
+Clear error messages indicate depth limit violations:
+
+```go
+_, err := cel2sql.Convert(deeplyNestedAST)
+// err: "expression exceeds maximum recursion depth of 100"
+
+_, err := cel2sql.Convert(deeplyNestedAST, cel2sql.WithMaxDepth(50))
+// err: "expression exceeds maximum recursion depth of 50"
+```
+
+### Best Practices
+
+1. **Use Default Limits**: The default depth of 100 handles realistic expressions
+2. **Validate User Input**: Reject obviously malicious patterns before CEL compilation
+3. **Monitor Depth Errors**: Log depth limit violations to detect attack patterns
+4. **Combine Protections**: Use depth limits WITH context timeouts
+5. **Test Your Limits**: Verify legitimate expressions work within configured limits
+
+### CWE Reference
+
+- **CWE-674**: Uncontrolled Recursion - Mitigated by automatic depth tracking
 
 ## Context Timeouts
 

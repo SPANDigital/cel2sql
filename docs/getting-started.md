@@ -444,7 +444,34 @@ field.matches(r"(a+)+b")  // Nested quantifiers
 - Maximum 20 capture groups
 - Maximum 10 nesting levels
 
-### 4. Use Context Timeouts
+### 4. Recursion Depth Limits
+
+Expressions are automatically protected from excessive nesting:
+
+```go
+// ✅ Normal expressions work fine
+(product.price > 100) && (product.stock > 0)
+
+// ❌ Excessive nesting blocked (default limit: 100 depth)
+((((((((((x + 1) + 1) + 1)...)))))))) // 150+ levels deep
+```
+
+**Automatic protection:**
+- Default maximum depth: 100 (sufficient for realistic expressions)
+- Prevents stack overflow from deeply nested expressions
+- Configurable limit with `WithMaxDepth()` option
+- Protects against CWE-674 (Uncontrolled Recursion)
+
+**Custom limits:**
+```go
+// Allow deeper nesting for complex expressions
+sql, err := cel2sql.Convert(ast, cel2sql.WithMaxDepth(200))
+
+// Stricter limit for untrusted input
+sql, err := cel2sql.Convert(ast, cel2sql.WithMaxDepth(50))
+```
+
+### 5. Use Context Timeouts
 
 Add defense-in-depth with context timeouts:
 
@@ -458,7 +485,7 @@ sqlWhere, err := cel2sql.Convert(ast,
     cel2sql.WithSchemas(schemas))
 ```
 
-### 5. Additional Best Practices
+### 6. Additional Best Practices
 
 - **Validate user input** before passing to CEL
 - **Use prepared statements** when executing generated SQL

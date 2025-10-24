@@ -74,6 +74,7 @@ cel2sql includes comprehensive security protections:
 - 🛡️ **Field Name Validation** - Prevents SQL injection via field names
 - 🔒 **JSON Field Escaping** - Automatic quote escaping in JSON paths
 - 🚫 **ReDoS Protection** - Validates regex patterns to prevent catastrophic backtracking
+- 🔄 **Recursion Depth Limits** - Prevents stack overflow from deeply nested expressions (default: 100)
 - ⏱️ **Context Timeouts** - Optional timeout protection for complex expressions
 
 All security features are enabled by default with zero configuration required.
@@ -115,6 +116,7 @@ sql, err := cel2sql.Convert(ast,
 - `WithSchemas(map[string]pg.Schema)` - Provide table schemas for JSON detection
 - `WithContext(context.Context)` - Enable cancellation and timeouts
 - `WithLogger(*slog.Logger)` - Enable structured logging
+- `WithMaxDepth(int)` - Set custom recursion depth limit (default: 100)
 
 ## Common Use Cases
 
