@@ -77,14 +77,35 @@ go test -v -run TestFunctionName ./...
 
 The library uses CEL's protobuf-based type system (`exprpb.Type`, `exprpb.Expr`). PostgreSQL types are mapped to CEL types through `pg.TypeProvider`:
 
-- `text` → `decls.String`
-- `bigint` / `integer` → `decls.Int`
-- `boolean` → `decls.Bool`
-- `double precision` → `decls.Double`
-- `timestamp with time zone` → `decls.Timestamp`
-- `json` / `jsonb` → `decls.String` (with automatic JSON path support)
+**Text and String Types:**
+- `text`, `varchar`, `char`, `character varying`, `character` → `decls.String`
+- `xml` → `decls.String`
+- `inet`, `cidr` → `decls.String` (network addresses)
+- `macaddr`, `macaddr8` → `decls.String` (MAC addresses)
+- `tsvector`, `tsquery` → `decls.String` (full-text search)
+
+**Numeric Types:**
+- `bigint`, `integer`, `int`, `int4`, `int8`, `smallint`, `int2` → `decls.Int`
+- `double precision`, `real`, `float4`, `float8`, `numeric`, `decimal` → `decls.Double`
+- `money` → `decls.Double`
+
+**Boolean and Binary:**
+- `boolean`, `bool` → `decls.Bool`
+- `bytea` → `decls.Bytes`
+- `uuid` → `decls.Bytes`
+
+**Temporal Types:**
+- `timestamp`, `timestamptz`, `timestamp with time zone`, `timestamp without time zone` → `decls.Timestamp`
+- `date` → `sqltypes.Date`
+- `time`, `timetz`, `time with time zone`, `time without time zone` → `sqltypes.Time`
+
+**Structured Types:**
+- `json`, `jsonb` → `decls.Dyn` (with automatic JSON path support)
 - Arrays: Set `Repeated: true` in schema
 - Composite types: Use nested `Schema` fields
+
+**Unsupported Types:**
+Unknown PostgreSQL types (e.g., `point`, `polygon`, `box`, custom enums) will cause `FindStructFieldType()` to return `found=false`. This prevents silent type mismatches. Add explicit support for custom types or use composite type definitions.
 
 ### JSON/JSONB Support
 

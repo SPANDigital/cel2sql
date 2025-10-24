@@ -236,3 +236,110 @@ func Test_typeProvider_FindStructFieldType(t *testing.T) {
 		})
 	}
 }
+
+func Test_typeProvider_PostgreSQLTypes(t *testing.T) {
+	tests := []struct {
+		name      string
+		pgType    string
+		repeated  bool
+		wantType  *types.Type
+		wantFound bool
+	}{
+		{
+			name:      "uuid",
+			pgType:    "uuid",
+			wantType:  types.BytesType,
+			wantFound: true,
+		},
+		{
+			name:      "uuid array",
+			pgType:    "uuid",
+			repeated:  true,
+			wantType:  types.NewListType(types.BytesType),
+			wantFound: true,
+		},
+		{
+			name:      "inet",
+			pgType:    "inet",
+			wantType:  types.StringType,
+			wantFound: true,
+		},
+		{
+			name:      "cidr",
+			pgType:    "cidr",
+			wantType:  types.StringType,
+			wantFound: true,
+		},
+		{
+			name:      "macaddr",
+			pgType:    "macaddr",
+			wantType:  types.StringType,
+			wantFound: true,
+		},
+		{
+			name:      "macaddr8",
+			pgType:    "macaddr8",
+			wantType:  types.StringType,
+			wantFound: true,
+		},
+		{
+			name:      "xml",
+			pgType:    "xml",
+			wantType:  types.StringType,
+			wantFound: true,
+		},
+		{
+			name:      "money",
+			pgType:    "money",
+			wantType:  types.DoubleType,
+			wantFound: true,
+		},
+		{
+			name:      "tsvector",
+			pgType:    "tsvector",
+			wantType:  types.StringType,
+			wantFound: true,
+		},
+		{
+			name:      "tsquery",
+			pgType:    "tsquery",
+			wantType:  types.StringType,
+			wantFound: true,
+		},
+		{
+			name:      "unknown_type returns false",
+			pgType:    "unknown_custom_type",
+			wantFound: false,
+		},
+		{
+			name:      "point returns false",
+			pgType:    "point",
+			wantFound: false,
+		},
+		{
+			name:      "polygon returns false",
+			pgType:    "polygon",
+			wantFound: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			schema := pg.Schema{
+				{Name: "test_field", Type: tt.pgType, Repeated: tt.repeated},
+			}
+			typeProvider := pg.NewTypeProvider(map[string]pg.Schema{
+				"test_table": schema,
+			})
+
+			got, gotFound := typeProvider.FindStructFieldType("test_table", "test_field")
+			assert.Equal(t, tt.wantFound, gotFound)
+			if tt.wantFound {
+				assert.NotNil(t, got)
+				assert.Equal(t, tt.wantType, got.Type)
+			} else {
+				assert.Nil(t, got)
+			}
+		})
+	}
+}

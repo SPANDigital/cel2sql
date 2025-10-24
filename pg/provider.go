@@ -265,13 +265,33 @@ func (p *typeProvider) FindStructFieldType(structType, fieldName string) (*types
 	case "json", "jsonb":
 		// JSON and JSONB types are treated as dynamic objects in CEL
 		exprType = decls.Dyn
+	case "uuid":
+		// UUID is represented as bytes for proper type handling
+		exprType = decls.Bytes
+	case "inet", "cidr":
+		// Network address types are represented as strings
+		// Note: Limited CEL operations available (equality, comparison)
+		exprType = decls.String
+	case "macaddr", "macaddr8":
+		// MAC address types are represented as strings
+		exprType = decls.String
+	case "xml":
+		// XML data is represented as string
+		exprType = decls.String
+	case "money":
+		// Money type is represented as double for numeric operations
+		exprType = decls.Double
+	case "tsvector", "tsquery":
+		// Full-text search types are represented as strings
+		exprType = decls.String
 	default:
 		// Handle composite types
 		if strings.Contains(field.Type, "composite") || len(field.Schema) > 0 {
 			exprType = decls.NewObjectType(strings.Join([]string{structType, fieldName}, "."))
 		} else {
-			// Default to string for unknown types
-			exprType = decls.String
+			// Unknown type - return not found instead of defaulting to string
+			// This prevents silent type mismatches and incorrect SQL generation
+			return nil, false
 		}
 	}
 
