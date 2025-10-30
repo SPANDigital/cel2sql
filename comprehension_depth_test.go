@@ -272,10 +272,10 @@ func TestComprehensionDepthWithMixedExpressions(t *testing.T) {
 
 func TestComprehensionDepthBoundaryConditions(t *testing.T) {
 	tests := []struct {
-		name        string
-		expression  string
-		depth       int
-		shouldErr   bool
+		name       string
+		expression string
+		depth      int
+		shouldErr  bool
 	}{
 		{
 			name:       "depth_1",

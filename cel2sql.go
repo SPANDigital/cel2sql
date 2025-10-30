@@ -56,11 +56,11 @@ type ConvertOption func(*convertOptions)
 
 // convertOptions holds configuration options for the Convert function.
 type convertOptions struct {
-	schemas       map[string]pg.Schema
-	ctx           context.Context
-	logger        *slog.Logger
-	maxDepth      int // Maximum recursion depth (0 = use default)
-	maxOutputLen  int // Maximum SQL output length (0 = use default)
+	schemas      map[string]pg.Schema
+	ctx          context.Context
+	logger       *slog.Logger
+	maxDepth     int // Maximum recursion depth (0 = use default)
+	maxOutputLen int // Maximum SQL output length (0 = use default)
 }
 
 // WithSchemas provides schema information for proper JSON/JSONB field handling.
@@ -202,12 +202,12 @@ func Convert(ast *cel.Ast, opts ...ConvertOption) (string, error) {
 	}
 
 	un := &converter{
-		typeMap:       checkedExpr.TypeMap,
-		schemas:       options.schemas,
-		ctx:           options.ctx,
-		logger:        options.logger,
-		maxDepth:      options.maxDepth,
-		maxOutputLen:  options.maxOutputLen,
+		typeMap:      checkedExpr.TypeMap,
+		schemas:      options.schemas,
+		ctx:          options.ctx,
+		logger:       options.logger,
+		maxDepth:     options.maxDepth,
+		maxOutputLen: options.maxOutputLen,
 	}
 
 	if err := un.visit(checkedExpr.Expr); err != nil {
@@ -271,13 +271,13 @@ func ConvertParameterized(ast *cel.Ast, opts ...ConvertOption) (*Result, error) 
 	}
 
 	un := &converter{
-		typeMap:       checkedExpr.TypeMap,
-		schemas:       options.schemas,
-		ctx:           options.ctx,
-		logger:        options.logger,
-		maxDepth:      options.maxDepth,
-		maxOutputLen:  options.maxOutputLen,
-		parameterize:  true, // Enable parameterization
+		typeMap:      checkedExpr.TypeMap,
+		schemas:      options.schemas,
+		ctx:          options.ctx,
+		logger:       options.logger,
+		maxDepth:     options.maxDepth,
+		maxOutputLen: options.maxOutputLen,
+		parameterize: true, // Enable parameterization
 	}
 
 	if err := un.visit(checkedExpr.Expr); err != nil {
@@ -302,18 +302,18 @@ func ConvertParameterized(ast *cel.Ast, opts ...ConvertOption) (*Result, error) 
 }
 
 type converter struct {
-	str                 strings.Builder
-	typeMap             map[int64]*exprpb.Type
-	schemas             map[string]pg.Schema
-	ctx                 context.Context
-	logger              *slog.Logger
-	depth               int           // Current recursion depth
-	maxDepth            int           // Maximum allowed recursion depth
-	maxOutputLen        int           // Maximum allowed SQL output length
-	comprehensionDepth  int           // Current comprehension nesting depth
-	parameterize        bool          // Enable parameterized output
-	parameters          []interface{} // Collected parameters for parameterized queries
-	paramCount          int           // Parameter counter for placeholders ($1, $2, etc.)
+	str                strings.Builder
+	typeMap            map[int64]*exprpb.Type
+	schemas            map[string]pg.Schema
+	ctx                context.Context
+	logger             *slog.Logger
+	depth              int           // Current recursion depth
+	maxDepth           int           // Maximum allowed recursion depth
+	maxOutputLen       int           // Maximum allowed SQL output length
+	comprehensionDepth int           // Current comprehension nesting depth
+	parameterize       bool          // Enable parameterized output
+	parameters         []interface{} // Collected parameters for parameterized queries
+	paramCount         int           // Parameter counter for placeholders ($1, $2, etc.)
 }
 
 // checkContext checks if the context has been cancelled or expired.
@@ -1152,14 +1152,14 @@ func (con *converter) visitAllComprehension(expr *exprpb.Expr, info *Comprehensi
 	// Add null checks for JSON arrays
 	if isJSONArray {
 		if err := con.visit(iterRange); err != nil {
-			return wrapConversionError(err,"visiting iter range for null check")
+			return wrapConversionError(err, "visiting iter range for null check")
 		}
 		con.str.WriteString(" IS NOT NULL AND ")
 		typeofFunc := con.getJSONTypeofFunction(iterRange)
 		con.str.WriteString(typeofFunc)
 		con.str.WriteString("(")
 		if err := con.visit(iterRange); err != nil {
-			return wrapConversionError(err,"visiting iter range for type check")
+			return wrapConversionError(err, "visiting iter range for type check")
 		}
 		con.str.WriteString(") = 'array'")
 
@@ -1171,7 +1171,7 @@ func (con *converter) visitAllComprehension(expr *exprpb.Expr, info *Comprehensi
 	if info.Predicate != nil {
 		con.str.WriteString("NOT (")
 		if err := con.visit(info.Predicate); err != nil {
-			return wrapConversionError(err,"visiting predicate in ALL comprehension")
+			return wrapConversionError(err, "visiting predicate in ALL comprehension")
 		}
 		con.str.WriteString(")")
 	}
@@ -1200,13 +1200,13 @@ func (con *converter) visitExistsComprehension(expr *exprpb.Expr, info *Comprehe
 		con.str.WriteString(jsonFunc)
 		con.str.WriteString("(")
 		if err := con.visit(iterRange); err != nil {
-			return wrapConversionError(err,"visiting iter range in EXISTS comprehension")
+			return wrapConversionError(err, "visiting iter range in EXISTS comprehension")
 		}
 		con.str.WriteString(")")
 	} else {
 		con.str.WriteString("UNNEST(")
 		if err := con.visit(iterRange); err != nil {
-			return wrapConversionError(err,"visiting iter range in EXISTS comprehension")
+			return wrapConversionError(err, "visiting iter range in EXISTS comprehension")
 		}
 		con.str.WriteString(")")
 	}
@@ -1219,14 +1219,14 @@ func (con *converter) visitExistsComprehension(expr *exprpb.Expr, info *Comprehe
 	// Add null checks for JSON arrays
 	if isJSONArray {
 		if err := con.visit(iterRange); err != nil {
-			return wrapConversionError(err,"visiting iter range for null check")
+			return wrapConversionError(err, "visiting iter range for null check")
 		}
 		con.str.WriteString(" IS NOT NULL AND ")
 		typeofFunc := con.getJSONTypeofFunction(iterRange)
 		con.str.WriteString(typeofFunc)
 		con.str.WriteString("(")
 		if err := con.visit(iterRange); err != nil {
-			return wrapConversionError(err,"visiting iter range for type check")
+			return wrapConversionError(err, "visiting iter range for type check")
 		}
 		con.str.WriteString(") = 'array'")
 
@@ -1237,7 +1237,7 @@ func (con *converter) visitExistsComprehension(expr *exprpb.Expr, info *Comprehe
 
 	if info.Predicate != nil {
 		if err := con.visit(info.Predicate); err != nil {
-			return wrapConversionError(err,"visiting predicate in EXISTS comprehension")
+			return wrapConversionError(err, "visiting predicate in EXISTS comprehension")
 		}
 	}
 
@@ -1265,13 +1265,13 @@ func (con *converter) visitExistsOneComprehension(expr *exprpb.Expr, info *Compr
 		con.str.WriteString(jsonFunc)
 		con.str.WriteString("(")
 		if err := con.visit(iterRange); err != nil {
-			return wrapConversionError(err,"visiting iter range in EXISTS_ONE comprehension")
+			return wrapConversionError(err, "visiting iter range in EXISTS_ONE comprehension")
 		}
 		con.str.WriteString(")")
 	} else {
 		con.str.WriteString("UNNEST(")
 		if err := con.visit(iterRange); err != nil {
-			return wrapConversionError(err,"visiting iter range in EXISTS_ONE comprehension")
+			return wrapConversionError(err, "visiting iter range in EXISTS_ONE comprehension")
 		}
 		con.str.WriteString(")")
 	}
@@ -1284,14 +1284,14 @@ func (con *converter) visitExistsOneComprehension(expr *exprpb.Expr, info *Compr
 	// Add null checks for JSON arrays
 	if isJSONArray {
 		if err := con.visit(iterRange); err != nil {
-			return wrapConversionError(err,"visiting iter range for null check")
+			return wrapConversionError(err, "visiting iter range for null check")
 		}
 		con.str.WriteString(" IS NOT NULL AND ")
 		typeofFunc := con.getJSONTypeofFunction(iterRange)
 		con.str.WriteString(typeofFunc)
 		con.str.WriteString("(")
 		if err := con.visit(iterRange); err != nil {
-			return wrapConversionError(err,"visiting iter range for type check")
+			return wrapConversionError(err, "visiting iter range for type check")
 		}
 		con.str.WriteString(") = 'array'")
 
@@ -1302,7 +1302,7 @@ func (con *converter) visitExistsOneComprehension(expr *exprpb.Expr, info *Compr
 
 	if info.Predicate != nil {
 		if err := con.visit(info.Predicate); err != nil {
-			return wrapConversionError(err,"visiting predicate in EXISTS_ONE comprehension")
+			return wrapConversionError(err, "visiting predicate in EXISTS_ONE comprehension")
 		}
 	}
 
@@ -1328,7 +1328,7 @@ func (con *converter) visitMapComprehension(expr *exprpb.Expr, info *Comprehensi
 	// Visit the transform expression
 	if info.Transform != nil {
 		if err := con.visit(info.Transform); err != nil {
-			return wrapConversionError(err,"visiting transform in MAP comprehension")
+			return wrapConversionError(err, "visiting transform in MAP comprehension")
 		}
 	} else {
 		// If no transform, just return the variable itself
@@ -1342,13 +1342,13 @@ func (con *converter) visitMapComprehension(expr *exprpb.Expr, info *Comprehensi
 		con.str.WriteString(jsonFunc)
 		con.str.WriteString("(")
 		if err := con.visit(iterRange); err != nil {
-			return wrapConversionError(err,"visiting iter range in MAP comprehension")
+			return wrapConversionError(err, "visiting iter range in MAP comprehension")
 		}
 		con.str.WriteString(")")
 	} else {
 		con.str.WriteString("UNNEST(")
 		if err := con.visit(iterRange); err != nil {
-			return wrapConversionError(err,"visiting iter range in MAP comprehension")
+			return wrapConversionError(err, "visiting iter range in MAP comprehension")
 		}
 		con.str.WriteString(")")
 	}
@@ -1360,7 +1360,7 @@ func (con *converter) visitMapComprehension(expr *exprpb.Expr, info *Comprehensi
 	if info.Filter != nil {
 		con.str.WriteString(" WHERE ")
 		if err := con.visit(info.Filter); err != nil {
-			return wrapConversionError(err,"visiting filter in MAP comprehension")
+			return wrapConversionError(err, "visiting filter in MAP comprehension")
 		}
 	}
 
@@ -1390,13 +1390,13 @@ func (con *converter) visitFilterComprehension(expr *exprpb.Expr, info *Comprehe
 		con.str.WriteString(jsonFunc)
 		con.str.WriteString("(")
 		if err := con.visit(iterRange); err != nil {
-			return wrapConversionError(err,"visiting iter range in FILTER comprehension")
+			return wrapConversionError(err, "visiting iter range in FILTER comprehension")
 		}
 		con.str.WriteString(")")
 	} else {
 		con.str.WriteString("UNNEST(")
 		if err := con.visit(iterRange); err != nil {
-			return wrapConversionError(err,"visiting iter range in FILTER comprehension")
+			return wrapConversionError(err, "visiting iter range in FILTER comprehension")
 		}
 		con.str.WriteString(")")
 	}
@@ -1407,7 +1407,7 @@ func (con *converter) visitFilterComprehension(expr *exprpb.Expr, info *Comprehe
 	if info.Predicate != nil {
 		con.str.WriteString(" WHERE ")
 		if err := con.visit(info.Predicate); err != nil {
-			return wrapConversionError(err,"visiting predicate in FILTER comprehension")
+			return wrapConversionError(err, "visiting predicate in FILTER comprehension")
 		}
 	}
 
@@ -1429,7 +1429,7 @@ func (con *converter) visitTransformListComprehension(expr *exprpb.Expr, info *C
 	// Visit the transform expression
 	if info.Transform != nil {
 		if err := con.visit(info.Transform); err != nil {
-			return wrapConversionError(err,"visiting transform in TRANSFORM_LIST comprehension")
+			return wrapConversionError(err, "visiting transform in TRANSFORM_LIST comprehension")
 		}
 	} else {
 		// If no transform, just return the variable itself
@@ -1440,7 +1440,7 @@ func (con *converter) visitTransformListComprehension(expr *exprpb.Expr, info *C
 
 	// Visit the iterable range (the array/list being comprehended over)
 	if err := con.visit(comprehension.GetIterRange()); err != nil {
-		return wrapConversionError(err,"visiting iter range in TRANSFORM_LIST comprehension")
+		return wrapConversionError(err, "visiting iter range in TRANSFORM_LIST comprehension")
 	}
 
 	con.str.WriteString(") AS ")
@@ -1450,7 +1450,7 @@ func (con *converter) visitTransformListComprehension(expr *exprpb.Expr, info *C
 	if info.Filter != nil {
 		con.str.WriteString(" WHERE ")
 		if err := con.visit(info.Filter); err != nil {
-			return wrapConversionError(err,"visiting filter in TRANSFORM_LIST comprehension")
+			return wrapConversionError(err, "visiting filter in TRANSFORM_LIST comprehension")
 		}
 	}
 

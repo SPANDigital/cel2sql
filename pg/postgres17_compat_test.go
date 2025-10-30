@@ -160,11 +160,25 @@ func TestPostgreSQL17Compatibility(t *testing.T) {
 			description:   "Test EXTRACT(DOY ...) for day of year",
 		},
 		{
-			name:          "extract_dow",
+			name:          "extract_dow_monday",
 			celExpr:       `test_compat.created_at.getDayOfWeek() == 0`,
-			expectedSQL:   `EXTRACT(DOW FROM test_compat.created_at) - 1 = 0`,
+			expectedSQL:   `(EXTRACT(DOW FROM test_compat.created_at) + 6) % 7 = 0`,
 			expectedCount: 1, // Monday (2024-01-15) - CEL uses 0=Monday
-			description:   "Test EXTRACT(DOW ...) for day of week",
+			description:   "Test getDayOfWeek for Monday (CEL value 0)",
+		},
+		{
+			name:          "extract_dow_sunday",
+			celExpr:       `test_compat.created_at.getDayOfWeek() == 6`,
+			expectedSQL:   `(EXTRACT(DOW FROM test_compat.created_at) + 6) % 7 = 6`,
+			expectedCount: 1, // Sunday (2024-03-10 - Charlie) - CEL uses 6=Sunday
+			description:   "Test getDayOfWeek for Sunday (CEL value 6) - fixes issue #42",
+		},
+		{
+			name:          "extract_dow_thursday",
+			celExpr:       `test_compat.created_at.getDayOfWeek() == 3`,
+			expectedSQL:   `(EXTRACT(DOW FROM test_compat.created_at) + 6) % 7 = 3`,
+			expectedCount: 2, // Thursday (2024-06-20 - Bob, 2024-09-05 - David) - CEL uses 3=Thursday
+			description:   "Test getDayOfWeek for Thursday (CEL value 3)",
 		},
 
 		// AT TIME ZONE test - simplified to just test the conversion happens

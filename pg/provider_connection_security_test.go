@@ -80,9 +80,9 @@ func TestMalformedConnectionStringsNoCredentialExposure(t *testing.T) {
 
 	// Test various truly malformed connection strings that will cause parsing errors
 	testCases := []struct {
-		name       string
-		connStr    string
-		secrets    []string // Strings that should NOT appear in error
+		name    string
+		connStr string
+		secrets []string // Strings that should NOT appear in error
 	}{
 		{
 			name:    "invalid_syntax_with_credentials",
@@ -91,7 +91,7 @@ func TestMalformedConnectionStringsNoCredentialExposure(t *testing.T) {
 		},
 		{
 			name:    "malformed_uri_with_password",
-			connStr: "postgressql://user:P@ss123!@[invalid",  // Invalid URI syntax
+			connStr: "postgressql://user:P@ss123!@[invalid", // Invalid URI syntax
 			secrets: []string{"P@ss123!", "user"},
 		},
 		{

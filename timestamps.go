@@ -136,6 +136,10 @@ func (con *converter) callInterval(_ *exprpb.Expr, args []*exprpb.Expr) error {
 
 // callExtractFromTimestamp handles timestamp field extraction (YEAR, MONTH, DAY, etc.)
 func (con *converter) callExtractFromTimestamp(function string, target *exprpb.Expr, args []*exprpb.Expr) error {
+	// For getDayOfWeek, we need to wrap the entire EXTRACT in parentheses for modulo operation
+	if function == overloads.TimeGetDayOfWeek {
+		con.str.WriteString("(")
+	}
 	con.str.WriteString("EXTRACT(")
 	switch function {
 	case overloads.TimeGetFullYear:
@@ -170,8 +174,14 @@ func (con *converter) callExtractFromTimestamp(function string, target *exprpb.E
 		}
 	}
 	con.str.WriteString(")")
-	if function == overloads.TimeGetMonth || function == overloads.TimeGetDayOfYear || function == overloads.TimeGetDayOfMonth || function == overloads.TimeGetDayOfWeek {
+	switch function {
+	case overloads.TimeGetMonth, overloads.TimeGetDayOfYear, overloads.TimeGetDayOfMonth:
 		con.str.WriteString(" - 1")
+	case overloads.TimeGetDayOfWeek:
+		// PostgreSQL DOW: 0=Sunday, 1=Monday, ..., 6=Saturday
+		// CEL getDayOfWeek: 0=Monday, 1=Tuesday, ..., 6=Sunday (ISO 8601)
+		// Convert: (DOW + 6) % 7
+		con.str.WriteString(" + 6) % 7")
 	}
 	return nil
 }

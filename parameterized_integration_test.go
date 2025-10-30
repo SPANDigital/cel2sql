@@ -122,11 +122,11 @@ func TestParameterizedQueriesIntegration(t *testing.T) {
 	}
 
 	tests := []struct {
-		name           string
-		celExpr        string
-		expectedRows   int
-		expectedIDs    []int64
-		description    string
+		name         string
+		celExpr      string
+		expectedRows int
+		expectedIDs  []int64
+		description  string
 	}{
 		{
 			name:         "simple string equality",

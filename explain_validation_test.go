@@ -334,34 +334,34 @@ func TestEXPLAINAnalyzeValidation(t *testing.T) {
 	require.NoError(t, err)
 
 	tests := []struct {
-		name           string
-		celExpr        string
-		expectedRows   int
-		description    string
+		name         string
+		celExpr      string
+		expectedRows int
+		description  string
 	}{
 		{
-			name:           "Filter by price range",
-			celExpr:        `price > 50.0 && price < 500.0`,
-			expectedRows:   2, // Mouse and Chair
-			description:    "Price range filtering should return correct count",
+			name:         "Filter by price range",
+			celExpr:      `price > 50.0 && price < 500.0`,
+			expectedRows: 2, // Mouse and Chair
+			description:  "Price range filtering should return correct count",
 		},
 		{
-			name:           "Filter by stock status",
-			celExpr:        `in_stock == true`,
-			expectedRows:   3, // Laptop, Mouse, Chair
-			description:    "Boolean filtering should work correctly",
+			name:         "Filter by stock status",
+			celExpr:      `in_stock == true`,
+			expectedRows: 3, // Laptop, Mouse, Chair
+			description:  "Boolean filtering should work correctly",
 		},
 		{
-			name:           "Array membership",
-			celExpr:        `"electronics" in categories`,
-			expectedRows:   2, // Laptop, Mouse
-			description:    "Array membership check should return correct results",
+			name:         "Array membership",
+			celExpr:      `"electronics" in categories`,
+			expectedRows: 2, // Laptop, Mouse
+			description:  "Array membership check should return correct results",
 		},
 		{
-			name:           "Complex condition",
-			celExpr:        `in_stock && price < 300.0`,
-			expectedRows:   2, // Mouse, Chair
-			description:    "Complex conditions should execute correctly",
+			name:         "Complex condition",
+			celExpr:      `in_stock && price < 300.0`,
+			expectedRows: 2, // Mouse, Chair
+			description:  "Complex conditions should execute correctly",
 		},
 	}
 

@@ -136,7 +136,7 @@ int(created_at)
 | `getFullYear()` | Get year | `created_at.getFullYear()` | `EXTRACT(YEAR FROM created_at)` |
 | `getMonth()` | Get month (0-based) | `created_at.getMonth()` | `EXTRACT(MONTH FROM created_at) - 1` |
 | `getDayOfMonth()` | Get day (0-based) | `created_at.getDayOfMonth()` | `EXTRACT(DAY FROM created_at) - 1` |
-| `getDayOfWeek()` | Get weekday (0=Monday) | `created_at.getDayOfWeek()` | `EXTRACT(DOW FROM created_at) - 1` |
+| `getDayOfWeek()` | Get weekday (0=Monday) | `created_at.getDayOfWeek()` | `(EXTRACT(DOW FROM created_at) + 6) % 7` |
 | `getDayOfYear()` | Get day of year (0-based) | `created_at.getDayOfYear()` | `EXTRACT(DOY FROM created_at) - 1` |
 | `getHours()` | Get hours | `created_at.getHours()` | `EXTRACT(HOUR FROM created_at)` |
 | `getMinutes()` | Get minutes | `created_at.getMinutes()` | `EXTRACT(MINUTE FROM created_at)` |

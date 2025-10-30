@@ -198,9 +198,9 @@ func TestRecursionDepthErrorMessage(t *testing.T) {
 
 func TestDeeplyNestedExpressions(t *testing.T) {
 	tests := []struct {
-		name     string
+		name      string
 		buildExpr func() string
-		maxDepth int
+		maxDepth  int
 		shouldErr bool
 	}{
 		{

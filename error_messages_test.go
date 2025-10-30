@@ -26,24 +26,24 @@ func TestErrorMessageSanitization(t *testing.T) {
 	})
 
 	tests := []struct {
-		name                string
-		celExpr             string
-		expectError         bool
-		userMsgContains     string   // What the user should see
-		userMsgNotContains  []string // What the user should NOT see
-		description         string
+		name               string
+		celExpr            string
+		expectError        bool
+		userMsgContains    string   // What the user should see
+		userMsgNotContains []string // What the user should NOT see
+		description        string
 	}{
 		{
-			name:            "valid expression should not error",
-			celExpr:         `obj.age > 18 && obj.name == "test"`,
-			expectError:     false,
-			description:     "Valid expression should not error",
+			name:        "valid expression should not error",
+			celExpr:     `obj.age > 18 && obj.name == "test"`,
+			expectError: false,
+			description: "Valid expression should not error",
 		},
 		{
-			name:            "valid identifier expression",
-			celExpr:         `obj.name == "test"`,
-			expectError:     false,
-			description:     "Simple field access should work",
+			name:        "valid identifier expression",
+			celExpr:     `obj.name == "test"`,
+			expectError: false,
+			description: "Simple field access should work",
 		},
 	}
 
@@ -119,11 +119,11 @@ func TestConversionErrorStructure(t *testing.T) {
 // TestErrorMessagesForCommonPatterns tests error messages for common failure patterns
 func TestErrorMessagesForCommonPatterns(t *testing.T) {
 	tests := []struct {
-		name               string
-		schema             pg.Schema
-		celExpr            string
-		expectedUserMsg    string
-		forbiddenStrings   []string
+		name             string
+		schema           pg.Schema
+		celExpr          string
+		expectedUserMsg  string
+		forbiddenStrings []string
 	}{
 		{
 			name: "unsupported size() argument type",
