@@ -936,17 +936,18 @@ func (con *converter) visitCallFunc(expr *exprpb.Expr) error {
 			case isListType(argType):
 				// Check if this is a JSON array field
 				if len(args) > 0 && con.isJSONArrayField(args[0]) {
-					// For JSON arrays, use jsonb_array_length
-					con.str.WriteString("jsonb_array_length(")
+					// For JSON arrays, use jsonb_array_length wrapped in COALESCE
+					con.str.WriteString("COALESCE(jsonb_array_length(")
 					err := con.visit(args[0])
 					if err != nil {
 						return err
 					}
-					con.str.WriteString(")")
+					con.str.WriteString("), 0)")
 					return nil
 				}
 				// For PostgreSQL, we need to specify the array dimension (1 for 1D arrays)
-				con.str.WriteString("ARRAY_LENGTH(")
+				// Wrap in COALESCE to handle NULL arrays (ARRAY_LENGTH returns NULL for NULL input)
+				con.str.WriteString("COALESCE(ARRAY_LENGTH(")
 				if target != nil {
 					nested := isBinaryOrTernaryOperator(target)
 					err := con.visitMaybeNested(target, nested)
@@ -964,7 +965,7 @@ func (con *converter) visitCallFunc(expr *exprpb.Expr) error {
 						con.str.WriteString(", ")
 					}
 				}
-				con.str.WriteString(", 1)")
+				con.str.WriteString(", 1), 0)")
 				return nil
 			default:
 				return newConversionErrorf(errMsgUnsupportedType, "size() argument type: %s", argType.String())

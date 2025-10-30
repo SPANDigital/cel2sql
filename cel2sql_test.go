@@ -495,7 +495,13 @@ func TestConvert(t *testing.T) {
 		{
 			name:    "size_list",
 			args:    args{source: `size(string_list)`},
-			want:    "ARRAY_LENGTH(string_list, 1)",
+			want:    "COALESCE(ARRAY_LENGTH(string_list, 1), 0)",
+			wantErr: false,
+		},
+		{
+			name:    "size_list_comparison",
+			args:    args{source: `size(string_list) > 0`},
+			want:    "COALESCE(ARRAY_LENGTH(string_list, 1), 0) > 0",
 			wantErr: false,
 		},
 	}
