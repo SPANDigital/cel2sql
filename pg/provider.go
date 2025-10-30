@@ -127,6 +127,13 @@ func NewTypeProviderWithConnection(ctx context.Context, connectionString string)
 		return nil, errors.New("failed to create connection pool")
 	}
 
+	// Validate connection works immediately rather than on first query
+	if err := pool.Ping(ctx); err != nil {
+		pool.Close()
+		// Security: Same sanitized error approach as above
+		return nil, errors.New("failed to connect to database")
+	}
+
 	return &typeProvider{
 		schemas: make(map[string]Schema),
 		pool:    pool,
