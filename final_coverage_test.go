@@ -7,17 +7,17 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/spandigital/cel2sql/v2"
-	"github.com/spandigital/cel2sql/v2/pg"
+	"github.com/spandigital/cel2sql/v3"
+	"github.com/spandigital/cel2sql/v3/pg"
 )
 
 // TestJSONFieldContains tests callContains with JSON fields (POSITION operator path)
 func TestJSONFieldContains(t *testing.T) {
-	schema := pg.Schema{
+	schema := pg.NewSchema([]pg.FieldSchema{
 		{Name: "id", Type: "integer"},
 		{Name: "tags", Type: "jsonb", IsJSON: true, IsJSONB: true},
 		{Name: "metadata", Type: "jsonb", IsJSON: true, IsJSONB: true},
-	}
+	})
 
 	provider := pg.NewTypeProvider(map[string]pg.Schema{"doc": schema})
 
@@ -63,12 +63,12 @@ func TestJSONFieldContains(t *testing.T) {
 
 // TestNestedJSONHasOperations tests visitNestedJSONHas and visitJSONColumnReference
 func TestNestedJSONHasOperations(t *testing.T) {
-	schema := pg.Schema{
+	schema := pg.NewSchema([]pg.FieldSchema{
 		{Name: "id", Type: "integer"},
 		{Name: "metadata", Type: "jsonb", IsJSON: true, IsJSONB: true},
 		{Name: "properties", Type: "jsonb", IsJSON: true, IsJSONB: true},
 		{Name: "content", Type: "json", IsJSON: true, IsJSONB: false},
-	}
+	})
 
 	provider := pg.NewTypeProvider(map[string]pg.Schema{"record": schema})
 
@@ -149,12 +149,12 @@ func TestNestedJSONHasOperations(t *testing.T) {
 
 // TestAdditionalFunctionTypes tests visitCallFunc with more function types
 func TestAdditionalFunctionTypes(t *testing.T) {
-	schema := pg.Schema{
+	schema := pg.NewSchema([]pg.FieldSchema{
 		{Name: "id", Type: "integer"},
 		{Name: "created", Type: "timestamp with time zone"},
 		{Name: "modified", Type: "timestamp with time zone"},
 		{Name: "data", Type: "jsonb", IsJSON: true, IsJSONB: true},
-	}
+	})
 
 	provider := pg.NewTypeProvider(map[string]pg.Schema{"record": schema})
 
@@ -262,13 +262,13 @@ func TestAdditionalFunctionTypes(t *testing.T) {
 
 // TestBinaryOperatorAdditionalCases tests more visitCallBinary scenarios
 func TestBinaryOperatorAdditionalCases(t *testing.T) {
-	schema := pg.Schema{
+	schema := pg.NewSchema([]pg.FieldSchema{
 		{Name: "id", Type: "integer"},
 		{Name: "score", Type: "double precision"},
 		{Name: "data", Type: "bytea"},
 		{Name: "tags", Type: "text", Repeated: true, ElementType: "text"},
 		{Name: "metadata", Type: "jsonb", IsJSON: true, IsJSONB: true},
-	}
+	})
 
 	provider := pg.NewTypeProvider(map[string]pg.Schema{"record": schema})
 
@@ -320,10 +320,10 @@ func TestBinaryOperatorAdditionalCases(t *testing.T) {
 
 // TestIdentifierWithNumericCasting tests visitIdent with numeric casting scenarios
 func TestIdentifierWithNumericCasting(t *testing.T) {
-	schema := pg.Schema{
+	schema := pg.NewSchema([]pg.FieldSchema{
 		{Name: "id", Type: "integer"},
 		{Name: "items", Type: "jsonb", IsJSON: true, IsJSONB: true},
-	}
+	})
 
 	provider := pg.NewTypeProvider(map[string]pg.Schema{"doc": schema})
 
@@ -386,14 +386,14 @@ func TestIdentifierWithNumericCasting(t *testing.T) {
 
 // TestJSONColumnReferenceEdgeCases tests edge cases for JSON column handling
 func TestJSONColumnReferenceEdgeCases(t *testing.T) {
-	schema := pg.Schema{
+	schema := pg.NewSchema([]pg.FieldSchema{
 		{Name: "id", Type: "integer"},
 		{Name: "metadata", Type: "jsonb", IsJSON: true, IsJSONB: true},
 		{Name: "structure", Type: "jsonb", IsJSON: true, IsJSONB: true},
 		{Name: "taxonomy", Type: "jsonb", IsJSON: true, IsJSONB: true},
 		{Name: "analytics", Type: "jsonb", IsJSON: true, IsJSONB: true},
 		{Name: "classification", Type: "jsonb", IsJSON: true, IsJSONB: true},
-	}
+	})
 
 	provider := pg.NewTypeProvider(map[string]pg.Schema{"asset": schema})
 

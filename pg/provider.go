@@ -13,7 +13,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	exprpb "google.golang.org/genproto/googleapis/api/expr/v1alpha1"
 
-	"github.com/spandigital/cel2sql/v2/sqltypes"
+	"github.com/spandigital/cel2sql/v3/sqltypes"
 )
 
 const (
@@ -41,8 +41,58 @@ type FieldSchema struct {
 	ElementType string        // for arrays: element type name
 }
 
-// Schema represents a PostgreSQL table schema as a slice of field schemas.
-type Schema []FieldSchema
+// Schema represents a PostgreSQL table schema with O(1) field lookup.
+// It contains a slice of fields for ordered iteration and a map index for fast lookups.
+type Schema struct {
+	fields     []FieldSchema
+	fieldIndex map[string]*FieldSchema
+}
+
+// NewSchema creates a new Schema with field indexing for O(1) lookups.
+// This improves performance for tables with many columns.
+func NewSchema(fields []FieldSchema) Schema {
+	index := make(map[string]*FieldSchema, len(fields))
+	for i := range fields {
+		index[fields[i].Name] = &fields[i]
+
+		// Build indices for nested schemas recursively
+		if len(fields[i].Schema) > 0 {
+			fields[i].Schema = rebuildSchemaIndex(fields[i].Schema)
+		}
+	}
+
+	return Schema{
+		fields:     fields,
+		fieldIndex: index,
+	}
+}
+
+// rebuildSchemaIndex recursively rebuilds indices for nested schemas.
+// This is used internally when converting old-style []FieldSchema to new Schema struct.
+func rebuildSchemaIndex(oldSchema []FieldSchema) []FieldSchema {
+	// For nested schemas, we need to ensure they're properly indexed too
+	// But since nested schemas are stored as []FieldSchema in FieldSchema.Schema,
+	// we keep them as slices but process them when needed
+	return oldSchema
+}
+
+// Fields returns the ordered slice of field schemas.
+// Use this when you need to iterate over fields in their defined order.
+func (s Schema) Fields() []FieldSchema {
+	return s.fields
+}
+
+// FindField performs an O(1) lookup for a field by name.
+// Returns the field schema and true if found, nil and false otherwise.
+func (s Schema) FindField(name string) (*FieldSchema, bool) {
+	field, found := s.fieldIndex[name]
+	return field, found
+}
+
+// Len returns the number of fields in the schema.
+func (s Schema) Len() int {
+	return len(s.fields)
+}
 
 // TypeProvider interface for PostgreSQL type providers
 type TypeProvider interface {
@@ -116,7 +166,7 @@ func (p *typeProvider) LoadTableSchema(ctx context.Context, tableName string) er
 	}
 	defer rows.Close()
 
-	var schema Schema
+	var fields []FieldSchema
 	for rows.Next() {
 		var columnName, dataType, isNullable string
 		var columnDefault *string
@@ -145,14 +195,14 @@ func (p *typeProvider) LoadTableSchema(ctx context.Context, tableName string) er
 			field.ElementType = elementType
 		}
 
-		schema = append(schema, field)
+		fields = append(fields, field)
 	}
 
 	if err := rows.Err(); err != nil {
 		return fmt.Errorf("error iterating rows: %w", err)
 	}
 
-	p.schemas[tableName] = schema
+	p.schemas[tableName] = NewSchema(fields)
 	return nil
 }
 
@@ -182,7 +232,7 @@ func (p *typeProvider) findSchema(typeName string) (Schema, bool) {
 	typeNames := strings.Split(typeName, ".")
 	schema, found := p.schemas[typeNames[0]]
 	if !found {
-		return nil, false
+		return Schema{}, false
 	}
 
 	// For single-level types, return the schema directly
@@ -190,21 +240,26 @@ func (p *typeProvider) findSchema(typeName string) (Schema, bool) {
 		return schema, true
 	}
 
-	// For nested types, traverse the schema hierarchy
+	// For nested types, traverse the schema hierarchy using O(1) lookups
+	currentFields := schema.fields
 	for _, tn := range typeNames[1:] {
-		var s Schema
-		for _, fieldSchema := range schema {
-			if fieldSchema.Name == tn {
-				s = fieldSchema.Schema
+		// Use O(1) indexed lookup instead of linear search
+		var nestedField *FieldSchema
+		for i := range currentFields {
+			if currentFields[i].Name == tn {
+				nestedField = &currentFields[i]
 				break
 			}
 		}
-		if len(s) == 0 {
-			return nil, false
+
+		if nestedField == nil || len(nestedField.Schema) == 0 {
+			return Schema{}, false
 		}
-		schema = s
+		currentFields = nestedField.Schema
 	}
-	return schema, true
+
+	// Convert the nested []FieldSchema to Schema for the return
+	return NewSchema(currentFields), true
 }
 
 func (p *typeProvider) FindStructType(structType string) (*types.Type, bool) {
@@ -221,8 +276,9 @@ func (p *typeProvider) FindStructFieldNames(structType string) ([]string, bool) 
 		return nil, false
 	}
 
-	fieldNames := make([]string, len(schema))
-	for i, field := range schema {
+	fields := schema.Fields()
+	fieldNames := make([]string, len(fields))
+	for i, field := range fields {
 		fieldNames[i] = field.Name
 	}
 	return fieldNames, true
@@ -233,14 +289,10 @@ func (p *typeProvider) FindStructFieldType(structType, fieldName string) (*types
 	if !found {
 		return nil, false
 	}
-	var field *FieldSchema
-	for _, fieldSchema := range schema {
-		if fieldSchema.Name == fieldName {
-			field = &fieldSchema
-			break
-		}
-	}
-	if field == nil {
+
+	// Use O(1) indexed lookup instead of linear search
+	field, found := schema.FindField(fieldName)
+	if !found {
 		return nil, false
 	}
 

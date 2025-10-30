@@ -6,8 +6,8 @@ import (
 	"log"
 
 	"github.com/google/cel-go/cel"
-	"github.com/spandigital/cel2sql/v2"
-	"github.com/spandigital/cel2sql/v2/pg"
+	"github.com/spandigital/cel2sql/v3"
+	"github.com/spandigital/cel2sql/v3/pg"
 )
 
 func main() {
@@ -25,7 +25,7 @@ func exampleWithPredefinedSchema() {
 	fmt.Println("=== Example 1: Pre-defined Schema ===")
 
 	// Define schema manually
-	userSchema := pg.Schema{
+	userSchema := pg.NewSchema([]pg.FieldSchema{
 		{Name: "id", Type: "integer", Repeated: false},
 		{Name: "name", Type: "text", Repeated: false},
 		{Name: "email", Type: "text", Repeated: false},
@@ -33,7 +33,7 @@ func exampleWithPredefinedSchema() {
 		{Name: "created_at", Type: "timestamp with time zone", Repeated: false},
 		{Name: "is_active", Type: "boolean", Repeated: false},
 		{Name: "tags", Type: "text", Repeated: true}, // Array field
-	}
+	})
 
 	// Create type provider with predefined schema
 	provider := pg.NewTypeProvider(map[string]pg.Schema{

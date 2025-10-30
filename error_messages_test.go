@@ -8,18 +8,18 @@ import (
 	"github.com/google/cel-go/cel"
 	"github.com/stretchr/testify/require"
 
-	"github.com/spandigital/cel2sql/v2"
-	"github.com/spandigital/cel2sql/v2/pg"
+	"github.com/spandigital/cel2sql/v3"
+	"github.com/spandigital/cel2sql/v3/pg"
 )
 
 // TestErrorMessageSanitization tests that error messages don't leak internal schema information
 func TestErrorMessageSanitization(t *testing.T) {
 	// Create a schema with fields
-	testSchema := pg.Schema{
+	testSchema := pg.NewSchema([]pg.FieldSchema{
 		{Name: "name", Type: "text"},
 		{Name: "age", Type: "integer"},
 		{Name: "tags", Type: "text", Repeated: true},
-	}
+	})
 
 	provider := pg.NewTypeProvider(map[string]pg.Schema{
 		"TestTable": testSchema,
@@ -91,9 +91,9 @@ func TestErrorMessageSanitization(t *testing.T) {
 // TestConversionErrorStructure tests the ConversionError type
 func TestConversionErrorStructure(t *testing.T) {
 	t.Run("basic conversion error", func(t *testing.T) {
-		testSchema := pg.Schema{
+		testSchema := pg.NewSchema([]pg.FieldSchema{
 			{Name: "name", Type: "text"},
-		}
+		})
 
 		provider := pg.NewTypeProvider(map[string]pg.Schema{
 			"TestTable": testSchema,
@@ -127,9 +127,9 @@ func TestErrorMessagesForCommonPatterns(t *testing.T) {
 	}{
 		{
 			name: "unsupported size() argument type",
-			schema: pg.Schema{
+			schema: pg.NewSchema([]pg.FieldSchema{
 				{Name: "data", Type: "jsonb"},
-			},
+			}),
 			celExpr:         `size(obj.data)`,
 			expectedUserMsg: "", // This might actually work with JSONB
 			forbiddenStrings: []string{
@@ -211,9 +211,9 @@ func TestErrorWrapping(t *testing.T) {
 	// This test ensures that our error wrapping preserves the error chain
 	// for proper error handling with errors.Is() and errors.As()
 
-	testSchema := pg.Schema{
+	testSchema := pg.NewSchema([]pg.FieldSchema{
 		{Name: "name", Type: "text"},
-	}
+	})
 
 	provider := pg.NewTypeProvider(map[string]pg.Schema{
 		"TestTable": testSchema,
@@ -257,10 +257,10 @@ func TestErrorMessagesNoSensitiveInfo(t *testing.T) {
 		"information_schema",
 	}
 
-	testSchema := pg.Schema{
+	testSchema := pg.NewSchema([]pg.FieldSchema{
 		{Name: "name", Type: "text"},
 		{Name: "age", Type: "integer"},
-	}
+	})
 
 	provider := pg.NewTypeProvider(map[string]pg.Schema{
 		"TestTable": testSchema,
@@ -305,9 +305,9 @@ func TestContextCancellationError(t *testing.T) {
 	// Context cancellation errors should not leak implementation details
 	// They should have clear user-facing messages
 
-	testSchema := pg.Schema{
+	testSchema := pg.NewSchema([]pg.FieldSchema{
 		{Name: "name", Type: "text"},
-	}
+	})
 
 	provider := pg.NewTypeProvider(map[string]pg.Schema{
 		"TestTable": testSchema,
@@ -330,9 +330,9 @@ func TestContextCancellationError(t *testing.T) {
 
 // TestErrorInterface verifies errors implement the error interface correctly
 func TestErrorInterface(t *testing.T) {
-	testSchema := pg.Schema{
+	testSchema := pg.NewSchema([]pg.FieldSchema{
 		{Name: "name", Type: "text"},
-	}
+	})
 
 	provider := pg.NewTypeProvider(map[string]pg.Schema{
 		"TestTable": testSchema,

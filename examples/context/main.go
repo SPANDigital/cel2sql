@@ -8,8 +8,8 @@ import (
 	"time"
 
 	"github.com/google/cel-go/cel"
-	"github.com/spandigital/cel2sql/v2"
-	"github.com/spandigital/cel2sql/v2/pg"
+	"github.com/spandigital/cel2sql/v3"
+	"github.com/spandigital/cel2sql/v3/pg"
 )
 
 func main() {
@@ -143,13 +143,13 @@ func exampleWithCancellation() {
 
 func exampleComplexWithOptions() {
 	// Define a schema with JSON fields
-	schema := pg.Schema{
+	schema := pg.NewSchema([]pg.FieldSchema{
 		{Name: "id", Type: "integer"},
 		{Name: "name", Type: "text"},
 		{Name: "age", Type: "integer"},
 		{Name: "scores", Type: "integer", Repeated: true},
 		{Name: "metadata", Type: "jsonb", IsJSON: true, IsJSONB: true},
-	}
+	})
 
 	provider := pg.NewTypeProvider(map[string]pg.Schema{"person": schema})
 

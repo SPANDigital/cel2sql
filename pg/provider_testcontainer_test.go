@@ -15,8 +15,8 @@ import (
 	"github.com/testcontainers/testcontainers-go/modules/postgres"
 	"github.com/testcontainers/testcontainers-go/wait"
 
-	"github.com/spandigital/cel2sql/v2"
-	"github.com/spandigital/cel2sql/v2/pg"
+	"github.com/spandigital/cel2sql/v3"
+	"github.com/spandigital/cel2sql/v3/pg"
 )
 
 func TestLoadTableSchema_WithPostgresContainer(t *testing.T) {
@@ -1414,14 +1414,14 @@ func TestRegexPatternMatching(t *testing.T) {
 	require.NoError(t, err)
 
 	// Define the CEL environment with test_regex table structure
-	schema := pg.Schema{
+	schema := pg.NewSchema([]pg.FieldSchema{
 		{Name: "id", Type: "bigint", Repeated: false},
 		{Name: "name", Type: "text", Repeated: false},
 		{Name: "email", Type: "text", Repeated: false},
 		{Name: "code", Type: "text", Repeated: false},
 		{Name: "phone", Type: "text", Repeated: false},
 		{Name: "description", Type: "text", Repeated: false},
-	}
+	})
 
 	// Create the type provider with the schema
 	schemas := map[string]pg.Schema{

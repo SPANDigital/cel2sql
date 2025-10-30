@@ -6,18 +6,18 @@ import (
 	"github.com/google/cel-go/cel"
 	"github.com/stretchr/testify/require"
 
-	"github.com/spandigital/cel2sql/v2"
-	"github.com/spandigital/cel2sql/v2/pg"
+	"github.com/spandigital/cel2sql/v3"
+	"github.com/spandigital/cel2sql/v3/pg"
 )
 
 // TestFieldNameValidation_Integration tests field name validation in actual CEL expression conversion
 func TestFieldNameValidation_Integration(t *testing.T) {
 	// Create a schema with fields that would pass CEL's type checking
 	// but should be rejected by our SQL validation
-	testSchema := pg.Schema{
+	testSchema := pg.NewSchema([]pg.FieldSchema{
 		{Name: "valid_field", Type: "text"},
 		{Name: "age", Type: "integer"},
-	}
+	})
 
 	provider := pg.NewTypeProvider(map[string]pg.Schema{
 		"TestTable": testSchema,
@@ -179,9 +179,9 @@ func TestFieldNameValidation_Identifiers(t *testing.T) {
 // Note: Maximum length validation is comprehensively tested in utils_test.go
 // This test documents that the validation exists at the integration level
 func TestFieldNameValidation_MaxLength(t *testing.T) {
-	testSchema := pg.Schema{
+	testSchema := pg.NewSchema([]pg.FieldSchema{
 		{Name: "test", Type: "text"},
-	}
+	})
 
 	provider := pg.NewTypeProvider(map[string]pg.Schema{
 		"TestTable": testSchema,
@@ -290,9 +290,9 @@ func TestFieldNameValidation_EdgeCases(t *testing.T) {
 		},
 	}
 
-	testSchema := pg.Schema{
+	testSchema := pg.NewSchema([]pg.FieldSchema{
 		{Name: "dummy", Type: "text"},
-	}
+	})
 
 	provider := pg.NewTypeProvider(map[string]pg.Schema{
 		"TestTable": testSchema,

@@ -8,8 +8,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/spandigital/cel2sql"
-	"github.com/spandigital/cel2sql/pg"
+	"github.com/spandigital/cel2sql/v3"
+	"github.com/spandigital/cel2sql/v3/pg"
 )
 
 func TestComprehensionImplementation(t *testing.T) {
@@ -109,17 +109,17 @@ func TestComprehensionImplementation(t *testing.T) {
 
 func TestNonComprehensionExpressionsStillWork(t *testing.T) {
 	// Ensure that non-comprehension expressions still work correctly
-	schema := pg.Schema{
+	schema := pg.NewSchema([]pg.FieldSchema{
 		{Name: "name", Type: "text", Repeated: false},
 		{Name: "age", Type: "bigint", Repeated: false},
 		{Name: "active", Type: "boolean", Repeated: false},
-	}
+	})
 
 	provider := pg.NewTypeProvider(map[string]pg.Schema{"User": schema})
 
 	env, err := cel.NewEnv(
 		cel.CustomTypeProvider(provider),
-		cel.Variable("user", cel.ObjectType("User")),
+		cel.Variable("usr", cel.ObjectType("User")),
 	)
 	require.NoError(t, err)
 
@@ -130,23 +130,23 @@ func TestNonComprehensionExpressionsStillWork(t *testing.T) {
 	}{
 		{
 			name:       "simple_comparison",
-			expression: `user.age > 18`,
-			expected:   `user.age > 18`,
+			expression: `usr.age > 18`,
+			expected:   `usr.age > 18`,
 		},
 		{
 			name:       "string_equality",
-			expression: `user.name == 'John'`,
-			expected:   `user.name = 'John'`,
+			expression: `usr.name == 'John'`,
+			expected:   `usr.name = 'John'`,
 		},
 		{
 			name:       "boolean_field",
-			expression: `user.active`,
-			expected:   `user.active`,
+			expression: `usr.active`,
+			expected:   `usr.active`,
 		},
 		{
 			name:       "logical_and",
-			expression: `user.age > 18 && user.active`,
-			expected:   `user.age > 18 AND user.active`,
+			expression: `usr.age > 18 && usr.active`,
+			expected:   `usr.age > 18 AND usr.active`,
 		},
 	}
 
@@ -164,7 +164,7 @@ func TestNonComprehensionExpressionsStillWork(t *testing.T) {
 
 func TestComprehensionWithPostgreSQLSchemas(t *testing.T) {
 	// Test comprehensions with realistic PostgreSQL schemas
-	schema := pg.Schema{
+	schema := pg.NewSchema([]pg.FieldSchema{
 		{Name: "id", Type: "bigint", Repeated: false},
 		{Name: "name", Type: "text", Repeated: false},
 		{Name: "email", Type: "text", Repeated: false},
@@ -173,7 +173,7 @@ func TestComprehensionWithPostgreSQLSchemas(t *testing.T) {
 		{Name: "salary", Type: "double precision", Repeated: false},
 		{Name: "tags", Type: "text", Repeated: true},     // Array field
 		{Name: "scores", Type: "bigint", Repeated: true}, // Array of integers
-	}
+	})
 
 	provider := pg.NewTypeProvider(map[string]pg.Schema{"Employee": schema})
 
@@ -268,18 +268,18 @@ func TestComprehensionWithPostgreSQLSchemas(t *testing.T) {
 
 func TestComprehensionWithNestedStructures(t *testing.T) {
 	// Test comprehensions with nested PostgreSQL composite types
-	addressSchema := pg.Schema{
+	addressSchema := pg.NewSchema([]pg.FieldSchema{
 		{Name: "street", Type: "text", Repeated: false},
 		{Name: "city", Type: "text", Repeated: false},
 		{Name: "zipcode", Type: "text", Repeated: false},
-	}
+	})
 
-	employeeSchema := pg.Schema{
+	employeeSchema := pg.NewSchema([]pg.FieldSchema{
 		{Name: "id", Type: "bigint", Repeated: false},
 		{Name: "name", Type: "text", Repeated: false},
-		{Name: "address", Type: "composite", Schema: addressSchema},
+		{Name: "address", Type: "composite", Schema: addressSchema.Fields()},
 		{Name: "skills", Type: "text", Repeated: true},
-	}
+	})
 
 	provider := pg.NewTypeProvider(map[string]pg.Schema{
 		"Address":  addressSchema,

@@ -4,8 +4,8 @@ import (
 	"testing"
 
 	"github.com/google/cel-go/cel"
-	"github.com/spandigital/cel2sql/v2"
-	"github.com/spandigital/cel2sql/v2/pg"
+	"github.com/spandigital/cel2sql/v3"
+	"github.com/spandigital/cel2sql/v3/pg"
 	"github.com/stretchr/testify/require"
 )
 
@@ -109,11 +109,11 @@ func TestNestedComprehensionDepthLimit(t *testing.T) {
 
 func TestComprehensionDepthWithSchemas(t *testing.T) {
 	// Test with realistic schemas similar to the issue example
-	schema := pg.Schema{
+	schema := pg.NewSchema([]pg.FieldSchema{
 		{Name: "list1", Type: "integer", Repeated: true},
 		{Name: "list2", Type: "integer", Repeated: true},
 		{Name: "list3", Type: "integer", Repeated: true},
-	}
+	})
 	provider := pg.NewTypeProvider(map[string]pg.Schema{"data": schema})
 	schemas := provider.GetSchemas()
 

@@ -6,17 +6,17 @@ import (
 	"github.com/google/cel-go/cel"
 	"github.com/stretchr/testify/require"
 
-	"github.com/spandigital/cel2sql/v2"
-	"github.com/spandigital/cel2sql/v2/pg"
+	"github.com/spandigital/cel2sql/v3"
+	"github.com/spandigital/cel2sql/v3/pg"
 )
 
 // TestJSONFieldNameEscaping_SingleQuote tests that single quotes in JSON field names are properly escaped
 func TestJSONFieldNameEscaping_SingleQuote(t *testing.T) {
 	// Create a schema with a JSON field that might have field names with single quotes
-	testSchema := pg.Schema{
+	testSchema := pg.NewSchema([]pg.FieldSchema{
 		{Name: "id", Type: "integer"},
 		{Name: "metadata", Type: "jsonb", IsJSON: true, IsJSONB: true},
-	}
+	})
 
 	provider := pg.NewTypeProvider(map[string]pg.Schema{
 		"TestTable": testSchema,
@@ -75,10 +75,10 @@ func TestJSONFieldNameEscaping_Documentation(t *testing.T) {
 
 // TestJSONFieldNameEscaping_HasFunction tests escaping in has() macro for JSON existence checks
 func TestJSONFieldNameEscaping_HasFunction(t *testing.T) {
-	testSchema := pg.Schema{
+	testSchema := pg.NewSchema([]pg.FieldSchema{
 		{Name: "id", Type: "integer"},
 		{Name: "settings", Type: "jsonb", IsJSON: true, IsJSONB: true},
-	}
+	})
 
 	provider := pg.NewTypeProvider(map[string]pg.Schema{
 		"TestTable": testSchema,

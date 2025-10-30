@@ -7,21 +7,21 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/spandigital/cel2sql/v2"
-	"github.com/spandigital/cel2sql/v2/pg"
+	"github.com/spandigital/cel2sql/v3"
+	"github.com/spandigital/cel2sql/v3/pg"
 )
 
 // TestJSONColumnTableReference tests the isTableReference function through JSON column detection
 // This tests that table.metadata pattern is correctly identified as JSON column access
 func TestJSONColumnTableReference(t *testing.T) {
 	// Define schema with known JSON columns
-	schema := pg.Schema{
+	schema := pg.NewSchema([]pg.FieldSchema{
 		{Name: "id", Type: "integer"},
 		{Name: "name", Type: "text"},
 		{Name: "metadata", Type: "jsonb", IsJSON: true, IsJSONB: true},
 		{Name: "properties", Type: "jsonb", IsJSON: true, IsJSONB: true},
 		{Name: "content", Type: "json", IsJSON: true, IsJSONB: false},
-	}
+	})
 
 	provider := pg.NewTypeProvider(map[string]pg.Schema{"assets": schema})
 
@@ -86,12 +86,12 @@ func TestJSONColumnTableReference(t *testing.T) {
 
 // TestTableReferenceDetection tests isTableReference through non-JSON column access
 func TestTableReferenceDetection(t *testing.T) {
-	schema := pg.Schema{
+	schema := pg.NewSchema([]pg.FieldSchema{
 		{Name: "id", Type: "integer"},
 		{Name: "name", Type: "text"},
 		{Name: "age", Type: "integer"},
 		{Name: "metadata", Type: "jsonb", IsJSON: true, IsJSONB: true},
-	}
+	})
 
 	provider := pg.NewTypeProvider(map[string]pg.Schema{"users": schema})
 
@@ -145,11 +145,11 @@ func TestTableReferenceDetection(t *testing.T) {
 // TestMapComprehensionAsTransform tests that map() comprehensions work correctly
 // This indirectly tests that TransformList comprehensions are handled via Map
 func TestMapComprehensionAsTransform(t *testing.T) {
-	schema := pg.Schema{
+	schema := pg.NewSchema([]pg.FieldSchema{
 		{Name: "id", Type: "integer"},
 		{Name: "scores", Type: "integer", Repeated: true, ElementType: "integer"},
 		{Name: "prices", Type: "double precision", Repeated: true, ElementType: "double precision"},
-	}
+	})
 
 	provider := pg.NewTypeProvider(map[string]pg.Schema{"data": schema})
 
@@ -260,11 +260,11 @@ func TestStructExpressions(t *testing.T) {
 
 // TestEdgeCasesForCoverage tests additional edge cases to improve coverage
 func TestEdgeCasesForCoverage(t *testing.T) {
-	schema := pg.Schema{
+	schema := pg.NewSchema([]pg.FieldSchema{
 		{Name: "id", Type: "integer"},
 		{Name: "tags", Type: "text", Repeated: true, ElementType: "text"},
 		{Name: "metadata", Type: "jsonb", IsJSON: true, IsJSONB: true},
-	}
+	})
 
 	provider := pg.NewTypeProvider(map[string]pg.Schema{"records": schema})
 

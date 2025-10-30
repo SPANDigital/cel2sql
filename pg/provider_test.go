@@ -7,8 +7,8 @@ import (
 	"github.com/google/cel-go/common/types"
 	"github.com/stretchr/testify/assert"
 
-	"github.com/spandigital/cel2sql/v2/pg"
-	"github.com/spandigital/cel2sql/v2/test"
+	"github.com/spandigital/cel2sql/v3/pg"
+	"github.com/spandigital/cel2sql/v3/test"
 )
 
 func Test_typeProvider_FindStructType(t *testing.T) {
@@ -325,9 +325,9 @@ func Test_typeProvider_PostgreSQLTypes(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			schema := pg.Schema{
+			schema := pg.NewSchema([]pg.FieldSchema{
 				{Name: "test_field", Type: tt.pgType, Repeated: tt.repeated},
-			}
+			})
 			typeProvider := pg.NewTypeProvider(map[string]pg.Schema{
 				"test_table": schema,
 			})
@@ -341,5 +341,107 @@ func Test_typeProvider_PostgreSQLTypes(t *testing.T) {
 				assert.Nil(t, got)
 			}
 		})
+	}
+}
+
+// Benchmark tests to verify O(1) performance improvement
+func BenchmarkFieldLookup_Small(b *testing.B) {
+	// 10 fields - small schema
+	fields := make([]pg.FieldSchema, 10)
+	for i := 0; i < 10; i++ {
+		fields[i] = pg.FieldSchema{
+			Name: "field_" + string(rune('a'+i)),
+			Type: "text",
+		}
+	}
+	schema := pg.NewSchema(fields)
+	typeProvider := pg.NewTypeProvider(map[string]pg.Schema{
+		"test_table": schema,
+	})
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		// Lookup last field (worst case for O(n), same as O(1) for indexed)
+		_, _ = typeProvider.FindStructFieldType("test_table", "field_j")
+	}
+}
+
+func BenchmarkFieldLookup_Medium(b *testing.B) {
+	// 100 fields - medium schema
+	fields := make([]pg.FieldSchema, 100)
+	for i := 0; i < 100; i++ {
+		fields[i] = pg.FieldSchema{
+			Name: "field_" + string(rune('0'+i%10)) + string(rune('0'+i/10)),
+			Type: "text",
+		}
+	}
+	schema := pg.NewSchema(fields)
+	typeProvider := pg.NewTypeProvider(map[string]pg.Schema{
+		"test_table": schema,
+	})
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		// Lookup last field (worst case for O(n))
+		_, _ = typeProvider.FindStructFieldType("test_table", "field_99")
+	}
+}
+
+func BenchmarkFieldLookup_Large(b *testing.B) {
+	// 1000 fields - large schema (real-world worst case)
+	fields := make([]pg.FieldSchema, 1000)
+	for i := 0; i < 1000; i++ {
+		fields[i] = pg.FieldSchema{
+			Name: "field_" + string(rune('0'+i%10)) + string(rune('0'+(i/10)%10)) + string(rune('0'+i/100)),
+			Type: "text",
+		}
+	}
+	schema := pg.NewSchema(fields)
+	typeProvider := pg.NewTypeProvider(map[string]pg.Schema{
+		"test_table": schema,
+	})
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		// Lookup last field (worst case for O(n))
+		_, _ = typeProvider.FindStructFieldType("test_table", "field_999")
+	}
+}
+
+func BenchmarkFieldNames_Small(b *testing.B) {
+	fields := make([]pg.FieldSchema, 10)
+	for i := 0; i < 10; i++ {
+		fields[i] = pg.FieldSchema{
+			Name: "field_" + string(rune('a'+i)),
+			Type: "text",
+		}
+	}
+	schema := pg.NewSchema(fields)
+	typeProvider := pg.NewTypeProvider(map[string]pg.Schema{
+		"test_table": schema,
+	})
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_, _ = typeProvider.FindStructFieldNames("test_table")
+	}
+}
+
+func BenchmarkFieldNames_Large(b *testing.B) {
+	fields := make([]pg.FieldSchema, 1000)
+	for i := 0; i < 1000; i++ {
+		fields[i] = pg.FieldSchema{
+			Name: "field_" + string(rune('0'+i%10)) + string(rune('0'+(i/10)%10)) + string(rune('0'+i/100)),
+			Type: "text",
+		}
+	}
+	schema := pg.NewSchema(fields)
+	typeProvider := pg.NewTypeProvider(map[string]pg.Schema{
+		"test_table": schema,
+	})
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_, _ = typeProvider.FindStructFieldNames("test_table")
 	}
 }

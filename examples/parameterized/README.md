@@ -59,7 +59,7 @@ SELECT * FROM users WHERE age = $1
 
 ```go
 import (
-    "github.com/spandigital/cel2sql/v2"
+    "github.com/spandigital/cel2sql/v3"
 )
 
 // Compile CEL expression
@@ -87,7 +87,7 @@ rows, err := db.Query(
 import (
     "context"
     "log/slog"
-    "github.com/spandigital/cel2sql/v2"
+    "github.com/spandigital/cel2sql/v3"
 )
 
 ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)

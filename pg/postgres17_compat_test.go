@@ -13,8 +13,8 @@ import (
 	"github.com/testcontainers/testcontainers-go/modules/postgres"
 	"github.com/testcontainers/testcontainers-go/wait"
 
-	"github.com/spandigital/cel2sql/v2"
-	"github.com/spandigital/cel2sql/v2/pg"
+	"github.com/spandigital/cel2sql/v3"
+	"github.com/spandigital/cel2sql/v3/pg"
 )
 
 // TestPostgreSQL17Compatibility tests all the PostgreSQL 17 compatibility fixes
@@ -76,7 +76,7 @@ func TestPostgreSQL17Compatibility(t *testing.T) {
 	require.NoError(t, err)
 
 	// Define schema for CEL
-	schema := pg.Schema{
+	schema := pg.NewSchema([]pg.FieldSchema{
 		{Name: "id", Type: "integer"},
 		{Name: "name", Type: "text"},
 		{Name: "age", Type: "integer"},
@@ -85,7 +85,7 @@ func TestPostgreSQL17Compatibility(t *testing.T) {
 		{Name: "data", Type: "bytea"},
 		{Name: "created_at", Type: "timestamp with time zone"},
 		{Name: "tags", Type: "text", Repeated: true},
-	}
+	})
 
 	provider := pg.NewTypeProvider(map[string]pg.Schema{"test_compat": schema})
 

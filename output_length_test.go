@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/google/cel-go/cel"
-	"github.com/spandigital/cel2sql/v2/pg"
+	"github.com/spandigital/cel2sql/v3/pg"
 	"github.com/stretchr/testify/require"
 )
 
@@ -95,10 +95,10 @@ func TestMaxSQLOutputLength(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			schema := pg.Schema{
+			schema := pg.NewSchema([]pg.FieldSchema{
 				{Name: "x", Type: "integer"},
 				{Name: "y", Type: "integer"},
-			}
+			})
 			provider := pg.NewTypeProvider(map[string]pg.Schema{"vars": schema})
 
 			env, err := cel.NewEnv(
@@ -132,10 +132,10 @@ func TestMaxSQLOutputLength(t *testing.T) {
 
 func TestMaxOutputLengthWithOtherOptions(t *testing.T) {
 	// Test combining WithMaxOutputLength with other options
-	schema := pg.Schema{
+	schema := pg.NewSchema([]pg.FieldSchema{
 		{Name: "x", Type: "integer"},
 		{Name: "name", Type: "text"},
-	}
+	})
 	provider := pg.NewTypeProvider(map[string]pg.Schema{"vars": schema})
 	schemas := provider.GetSchemas()
 
@@ -209,7 +209,7 @@ func TestMaxOutputLengthWithOtherOptions(t *testing.T) {
 
 func TestOutputLengthErrorMessage(t *testing.T) {
 	// Verify error message format
-	schema := pg.Schema{{Name: "x", Type: "integer"}}
+	schema := pg.NewSchema([]pg.FieldSchema{{Name: "x", Type: "integer"}})
 	provider := pg.NewTypeProvider(map[string]pg.Schema{"vars": schema})
 
 	env, err := cel.NewEnv(
@@ -241,7 +241,7 @@ func TestOutputLengthErrorMessage(t *testing.T) {
 
 func TestOutputLengthResetBetweenCalls(t *testing.T) {
 	// Ensure output length check resets between Convert() calls
-	schema := pg.Schema{{Name: "x", Type: "integer"}}
+	schema := pg.NewSchema([]pg.FieldSchema{{Name: "x", Type: "integer"}})
 	provider := pg.NewTypeProvider(map[string]pg.Schema{"vars": schema})
 
 	env, err := cel.NewEnv(
@@ -321,7 +321,7 @@ func TestLargeArrayLiterals(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			schema := pg.Schema{{Name: "x", Type: "integer"}}
+			schema := pg.NewSchema([]pg.FieldSchema{{Name: "x", Type: "integer"}})
 			provider := pg.NewTypeProvider(map[string]pg.Schema{"vars": schema})
 
 			env, err := cel.NewEnv(
@@ -398,7 +398,7 @@ func TestLongStringConcatenations(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			schema := pg.Schema{{Name: "s", Type: "text"}}
+			schema := pg.NewSchema([]pg.FieldSchema{{Name: "s", Type: "text"}})
 			provider := pg.NewTypeProvider(map[string]pg.Schema{"vars": schema})
 
 			env, err := cel.NewEnv(
@@ -469,7 +469,7 @@ func TestMaxOutputLengthWithComprehensions(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			schema := pg.Schema{{Name: "x", Type: "integer"}}
+			schema := pg.NewSchema([]pg.FieldSchema{{Name: "x", Type: "integer"}})
 			provider := pg.NewTypeProvider(map[string]pg.Schema{"vars": schema})
 
 			env, err := cel.NewEnv(
@@ -500,10 +500,10 @@ func TestMaxOutputLengthWithComprehensions(t *testing.T) {
 
 func TestParameterizedWithOutputLength(t *testing.T) {
 	// Test that parameterized conversion also respects output length limits
-	schema := pg.Schema{
+	schema := pg.NewSchema([]pg.FieldSchema{
 		{Name: "x", Type: "integer"},
 		{Name: "name", Type: "text"},
-	}
+	})
 	provider := pg.NewTypeProvider(map[string]pg.Schema{"vars": schema})
 	schemas := provider.GetSchemas()
 

@@ -14,8 +14,8 @@ import (
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/wait"
 
-	"github.com/spandigital/cel2sql/v2"
-	"github.com/spandigital/cel2sql/v2/pg"
+	"github.com/spandigital/cel2sql/v3"
+	"github.com/spandigital/cel2sql/v3/pg"
 )
 
 // setupPostgresContainer starts a PostgreSQL 17 container for testing
@@ -98,14 +98,14 @@ func TestParameterizedQueriesIntegration(t *testing.T) {
 	require.NoError(t, err, "Failed to insert test data")
 
 	// Set up CEL environment
-	testSchema := pg.Schema{
+	testSchema := pg.NewSchema([]pg.FieldSchema{
 		{Name: "id", Type: "bigint"},
 		{Name: "name", Type: "text"},
 		{Name: "age", Type: "integer"},
 		{Name: "salary", Type: "double precision"},
 		{Name: "active", Type: "boolean"},
 		{Name: "metadata", Type: "jsonb", IsJSON: true, IsJSONB: true},
-	}
+	})
 
 	provider := pg.NewTypeProvider(map[string]pg.Schema{
 		"users": testSchema,
@@ -277,11 +277,11 @@ func TestParameterizedQueryPlanCaching(t *testing.T) {
 	require.NoError(t, err)
 
 	// Set up CEL environment
-	testSchema := pg.Schema{
+	testSchema := pg.NewSchema([]pg.FieldSchema{
 		{Name: "id", Type: "bigint"},
 		{Name: "name", Type: "text"},
 		{Name: "price", Type: "double precision"},
-	}
+	})
 
 	provider := pg.NewTypeProvider(map[string]pg.Schema{
 		"products": testSchema,
@@ -389,12 +389,12 @@ func TestParameterizedPreparedStatements(t *testing.T) {
 	require.NoError(t, err)
 
 	// Set up CEL environment
-	testSchema := pg.Schema{
+	testSchema := pg.NewSchema([]pg.FieldSchema{
 		{Name: "id", Type: "bigint"},
 		{Name: "name", Type: "text"},
 		{Name: "department", Type: "text"},
 		{Name: "salary", Type: "double precision"},
-	}
+	})
 
 	provider := pg.NewTypeProvider(map[string]pg.Schema{
 		"employees": testSchema,
@@ -502,11 +502,11 @@ func TestParameterizedSQLInjectionPrevention(t *testing.T) {
 	require.NoError(t, err)
 
 	// Set up CEL environment
-	testSchema := pg.Schema{
+	testSchema := pg.NewSchema([]pg.FieldSchema{
 		{Name: "id", Type: "bigint"},
 		{Name: "username", Type: "text"},
 		{Name: "balance", Type: "double precision"},
-	}
+	})
 
 	provider := pg.NewTypeProvider(map[string]pg.Schema{
 		"accounts": testSchema,
@@ -606,14 +606,14 @@ func TestParameterizedDataTypeCompatibility(t *testing.T) {
 	require.NoError(t, err)
 
 	// Set up CEL environment
-	testSchema := pg.Schema{
+	testSchema := pg.NewSchema([]pg.FieldSchema{
 		{Name: "id", Type: "bigint"},
 		{Name: "text_col", Type: "text"},
 		{Name: "int_col", Type: "bigint"},
 		{Name: "double_col", Type: "double precision"},
 		{Name: "bool_col", Type: "boolean"},
 		{Name: "bytes_col", Type: "bytea"},
-	}
+	})
 
 	provider := pg.NewTypeProvider(map[string]pg.Schema{
 		"datatypes": testSchema,
@@ -737,10 +737,10 @@ func BenchmarkParameterizedVsInline(b *testing.B) {
 	}
 
 	// Set up CEL environment
-	testSchema := pg.Schema{
+	testSchema := pg.NewSchema([]pg.FieldSchema{
 		{Name: "id", Type: "bigint"},
 		{Name: "value", Type: "integer"},
-	}
+	})
 
 	provider := pg.NewTypeProvider(map[string]pg.Schema{
 		"benchmark_test": testSchema,
@@ -863,13 +863,13 @@ func TestParameterizedComplexExpressions(t *testing.T) {
 	require.NoError(t, err)
 
 	// Set up CEL environment
-	testSchema := pg.Schema{
+	testSchema := pg.NewSchema([]pg.FieldSchema{
 		{Name: "id", Type: "bigint"},
 		{Name: "name", Type: "text"},
 		{Name: "age", Type: "integer"},
 		{Name: "score", Type: "double precision"},
 		{Name: "tags", Type: "text", Repeated: true, ElementType: "text"},
-	}
+	})
 
 	provider := pg.NewTypeProvider(map[string]pg.Schema{
 		"complex_test": testSchema,
@@ -987,10 +987,10 @@ func TestParameterizedQueryPerformance(t *testing.T) {
 	}
 
 	// Set up CEL environment
-	testSchema := pg.Schema{
+	testSchema := pg.NewSchema([]pg.FieldSchema{
 		{Name: "id", Type: "bigint"},
 		{Name: "value", Type: "integer"},
-	}
+	})
 
 	provider := pg.NewTypeProvider(map[string]pg.Schema{
 		"perf_test": testSchema,

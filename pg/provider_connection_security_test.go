@@ -12,7 +12,7 @@ import (
 	"github.com/testcontainers/testcontainers-go/modules/postgres"
 	"github.com/testcontainers/testcontainers-go/wait"
 
-	"github.com/spandigital/cel2sql/v2/pg"
+	"github.com/spandigital/cel2sql/v3/pg"
 )
 
 // TestConnectionStringLengthValidation tests that connection strings exceeding

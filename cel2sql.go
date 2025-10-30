@@ -18,7 +18,7 @@ import (
 	"github.com/google/cel-go/common/overloads"
 	exprpb "google.golang.org/genproto/googleapis/api/expr/v1alpha1"
 
-	"github.com/spandigital/cel2sql/v2/pg"
+	"github.com/spandigital/cel2sql/v3/pg"
 )
 
 // Implementations based on `google/cel-go`'s unparser
@@ -383,7 +383,7 @@ func (con *converter) isFieldJSON(tableName, fieldName string) bool {
 		return false
 	}
 
-	for _, field := range schema {
+	for _, field := range schema.Fields() {
 		if field.Name == fieldName {
 			con.logger.LogAttrs(context.Background(), slog.LevelDebug,
 				"field type lookup",
@@ -432,7 +432,7 @@ func (con *converter) isFieldJSONB(tableName, fieldName string) bool {
 		return false
 	}
 
-	for _, field := range schema {
+	for _, field := range schema.Fields() {
 		if field.Name == fieldName {
 			return field.IsJSONB
 		}
@@ -452,7 +452,7 @@ func (con *converter) isFieldArray(tableName, fieldName string) bool {
 		return false
 	}
 
-	for _, field := range schema {
+	for _, field := range schema.Fields() {
 		if field.Name == fieldName {
 			return field.Repeated
 		}
@@ -472,7 +472,7 @@ func (con *converter) getFieldElementType(tableName, fieldName string) string {
 		return ""
 	}
 
-	for _, field := range schema {
+	for _, field := range schema.Fields() {
 		if field.Name == fieldName && field.Repeated {
 			return field.ElementType
 		}

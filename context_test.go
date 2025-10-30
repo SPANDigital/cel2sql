@@ -10,8 +10,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/spandigital/cel2sql/v2"
-	"github.com/spandigital/cel2sql/v2/pg"
+	"github.com/spandigital/cel2sql/v3"
+	"github.com/spandigital/cel2sql/v3/pg"
 )
 
 // TestConvertWithContext_NilContext tests that conversion works without a context (backward compatibility)
@@ -90,11 +90,11 @@ func TestConvertWithContext_Timeout(t *testing.T) {
 
 // TestConvertWithContext_ComplexExpression tests context cancellation with a complex expression
 func TestConvertWithContext_ComplexExpression(t *testing.T) {
-	schema := pg.Schema{
+	schema := pg.NewSchema([]pg.FieldSchema{
 		{Name: "name", Type: "text"},
 		{Name: "age", Type: "integer"},
 		{Name: "scores", Type: "integer", Repeated: true},
-	}
+	})
 
 	provider := pg.NewTypeProvider(map[string]pg.Schema{"Person": schema})
 
@@ -127,9 +127,9 @@ func TestConvertWithContext_ComplexExpression(t *testing.T) {
 
 // TestConvertWithContext_MultipleOptions tests combining context with other options
 func TestConvertWithContext_MultipleOptions(t *testing.T) {
-	schema := pg.Schema{
+	schema := pg.NewSchema([]pg.FieldSchema{
 		{Name: "metadata", Type: "jsonb", IsJSON: true, IsJSONB: true},
-	}
+	})
 
 	provider := pg.NewTypeProvider(map[string]pg.Schema{"resource": schema})
 

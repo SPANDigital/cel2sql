@@ -17,8 +17,8 @@ import (
 
 	"github.com/google/cel-go/cel"
 	_ "github.com/lib/pq"
-	"github.com/spandigital/cel2sql/v2"
-	"github.com/spandigital/cel2sql/v2/pg"
+	"github.com/spandigital/cel2sql/v3"
+	"github.com/spandigital/cel2sql/v3/pg"
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/modules/postgres"
 	"github.com/testcontainers/testcontainers-go/wait"
@@ -77,7 +77,7 @@ func main() {
 	}
 
 	// Define schema for CEL
-	schema := pg.Schema{
+	schema := pg.NewSchema([]pg.FieldSchema{
 		{Name: "id", Type: "bigint"},
 		{Name: "name", Type: "text"},
 		{Name: "email", Type: "text"},
@@ -85,7 +85,7 @@ func main() {
 		{Name: "salary", Type: "double precision"},
 		{Name: "department", Type: "text"},
 		{Name: "active", Type: "boolean"},
-	}
+	})
 
 	provider := pg.NewTypeProvider(map[string]pg.Schema{"users": schema})
 

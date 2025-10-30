@@ -6,19 +6,19 @@ import (
 	"log"
 
 	"github.com/google/cel-go/cel"
-	"github.com/spandigital/cel2sql/v2"
-	"github.com/spandigital/cel2sql/v2/pg"
+	"github.com/spandigital/cel2sql/v3"
+	"github.com/spandigital/cel2sql/v3/pg"
 )
 
 func main() {
 	// Define a PostgreSQL table schema
-	employeeSchema := pg.Schema{
+	employeeSchema := pg.NewSchema([]pg.FieldSchema{
 		{Name: "name", Type: "text", Repeated: false},
 		{Name: "age", Type: "integer", Repeated: false},
 		{Name: "department", Type: "text", Repeated: false},
 		{Name: "hired_at", Type: "timestamp with time zone", Repeated: false},
 		{Name: "active", Type: "boolean", Repeated: false},
-	}
+	})
 
 	// Create CEL environment with PostgreSQL type provider
 	env, err := cel.NewEnv(

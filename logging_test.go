@@ -11,8 +11,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/spandigital/cel2sql/v2"
-	"github.com/spandigital/cel2sql/v2/pg"
+	"github.com/spandigital/cel2sql/v3"
+	"github.com/spandigital/cel2sql/v3/pg"
 )
 
 // TestLoggingWithDiscard verifies that default behavior uses discard handler (zero overhead)
@@ -38,10 +38,10 @@ func TestLoggingWithJSONHandler(t *testing.T) {
 		Level: slog.LevelDebug,
 	}))
 
-	schema := pg.Schema{
+	schema := pg.NewSchema([]pg.FieldSchema{
 		{Name: "id", Type: "integer"},
 		{Name: "metadata", Type: "jsonb", IsJSON: true, IsJSONB: true},
-	}
+	})
 	provider := pg.NewTypeProvider(map[string]pg.Schema{"users": schema})
 
 	env, err := cel.NewEnv(
@@ -74,10 +74,10 @@ func TestLoggingJSONPathDetection(t *testing.T) {
 		Level: slog.LevelDebug,
 	}))
 
-	schema := pg.Schema{
+	schema := pg.NewSchema([]pg.FieldSchema{
 		{Name: "id", Type: "integer"},
 		{Name: "data", Type: "jsonb", IsJSON: true, IsJSONB: true},
-	}
+	})
 	provider := pg.NewTypeProvider(map[string]pg.Schema{"records": schema})
 
 	env, err := cel.NewEnv(
@@ -108,10 +108,10 @@ func TestLoggingComprehensions(t *testing.T) {
 		Level: slog.LevelDebug,
 	}))
 
-	schema := pg.Schema{
+	schema := pg.NewSchema([]pg.FieldSchema{
 		{Name: "id", Type: "integer"},
 		{Name: "tags", Type: "text", Repeated: true, ElementType: "text"},
-	}
+	})
 	provider := pg.NewTypeProvider(map[string]pg.Schema{"items": schema})
 
 	env, err := cel.NewEnv(
@@ -190,10 +190,10 @@ func TestLoggingSchemaLookup(t *testing.T) {
 		Level: slog.LevelDebug,
 	}))
 
-	schema := pg.Schema{
+	schema := pg.NewSchema([]pg.FieldSchema{
 		{Name: "id", Type: "integer"},
 		{Name: "data", Type: "jsonb", IsJSON: true, IsJSONB: true},
-	}
+	})
 	provider := pg.NewTypeProvider(map[string]pg.Schema{"users": schema})
 
 	env, err := cel.NewEnv(

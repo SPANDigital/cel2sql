@@ -159,8 +159,8 @@ import (
     "log"
 
     "github.com/google/cel-go/cel"
-    "github.com/spandigital/cel2sql/v2"
-    "github.com/spandigital/cel2sql/v2/pg"
+    "github.com/spandigital/cel2sql/v3"
+    "github.com/spandigital/cel2sql/v3/pg"
 )
 
 func main() {

@@ -8,8 +8,8 @@ import (
 	"log"
 
 	"github.com/google/cel-go/cel"
-	"github.com/spandigital/cel2sql/v2"
-	"github.com/spandigital/cel2sql/v2/pg"
+	"github.com/spandigital/cel2sql/v3"
+	"github.com/spandigital/cel2sql/v3/pg"
 )
 
 func main() {
@@ -63,7 +63,7 @@ func simpleExamples() {
 
 func schemaExamples() {
 	// Define a PostgreSQL schema for employees
-	schema := pg.Schema{
+	schema := pg.NewSchema([]pg.FieldSchema{
 		{Name: "id", Type: "bigint", Repeated: false},
 		{Name: "name", Type: "text", Repeated: false},
 		{Name: "email", Type: "text", Repeated: false},
@@ -71,7 +71,7 @@ func schemaExamples() {
 		{Name: "active", Type: "boolean", Repeated: false},
 		{Name: "salary", Type: "double precision", Repeated: false},
 		{Name: "skills", Type: "text", Repeated: true}, // Array field
-	}
+	})
 
 	provider := pg.NewTypeProvider(map[string]pg.Schema{"Employee": schema})
 
@@ -113,19 +113,20 @@ func schemaExamples() {
 
 func complexExamples() {
 	// Define nested schema with addresses
-	addressSchema := pg.Schema{
+	addressFields := []pg.FieldSchema{
 		{Name: "street", Type: "text", Repeated: false},
 		{Name: "city", Type: "text", Repeated: false},
 		{Name: "country", Type: "text", Repeated: false},
 	}
+	addressSchema := pg.NewSchema(addressFields)
 
-	employeeSchema := pg.Schema{
+	employeeSchema := pg.NewSchema([]pg.FieldSchema{
 		{Name: "id", Type: "bigint", Repeated: false},
 		{Name: "name", Type: "text", Repeated: false},
-		{Name: "address", Type: "composite", Schema: addressSchema},
+		{Name: "address", Type: "composite", Schema: addressFields},
 		{Name: "skills", Type: "text", Repeated: true},
 		{Name: "scores", Type: "bigint", Repeated: true},
-	}
+	})
 
 	provider := pg.NewTypeProvider(map[string]pg.Schema{
 		"Address":  addressSchema,

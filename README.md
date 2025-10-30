@@ -13,7 +13,7 @@
 ### Installation
 
 ```bash
-go get github.com/spandigital/cel2sql/v2
+go get github.com/spandigital/cel2sql/v3
 ```
 
 ### Basic Example
@@ -24,17 +24,17 @@ package main
 import (
     "fmt"
     "github.com/google/cel-go/cel"
-    "github.com/spandigital/cel2sql/v2"
-    "github.com/spandigital/cel2sql/v2/pg"
+    "github.com/spandigital/cel2sql/v3"
+    "github.com/spandigital/cel2sql/v3/pg"
 )
 
 func main() {
     // 1. Define your database table schema
-    userSchema := pg.Schema{
+    userSchema := pg.NewSchema([]pg.FieldSchema{
         {Name: "name", Type: "text"},
         {Name: "age", Type: "integer"},
         {Name: "active", Type: "boolean"},
-    }
+    })
 
     // 2. Create CEL environment
     env, _ := cel.NewEnv(
@@ -88,7 +88,7 @@ cel2sql supports optional advanced features via functional options:
 import (
     "context"
     "log/slog"
-    "github.com/spandigital/cel2sql/v2"
+    "github.com/spandigital/cel2sql/v3"
 )
 
 // Basic conversion

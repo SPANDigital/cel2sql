@@ -7,18 +7,18 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/spandigital/cel2sql/v2"
-	"github.com/spandigital/cel2sql/v2/pg"
+	"github.com/spandigital/cel2sql/v3"
+	"github.com/spandigital/cel2sql/v3/pg"
 )
 
 // TestExistsOneComprehension tests the visitExistsOneComprehension function with schema-based arrays
 func TestExistsOneComprehension(t *testing.T) {
 	// Define schema with array field
-	schema := pg.Schema{
+	schema := pg.NewSchema([]pg.FieldSchema{
 		{Name: "id", Type: "integer"},
 		{Name: "scores", Type: "integer", Repeated: true},
 		{Name: "tags", Type: "text", Repeated: true},
-	}
+	})
 
 	provider := pg.NewTypeProvider(map[string]pg.Schema{"Record": schema})
 
@@ -71,12 +71,12 @@ func TestExistsOneComprehension(t *testing.T) {
 // TestFilterComprehension tests the visitFilterComprehension function with schema-based arrays
 func TestFilterComprehension(t *testing.T) {
 	// Define schema with array field
-	schema := pg.Schema{
+	schema := pg.NewSchema([]pg.FieldSchema{
 		{Name: "id", Type: "integer"},
 		{Name: "scores", Type: "integer", Repeated: true},
 		{Name: "tags", Type: "text", Repeated: true},
 		{Name: "values", Type: "double precision", Repeated: true},
-	}
+	})
 
 	provider := pg.NewTypeProvider(map[string]pg.Schema{"Record": schema})
 
@@ -135,10 +135,10 @@ func TestFilterComprehension(t *testing.T) {
 // TestJSONArrayComprehensions tests comprehensions with JSON array fields
 func TestJSONArrayComprehensions(t *testing.T) {
 	// Define schema with JSON array field
-	schema := pg.Schema{
+	schema := pg.NewSchema([]pg.FieldSchema{
 		{Name: "id", Type: "integer"},
 		{Name: "metadata", Type: "jsonb", IsJSON: true, IsJSONB: true},
-	}
+	})
 
 	provider := pg.NewTypeProvider(map[string]pg.Schema{"Record": schema})
 
@@ -191,10 +191,10 @@ func TestJSONArrayComprehensions(t *testing.T) {
 // TestNestedComprehensions tests nested comprehension scenarios
 func TestNestedComprehensions(t *testing.T) {
 	// Define schema with nested arrays
-	schema := pg.Schema{
+	schema := pg.NewSchema([]pg.FieldSchema{
 		{Name: "id", Type: "integer"},
 		{Name: "groups", Type: "jsonb", IsJSON: true, IsJSONB: true},
-	}
+	})
 
 	provider := pg.NewTypeProvider(map[string]pg.Schema{"Record": schema})
 
@@ -241,10 +241,10 @@ func TestNestedComprehensions(t *testing.T) {
 
 // TestComprehensionZeroCoverageEdgeCases tests edge cases for zero-coverage comprehension functions
 func TestComprehensionZeroCoverageEdgeCases(t *testing.T) {
-	schema := pg.Schema{
+	schema := pg.NewSchema([]pg.FieldSchema{
 		{Name: "id", Type: "integer"},
 		{Name: "items", Type: "integer", Repeated: true},
-	}
+	})
 
 	provider := pg.NewTypeProvider(map[string]pg.Schema{"Record": schema})
 

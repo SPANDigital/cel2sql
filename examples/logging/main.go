@@ -8,8 +8,8 @@ import (
 	"os"
 
 	"github.com/google/cel-go/cel"
-	"github.com/spandigital/cel2sql/v2"
-	"github.com/spandigital/cel2sql/v2/pg"
+	"github.com/spandigital/cel2sql/v3"
+	"github.com/spandigital/cel2sql/v3/pg"
 )
 
 func main() {
@@ -19,12 +19,12 @@ func main() {
 	}))
 
 	// Define schema with JSON fields and arrays
-	schema := pg.Schema{
+	schema := pg.NewSchema([]pg.FieldSchema{
 		{Name: "id", Type: "integer"},
 		{Name: "name", Type: "text"},
 		{Name: "metadata", Type: "jsonb", IsJSON: true, IsJSONB: true},
 		{Name: "tags", Type: "text", Repeated: true, ElementType: "text"},
-	}
+	})
 	provider := pg.NewTypeProvider(map[string]pg.Schema{"users": schema})
 
 	// Create CEL environment

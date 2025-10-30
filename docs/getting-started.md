@@ -14,7 +14,7 @@ cel2sql converts CEL (Common Expression Language) expressions into PostgreSQL SQ
 ## Installation
 
 ```bash
-go get github.com/spandigital/cel2sql/v2
+go get github.com/spandigital/cel2sql/v3
 ```
 
 ## Your First cel2sql Program
@@ -29,8 +29,8 @@ import (
     "log"
 
     "github.com/google/cel-go/cel"
-    "github.com/spandigital/cel2sql/v2"
-    "github.com/spandigital/cel2sql/v2/pg"
+    "github.com/spandigital/cel2sql/v3"
+    "github.com/spandigital/cel2sql/v3/pg"
 )
 
 func main() {
@@ -179,8 +179,8 @@ import (
     "log"
 
     "github.com/google/cel-go/cel"
-    "github.com/spandigital/cel2sql/v2"
-    "github.com/spandigital/cel2sql/v2/pg"
+    "github.com/spandigital/cel2sql/v3"
+    "github.com/spandigital/cel2sql/v3/pg"
 )
 
 func main() {

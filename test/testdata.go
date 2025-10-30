@@ -2,12 +2,12 @@
 package test
 
 import (
-	"github.com/spandigital/cel2sql/v2/pg"
+	"github.com/spandigital/cel2sql/v3/pg"
 )
 
 // NewTrigramsTableSchema returns a PostgreSQL schema for the trigrams table.
 func NewTrigramsTableSchema() pg.Schema {
-	return pg.Schema{
+	return pg.NewSchema([]pg.FieldSchema{
 		{
 			Name:     "ngram",
 			Type:     "text",
@@ -107,12 +107,12 @@ func NewTrigramsTableSchema() pg.Schema {
 				},
 			},
 		},
-	}
+	})
 }
 
 // NewWikipediaTableSchema returns a PostgreSQL schema for the wikipedia table.
 func NewWikipediaTableSchema() pg.Schema {
-	return pg.Schema{
+	return pg.NewSchema([]pg.FieldSchema{
 		{
 			Name:     "title",
 			Type:     "text",
@@ -188,5 +188,5 @@ func NewWikipediaTableSchema() pg.Schema {
 			Type:     "bigint",
 			Repeated: false,
 		},
-	}
+	})
 }

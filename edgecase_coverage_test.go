@@ -7,8 +7,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/spandigital/cel2sql/v2"
-	"github.com/spandigital/cel2sql/v2/pg"
+	"github.com/spandigital/cel2sql/v3"
+	"github.com/spandigital/cel2sql/v3/pg"
 )
 
 // TestConstEdgeCases tests visitConst with edge case values
@@ -242,13 +242,13 @@ func TestStringFunctionEdgeCases(t *testing.T) {
 
 // TestBinaryOperatorEdgeCases tests visitCallBinary with various operator combinations
 func TestBinaryOperatorEdgeCases(t *testing.T) {
-	schema := pg.Schema{
+	schema := pg.NewSchema([]pg.FieldSchema{
 		{Name: "id", Type: "integer"},
 		{Name: "name", Type: "text"},
 		{Name: "score", Type: "double precision"},
 		{Name: "tags", Type: "text", Repeated: true, ElementType: "text"},
 		{Name: "metadata", Type: "jsonb", IsJSON: true, IsJSONB: true},
-	}
+	})
 
 	provider := pg.NewTypeProvider(map[string]pg.Schema{"data": schema})
 
@@ -374,13 +374,13 @@ func TestBinaryOperatorEdgeCases(t *testing.T) {
 
 // TestIdentifierEdgeCases tests visitIdent with various identifier patterns
 func TestIdentifierEdgeCases(t *testing.T) {
-	schema := pg.Schema{
+	schema := pg.NewSchema([]pg.FieldSchema{
 		{Name: "id", Type: "integer"},
 		{Name: "score", Type: "integer"},
 		{Name: "value", Type: "integer"},
 		{Name: "count", Type: "integer"},
 		{Name: "amount", Type: "integer"},
-	}
+	})
 
 	provider := pg.NewTypeProvider(map[string]pg.Schema{"record": schema})
 
@@ -456,14 +456,14 @@ func TestIdentifierEdgeCases(t *testing.T) {
 
 // TestCallFuncEdgeCases tests visitCallFunc with various function types
 func TestCallFuncEdgeCases(t *testing.T) {
-	schema := pg.Schema{
+	schema := pg.NewSchema([]pg.FieldSchema{
 		{Name: "id", Type: "integer"},
 		{Name: "name", Type: "text"},
 		{Name: "created", Type: "timestamp with time zone"},
 		{Name: "data", Type: "jsonb", IsJSON: true, IsJSONB: true},
 		{Name: "tags", Type: "text", Repeated: true, ElementType: "text"},
 		{Name: "scores", Type: "integer", Repeated: true, ElementType: "integer"},
-	}
+	})
 
 	provider := pg.NewTypeProvider(map[string]pg.Schema{"record": schema})
 

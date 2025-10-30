@@ -7,19 +7,19 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/spandigital/cel2sql/v2"
-	"github.com/spandigital/cel2sql/v2/pg"
+	"github.com/spandigital/cel2sql/v3"
+	"github.com/spandigital/cel2sql/v3/pg"
 )
 
 // TestJSONBFieldDetection tests the isFieldJSONB function through actual conversions
 func TestJSONBFieldDetection(t *testing.T) {
 	// Define schema with both JSON and JSONB fields
-	schema := pg.Schema{
+	schema := pg.NewSchema([]pg.FieldSchema{
 		{Name: "id", Type: "integer"},
 		{Name: "json_data", Type: "json", IsJSON: true, IsJSONB: false},
 		{Name: "jsonb_data", Type: "jsonb", IsJSON: true, IsJSONB: true},
 		{Name: "jsonb_metadata", Type: "jsonb", IsJSON: true, IsJSONB: true},
-	}
+	})
 
 	provider := pg.NewTypeProvider(map[string]pg.Schema{"record": schema})
 
@@ -77,13 +77,13 @@ func TestJSONBFieldDetection(t *testing.T) {
 // TestArrayFieldDetection tests the isFieldArray and getFieldElementType functions
 func TestArrayFieldDetection(t *testing.T) {
 	// Define schema with various array types
-	schema := pg.Schema{
+	schema := pg.NewSchema([]pg.FieldSchema{
 		{Name: "id", Type: "integer"},
 		{Name: "int_array", Type: "integer", Repeated: true, ElementType: "integer"},
 		{Name: "text_array", Type: "text", Repeated: true, ElementType: "text"},
 		{Name: "double_array", Type: "double precision", Repeated: true, ElementType: "double precision"},
 		{Name: "not_array", Type: "text", Repeated: false},
-	}
+	})
 
 	provider := pg.NewTypeProvider(map[string]pg.Schema{"data": schema})
 
@@ -143,10 +143,10 @@ func TestArrayFieldDetection(t *testing.T) {
 func TestJSONBWithArrays(t *testing.T) {
 	t.Skip("JSONB array .size() operations not yet fully supported")
 
-	schema := pg.Schema{
+	schema := pg.NewSchema([]pg.FieldSchema{
 		{Name: "id", Type: "integer"},
 		{Name: "data", Type: "jsonb", IsJSON: true, IsJSONB: true},
-	}
+	})
 
 	provider := pg.NewTypeProvider(map[string]pg.Schema{"doc": schema})
 
@@ -192,11 +192,11 @@ func TestJSONBWithArrays(t *testing.T) {
 
 // TestSchemaEdgeCases tests edge cases in schema lookups
 func TestSchemaEdgeCases(t *testing.T) {
-	schema := pg.Schema{
+	schema := pg.NewSchema([]pg.FieldSchema{
 		{Name: "id", Type: "integer"},
 		{Name: "data", Type: "jsonb", IsJSON: true, IsJSONB: true},
 		{Name: "array_field", Type: "text", Repeated: true, ElementType: "text"},
-	}
+	})
 
 	provider := pg.NewTypeProvider(map[string]pg.Schema{"table1": schema})
 

@@ -6,9 +6,9 @@ import (
 	"unicode/utf8"
 
 	"github.com/google/cel-go/cel"
-	"github.com/spandigital/cel2sql/v2"
-	"github.com/spandigital/cel2sql/v2/pg"
-	"github.com/spandigital/cel2sql/v2/sqltypes"
+	"github.com/spandigital/cel2sql/v3"
+	"github.com/spandigital/cel2sql/v3/pg"
+	"github.com/spandigital/cel2sql/v3/sqltypes"
 )
 
 // FuzzConvert fuzzes the main Convert function to find crashes, panics, and SQL injection vulnerabilities
@@ -54,7 +54,7 @@ func FuzzConvert(f *testing.F) {
 	}
 
 	// Create CEL environment for fuzzing
-	schema := pg.Schema{
+	schema := pg.NewSchema([]pg.FieldSchema{
 		{Name: "name", Type: "text"},
 		{Name: "email", Type: "text"},
 		{Name: "text", Type: "text"},
@@ -77,17 +77,17 @@ func FuzzConvert(f *testing.F) {
 		{Name: "a", Type: "boolean"},
 		{Name: "b", Type: "boolean"},
 		{Name: "c", Type: "boolean"},
-	}
+	})
 
-	itemSchema := pg.Schema{
+	itemSchema := pg.NewSchema([]pg.FieldSchema{
 		{Name: "id", Type: "integer"},
 		{Name: "active", Type: "boolean"},
-	}
+	})
 
-	employeeSchema := pg.Schema{
+	employeeSchema := pg.NewSchema([]pg.FieldSchema{
 		{Name: "name", Type: "text"},
 		{Name: "age", Type: "integer"},
-	}
+	})
 
 	provider := pg.NewTypeProvider(map[string]pg.Schema{
 		"Record":   schema,
@@ -209,9 +209,9 @@ func FuzzEscapeLikePattern(f *testing.F) {
 		// Create a CEL expression with startsWith using the pattern
 		celExpr := `name.startsWith("` + strings.ReplaceAll(pattern, `"`, `\"`) + `")`
 
-		schema := pg.Schema{
+		schema := pg.NewSchema([]pg.FieldSchema{
 			{Name: "name", Type: "text"},
-		}
+		})
 		provider := pg.NewTypeProvider(map[string]pg.Schema{"Record": schema})
 
 		env, err := cel.NewEnv(
@@ -305,9 +305,9 @@ func FuzzConvertRE2ToPOSIX(f *testing.F) {
 		escapedPattern = strings.ReplaceAll(escapedPattern, `"`, `\"`)
 		celExpr := `email.matches(r"` + escapedPattern + `")`
 
-		schema := pg.Schema{
+		schema := pg.NewSchema([]pg.FieldSchema{
 			{Name: "email", Type: "text"},
-		}
+		})
 		provider := pg.NewTypeProvider(map[string]pg.Schema{"Record": schema})
 
 		env, err := cel.NewEnv(

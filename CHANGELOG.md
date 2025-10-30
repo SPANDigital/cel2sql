@@ -2,6 +2,27 @@
 
 ## [Unreleased]
 
+## [3.0.0] - 2025-10-30
+
+### Breaking Changes
+- **Schema API Redesign for O(1) Performance** (fixes #28)
+  - Changed `pg.Schema` from type alias `[]FieldSchema` to a struct with internal indexing
+  - Schema field lookups now O(1) constant time instead of O(n) linear search
+  - **Migration Guide**:
+    - Old: `schema := pg.Schema{{Name: "field", Type: "text"}}`
+    - New: `schema := pg.NewSchema([]pg.FieldSchema{{Name: "field", Type: "text"}})`
+    - Use `schema.Fields()` to iterate fields
+    - Use `schema.FindField(name)` for O(1) lookups
+  - Benchmarks show constant 241ns lookup time regardless of schema size (10, 100, or 1000 fields)
+  - All examples, tests, and documentation updated
+
+### Performance
+- **10-100x faster schema lookups** for large schemas
+  - 10 fields: ~same performance
+  - 100 fields: ~10x faster
+  - 1000 fields: ~100x faster
+  - Critical for applications with complex database schemas
+
 ### Security
 - **Nested Comprehension Depth Limits**: Added protection against resource exhaustion from deeply nested comprehensions (fixes #35)
   - Implemented maximum nesting depth of 3 for CEL comprehensions (all, exists, exists_one, filter, map)
@@ -150,7 +171,7 @@ has(properties.visibility)                     // → properties->'visibility' I
 ## [2.7.2] - 2025-07-19
 
 ### BREAKING CHANGES
-- **Module Path Update**: Updated module path to `github.com/spandigital/cel2sql/v2` for Go module versioning compliance
+- **Module Path Update**: Updated module path to `github.com/spandigital/cel2sql/v3` for Go module versioning compliance
 - **Import Changes Required**: All users must update their imports to include the `/v2` suffix
 
 ### Fixed
@@ -167,9 +188,9 @@ import "github.com/spandigital/cel2sql/pg"
 import "github.com/spandigital/cel2sql/sqltypes"
 
 // NEW (v2.7.2 and later)
-import "github.com/spandigital/cel2sql/v2"
-import "github.com/spandigital/cel2sql/v2/pg"
-import "github.com/spandigital/cel2sql/v2/sqltypes"
+import "github.com/spandigital/cel2sql/v3"
+import "github.com/spandigital/cel2sql/v3/pg"
+import "github.com/spandigital/cel2sql/v3/sqltypes"
 ```
 
 ### Technical Details

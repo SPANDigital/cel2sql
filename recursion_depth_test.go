@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/google/cel-go/cel"
-	"github.com/spandigital/cel2sql/v2/pg"
+	"github.com/spandigital/cel2sql/v3/pg"
 	"github.com/stretchr/testify/require"
 )
 
@@ -65,7 +65,7 @@ func TestMaxRecursionDepth(t *testing.T) {
 				expr = "(" + expr + " + 1)"
 			}
 
-			schema := pg.Schema{{Name: "x", Type: "integer"}}
+			schema := pg.NewSchema([]pg.FieldSchema{{Name: "x", Type: "integer"}})
 			provider := pg.NewTypeProvider(map[string]pg.Schema{"vars": schema})
 
 			env, err := cel.NewEnv(
@@ -96,7 +96,7 @@ func TestMaxRecursionDepth(t *testing.T) {
 
 func TestMaxDepthWithOtherOptions(t *testing.T) {
 	// Test combining WithMaxDepth with other options
-	schema := pg.Schema{{Name: "x", Type: "integer"}}
+	schema := pg.NewSchema([]pg.FieldSchema{{Name: "x", Type: "integer"}})
 	provider := pg.NewTypeProvider(map[string]pg.Schema{"vars": schema})
 	schemas := provider.GetSchemas()
 
@@ -173,7 +173,7 @@ func TestRecursionDepthErrorMessage(t *testing.T) {
 		expr = "(" + expr + " + 1)"
 	}
 
-	schema := pg.Schema{{Name: "x", Type: "integer"}}
+	schema := pg.NewSchema([]pg.FieldSchema{{Name: "x", Type: "integer"}})
 	provider := pg.NewTypeProvider(map[string]pg.Schema{"vars": schema})
 
 	env, err := cel.NewEnv(
@@ -267,7 +267,7 @@ func TestDeeplyNestedExpressions(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			schema := pg.Schema{{Name: "x", Type: "integer"}}
+			schema := pg.NewSchema([]pg.FieldSchema{{Name: "x", Type: "integer"}})
 			provider := pg.NewTypeProvider(map[string]pg.Schema{"vars": schema})
 
 			env, err := cel.NewEnv(
@@ -299,7 +299,7 @@ func TestDeeplyNestedExpressions(t *testing.T) {
 
 func TestDepthResetBetweenCalls(t *testing.T) {
 	// Ensure depth counter resets between Convert() calls
-	schema := pg.Schema{{Name: "x", Type: "integer"}}
+	schema := pg.NewSchema([]pg.FieldSchema{{Name: "x", Type: "integer"}})
 	provider := pg.NewTypeProvider(map[string]pg.Schema{"vars": schema})
 
 	env, err := cel.NewEnv(
@@ -360,9 +360,9 @@ func TestMaxDepthWithComprehensions(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			schema := pg.Schema{
+			schema := pg.NewSchema([]pg.FieldSchema{
 				{Name: "x", Type: "integer"},
-			}
+			})
 			provider := pg.NewTypeProvider(map[string]pg.Schema{"vars": schema})
 
 			env, err := cel.NewEnv(

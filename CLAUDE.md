@@ -6,9 +6,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 cel2sql converts CEL (Common Expression Language) expressions to PostgreSQL SQL conditions. It specifically targets PostgreSQL standard SQL and was recently migrated from BigQuery.
 
-**Module**: `github.com/spandigital/cel2sql/v2`
+**Module**: `github.com/spandigital/cel2sql/v3`
 **Go Version**: 1.24+
-**Current Version**: v2.12.1
+**Current Version**: v3.0.0
 
 ## Common Development Commands
 
@@ -171,12 +171,12 @@ These validations prevent PostgreSQL syntax errors and ensure predictable behavi
 
 ### Creating Type Providers
 ```go
-schema := pg.Schema{
+schema := pg.NewSchema([]pg.FieldSchema{
     {Name: "field_name", Type: "text", Repeated: false},
     {Name: "array_field", Type: "text", Repeated: true},
     {Name: "json_field", Type: "jsonb", Repeated: false},
     {Name: "composite_field", Type: "composite", Schema: []pg.FieldSchema{...}},
-}
+})
 provider := pg.NewTypeProvider(map[string]pg.Schema{"TableName": schema})
 ```
 

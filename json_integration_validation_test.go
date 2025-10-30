@@ -11,8 +11,8 @@ import (
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/wait"
 
-	"github.com/spandigital/cel2sql/v2"
-	"github.com/spandigital/cel2sql/v2/pg"
+	"github.com/spandigital/cel2sql/v3"
+	"github.com/spandigital/cel2sql/v3/pg"
 )
 
 // TestGeneratedSQLAgainstPostgreSQL tests if our generated SQL actually works against PostgreSQL
@@ -69,10 +69,10 @@ func TestGeneratedSQLAgainstPostgreSQL(t *testing.T) {
 	require.NoError(t, err)
 
 	// Set up CEL environment
-	testSchema := pg.Schema{
+	testSchema := pg.NewSchema([]pg.FieldSchema{
 		{Name: "id", Type: "integer"},
 		{Name: "metadata", Type: "jsonb", IsJSON: true, IsJSONB: true},
-	}
+	})
 
 	provider := pg.NewTypeProvider(map[string]pg.Schema{
 		"TestTable": testSchema,
