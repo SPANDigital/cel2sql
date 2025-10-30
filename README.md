@@ -262,6 +262,32 @@ user.scores.all(s, s >= 60)
 | Dates | `created_at.getFullYear() == 2024` | `EXTRACT(YEAR FROM created_at) = 2024` |
 | Conditionals | `age > 30 ? "senior" : "junior"` | `CASE WHEN age > 30 THEN 'senior' ELSE 'junior' END` |
 
+### Regex Matching Limitations
+
+cel2sql automatically converts CEL's RE2 regex patterns to PostgreSQL POSIX regex. While most common patterns work, some RE2 features are **not supported** and will return errors:
+
+**Supported:**
+- ✅ Basic patterns: `.*`, `[a-z]+`, `\d{3}`
+- ✅ Case-insensitive flag: `(?i)pattern` → Uses `~*` operator
+- ✅ Character classes: `\d`, `\w`, `\s` (converted to POSIX)
+- ✅ Non-capturing groups: `(?:...)` (converted to regular groups)
+
+**Unsupported:**
+- ❌ Lookahead assertions: `(?=...)`, `(?!...)`
+- ❌ Lookbehind assertions: `(?<=...)`, `(?<!...)`
+- ❌ Named capture groups: `(?P<name>...)`
+- ❌ Inline flags (except `(?i)`): `(?m)`, `(?s)`, `(?-i)`, etc.
+
+**ReDoS Protection:**
+cel2sql includes automatic validation to prevent Regular Expression Denial of Service attacks:
+- Pattern length limited to 500 characters
+- Nested quantifiers blocked: `(a+)+` ❌
+- Quantified alternation blocked: `(a|a)*` ❌
+- Capture group limit: 20 maximum
+- Nesting depth limit: 10 levels
+
+See [Regex Matching documentation](docs/regex-matching.md) for complete details, safe pattern examples, and performance tips.
+
 ## Type Mapping
 
 | CEL Type | PostgreSQL Type |
