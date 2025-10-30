@@ -210,6 +210,72 @@ sqlCondition, err := cel2sql.Convert(ast)
 // Returns: table.field = 'value' AND table.age > 30
 ```
 
+### Query Analysis and Index Recommendations
+
+cel2sql can analyze CEL expressions and recommend database indexes to optimize performance.
+
+#### Using AnalyzeQuery
+
+```go
+ast, issues := env.Compile(`person.age > 18 && person.metadata.verified == true`)
+if issues != nil && issues.Err() != nil {
+    return issues.Err()
+}
+
+sql, recommendations, err := cel2sql.AnalyzeQuery(ast,
+    cel2sql.WithSchemas(schemas))
+if err != nil {
+    return err
+}
+
+// Use the generated SQL
+rows, err := db.Query("SELECT * FROM people WHERE " + sql)
+
+// Review and apply index recommendations
+for _, rec := range recommendations {
+    fmt.Printf("Column: %s, Type: %s\n", rec.Column, rec.IndexType)
+    fmt.Printf("Reason: %s\n", rec.Reason)
+    fmt.Printf("Execute: %s\n\n", rec.Expression)
+}
+```
+
+#### Index Recommendation Types
+
+AnalyzeQuery detects patterns and recommends appropriate index types:
+
+- **B-tree indexes**: Comparison operations (`==, >, <, >=, <=`)
+  - Best for: Equality checks, range queries, sorting
+  - Example: `person.age > 18` → B-tree on `person.age`
+
+- **GIN indexes**: JSON/JSONB path operations, array operations
+  - Best for: JSON field access, array membership, containment
+  - Example: `person.metadata.verified == true` → GIN on `person.metadata`
+  - Example: `"premium" in person.tags` → GIN on `person.tags`
+
+- **GIN indexes with pg_trgm**: Regex pattern matching
+  - Best for: Text search, pattern matching, fuzzy matching
+  - Requires: PostgreSQL pg_trgm extension
+  - Example: `person.email.matches(r"@example\.com$")` → GIN on `person.email`
+
+#### IndexRecommendation Structure
+
+```go
+type IndexRecommendation struct {
+    Column     string  // Full column name (e.g., "person.metadata")
+    IndexType  string  // "BTREE", "GIN", or "GIST"
+    Expression string  // Complete CREATE INDEX statement
+    Reason     string  // Explanation of why this index is recommended
+}
+```
+
+#### When to Use
+
+- **Development**: Discover which indexes your queries need
+- **Performance tuning**: Identify missing indexes causing slow queries
+- **Production monitoring**: Analyze user-generated filter expressions
+
+See `examples/index_analysis/` for a complete working example.
+
 ### Logging and Observability
 
 cel2sql supports structured logging using Go's standard `log/slog` package (Go 1.21+).

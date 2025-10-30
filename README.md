@@ -119,6 +119,79 @@ sql, err := cel2sql.Convert(ast,
 - `WithLogger(*slog.Logger)` - Enable structured logging
 - `WithMaxDepth(int)` - Set custom recursion depth limit (default: 100)
 
+## Query Analysis and Index Recommendations
+
+cel2sql can analyze your CEL queries and recommend database indexes to optimize performance. The `AnalyzeQuery()` function returns both the converted SQL and actionable index recommendations.
+
+### How It Works
+
+`AnalyzeQuery()` examines your CEL expression and detects patterns that would benefit from specific PostgreSQL index types:
+
+- **JSON/JSONB path operations** (`->>, ?`) → GIN indexes
+- **Array operations** (comprehensions, `IN` clauses) → GIN indexes
+- **Regex matching** (`matches()`) → GIN indexes with `pg_trgm` extension
+- **Comparison operations** (`==, >, <, >=, <=`) → B-tree indexes
+
+### Usage
+
+```go
+sql, recommendations, err := cel2sql.AnalyzeQuery(ast,
+    cel2sql.WithSchemas(schemas))
+if err != nil {
+    log.Fatal(err)
+}
+
+// Use the generated SQL
+rows, err := db.Query("SELECT * FROM users WHERE " + sql)
+
+// Review and apply index recommendations
+for _, rec := range recommendations {
+    fmt.Printf("Column: %s\n", rec.Column)
+    fmt.Printf("Type: %s\n", rec.IndexType)
+    fmt.Printf("Reason: %s\n", rec.Reason)
+    fmt.Printf("Execute: %s\n\n", rec.Expression)
+
+    // Apply the recommendation
+    // _, err := db.Exec(rec.Expression)
+}
+```
+
+### Example
+
+```go
+// Query with multiple index-worthy patterns
+celExpr := `person.age > 18 &&
+            person.email.matches(r"@example\.com$") &&
+            person.metadata.verified == true`
+
+ast, _ := env.Compile(celExpr)
+sql, recs, _ := cel2sql.AnalyzeQuery(ast, cel2sql.WithSchemas(schemas))
+
+// Generated SQL:
+// person.age > 18 AND person.email ~ '@example\.com$'
+// AND person.metadata->>'verified' = 'true'
+
+// Recommendations:
+// 1. CREATE INDEX idx_person_age_btree ON table_name (person.age);
+//    Reason: Comparison operations benefit from B-tree for range queries
+//
+// 2. CREATE INDEX idx_person_email_gin_trgm ON table_name
+//    USING GIN (person.email gin_trgm_ops);
+//    Reason: Regex matching benefits from GIN index with pg_trgm
+//
+// 3. CREATE INDEX idx_person_metadata_gin ON table_name
+//    USING GIN (person.metadata);
+//    Reason: JSON path operations benefit from GIN index
+```
+
+### When to Use
+
+- **Development**: Discover which indexes your queries need
+- **Performance tuning**: Identify missing indexes causing slow queries
+- **Production monitoring**: Analyze user-generated filter expressions
+
+See `examples/index_analysis/` for a complete working example.
+
 ## Parameterized Queries
 
 cel2sql supports **parameterized queries** (prepared statements) for improved performance, security, and monitoring.
