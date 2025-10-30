@@ -231,12 +231,12 @@ func TestOutputLengthErrorMessage(t *testing.T) {
 	// Test default error message
 	_, err = Convert(ast)
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "generated SQL exceeds maximum output length of 50000")
+	require.Contains(t, err.Error(), "exceeds limit of 50000")
 
 	// Test custom limit error message
 	_, err = Convert(ast, WithMaxOutputLength(1000))
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "generated SQL exceeds maximum output length of 1000")
+	require.Contains(t, err.Error(), "exceeds limit of 1000")
 }
 
 func TestOutputLengthResetBetweenCalls(t *testing.T) {

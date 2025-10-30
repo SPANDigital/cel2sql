@@ -96,9 +96,9 @@ func TestNestedComprehensionDepthLimit(t *testing.T) {
 
 			if tt.shouldErr {
 				require.Error(t, err, tt.description)
-				require.Contains(t, err.Error(), "comprehension nesting depth",
+				require.Contains(t, err.Error(), "comprehension depth",
 					"Error should mention comprehension depth")
-				require.Contains(t, err.Error(), "exceeds maximum",
+				require.Contains(t, err.Error(), "exceeds limit",
 					"Error should mention exceeding maximum")
 			} else {
 				require.NoError(t, err, tt.description)
@@ -158,8 +158,8 @@ func TestComprehensionDepthWithSchemas(t *testing.T) {
 
 			if tt.shouldErr {
 				require.Error(t, err, tt.description)
-				require.Contains(t, err.Error(), "comprehension nesting depth")
-				require.Contains(t, err.Error(), "exceeds maximum")
+				require.Contains(t, err.Error(), "comprehension depth")
+				require.Contains(t, err.Error(), "exceeds limit")
 			} else {
 				require.NoError(t, err, tt.description)
 			}
@@ -203,9 +203,9 @@ func TestComprehensionDepthErrorMessage(t *testing.T) {
 
 	_, err = cel2sql.Convert(ast)
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "comprehension nesting depth",
+	require.Contains(t, err.Error(), "comprehension depth",
 		"Error message should mention comprehension depth")
-	require.Contains(t, err.Error(), "exceeds maximum",
+	require.Contains(t, err.Error(), "exceeds limit",
 		"Error message should mention exceeding maximum")
 }
 
@@ -261,8 +261,8 @@ func TestComprehensionDepthWithMixedExpressions(t *testing.T) {
 
 			if tt.shouldErr {
 				require.Error(t, err, tt.description)
-				require.Contains(t, err.Error(), "comprehension nesting depth")
-				require.Contains(t, err.Error(), "exceeds maximum")
+				require.Contains(t, err.Error(), "comprehension depth")
+				require.Contains(t, err.Error(), "exceeds limit")
 			} else {
 				require.NoError(t, err, tt.description)
 			}
@@ -321,8 +321,8 @@ func TestComprehensionDepthBoundaryConditions(t *testing.T) {
 
 			if tt.shouldErr {
 				require.Error(t, err)
-				require.Contains(t, err.Error(), "comprehension nesting depth")
-				require.Contains(t, err.Error(), "exceeds maximum")
+				require.Contains(t, err.Error(), "comprehension depth")
+				require.Contains(t, err.Error(), "exceeds limit")
 			} else {
 				require.NoError(t, err)
 			}

@@ -61,7 +61,7 @@ func TestConvertWithContext_CancelledContext(t *testing.T) {
 	require.Error(t, err)
 	assert.Empty(t, sql)
 	assert.True(t, errors.Is(err, context.Canceled), "error should wrap context.Canceled")
-	assert.Contains(t, err.Error(), "conversion cancelled")
+	assert.Contains(t, err.Error(), "operation cancelled")
 }
 
 // TestConvertWithContext_Timeout tests that a timeout context stops conversion
@@ -85,7 +85,7 @@ func TestConvertWithContext_Timeout(t *testing.T) {
 	require.Error(t, err)
 	assert.Empty(t, sql)
 	assert.True(t, errors.Is(err, context.DeadlineExceeded), "error should wrap context.DeadlineExceeded")
-	assert.Contains(t, err.Error(), "conversion cancelled")
+	assert.Contains(t, err.Error(), "operation cancelled")
 }
 
 // TestConvertWithContext_ComplexExpression tests context cancellation with a complex expression
@@ -122,7 +122,7 @@ func TestConvertWithContext_ComplexExpression(t *testing.T) {
 	sql, err = cel2sql.Convert(ast, cel2sql.WithContext(cancelledCtx), cel2sql.WithSchemas(schemas))
 	require.Error(t, err)
 	assert.Empty(t, sql)
-	assert.Contains(t, err.Error(), "conversion cancelled")
+	assert.Contains(t, err.Error(), "operation cancelled")
 }
 
 // TestConvertWithContext_MultipleOptions tests combining context with other options
@@ -180,5 +180,5 @@ func TestConvertWithContext_LongRunningConversion(t *testing.T) {
 	// Should fail due to timeout
 	_, err = cel2sql.Convert(ast, cel2sql.WithContext(ctx))
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "conversion cancelled")
+	assert.Contains(t, err.Error(), "operation cancelled")
 }

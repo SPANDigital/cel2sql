@@ -188,12 +188,12 @@ func TestRecursionDepthErrorMessage(t *testing.T) {
 	// Test default error message
 	_, err = Convert(ast)
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "expression exceeds maximum recursion depth of 100")
+	require.Contains(t, err.Error(), "exceeds limit of 100")
 
 	// Test custom depth error message
 	_, err = Convert(ast, WithMaxDepth(50))
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "expression exceeds maximum recursion depth of 50")
+	require.Contains(t, err.Error(), "exceeds limit of 50")
 }
 
 func TestDeeplyNestedExpressions(t *testing.T) {

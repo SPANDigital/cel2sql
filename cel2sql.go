@@ -4,7 +4,6 @@ package cel2sql
 import (
 	"context"
 	"encoding/hex"
-	"errors"
 	"fmt"
 	"log/slog"
 	"math"
@@ -330,7 +329,7 @@ func (con *converter) checkContext() error {
 		return nil
 	}
 	if err := con.ctx.Err(); err != nil {
-		return fmt.Errorf("conversion cancelled: %w", err)
+		return fmt.Errorf("%w: %w", ErrContextCanceled, err)
 	}
 	return nil
 }
@@ -343,7 +342,7 @@ func (con *converter) visit(expr *exprpb.Expr) error {
 	// Check depth limit before context check (fail fast)
 	// Allow depths up to and including maxDepth
 	if con.depth > con.maxDepth {
-		return fmt.Errorf("expression exceeds maximum recursion depth of %d", con.maxDepth)
+		return fmt.Errorf("%w: depth %d exceeds limit of %d", ErrMaxDepthExceeded, con.depth, con.maxDepth)
 	}
 
 	// Check for context cancellation at the main recursion entry point
@@ -353,7 +352,7 @@ func (con *converter) visit(expr *exprpb.Expr) error {
 
 	// Check SQL output length limit to prevent resource exhaustion (CWE-400)
 	if con.str.Len() > con.maxOutputLen {
-		return fmt.Errorf("generated SQL exceeds maximum output length of %d", con.maxOutputLen)
+		return fmt.Errorf("%w: %d bytes exceeds limit of %d", ErrMaxOutputLengthExceeded, con.str.Len(), con.maxOutputLen)
 	}
 
 	switch expr.ExprKind.(type) {
@@ -706,7 +705,7 @@ func (con *converter) callStartsWith(target *exprpb.Expr, args []*exprpb.Expr) e
 	// or for more robust handling: LEFT(string, LENGTH(prefix)) = prefix
 
 	if target == nil || len(args) == 0 {
-		return errors.New("startsWith function requires both string and prefix arguments")
+		return fmt.Errorf("%w: startsWith function requires both string and prefix arguments", ErrInvalidArguments)
 	}
 
 	// Visit the string expression
@@ -723,7 +722,7 @@ func (con *converter) callStartsWith(target *exprpb.Expr, args []*exprpb.Expr) e
 		prefix := constExpr.GetStringValue()
 		// Reject patterns containing null bytes
 		if strings.Contains(prefix, "\x00") {
-			return errors.New("LIKE patterns cannot contain null bytes")
+			return fmt.Errorf("%w: LIKE patterns cannot contain null bytes", ErrInvalidArguments)
 		}
 		// Escape special LIKE characters: %, _, \
 		escaped := escapeLikePattern(prefix)
@@ -747,7 +746,7 @@ func (con *converter) callEndsWith(target *exprpb.Expr, args []*exprpb.Expr) err
 	// or for more robust handling: RIGHT(string, LENGTH(suffix)) = suffix
 
 	if target == nil || len(args) == 0 {
-		return errors.New("endsWith function requires both string and suffix arguments")
+		return fmt.Errorf("%w: endsWith function requires both string and suffix arguments", ErrInvalidArguments)
 	}
 
 	// Visit the string expression
@@ -764,7 +763,7 @@ func (con *converter) callEndsWith(target *exprpb.Expr, args []*exprpb.Expr) err
 		suffix := constExpr.GetStringValue()
 		// Reject patterns containing null bytes
 		if strings.Contains(suffix, "\x00") {
-			return errors.New("LIKE patterns cannot contain null bytes")
+			return fmt.Errorf("%w: LIKE patterns cannot contain null bytes", ErrInvalidArguments)
 		}
 		// Escape special LIKE characters: %, _, \
 		escaped := escapeLikePattern(suffix)
@@ -837,7 +836,7 @@ func (con *converter) callMatches(target *exprpb.Expr, args []*exprpb.Expr) erro
 	}
 
 	if stringExpr == nil || patternExpr == nil {
-		return errors.New("matches function requires both string and pattern arguments")
+		return fmt.Errorf("%w: matches function requires both string and pattern arguments", ErrInvalidArguments)
 	}
 
 	// Visit the string expression
@@ -851,13 +850,13 @@ func (con *converter) callMatches(target *exprpb.Expr, args []*exprpb.Expr) erro
 		re2Pattern := constExpr.GetStringValue()
 		// Reject patterns containing null bytes
 		if strings.Contains(re2Pattern, "\x00") {
-			return errors.New("regex patterns cannot contain null bytes")
+			return fmt.Errorf("%w: regex patterns cannot contain null bytes", ErrInvalidRegexPattern)
 		}
 
 		// Convert RE2 to POSIX with security validation
 		posixPattern, caseInsensitive, err := convertRE2ToPOSIX(re2Pattern)
 		if err != nil {
-			return fmt.Errorf("invalid regex pattern: %w", err)
+			return fmt.Errorf("%w: %w", ErrInvalidRegexPattern, err)
 		}
 
 		con.logger.LogAttrs(context.Background(), slog.LevelDebug,
@@ -1041,10 +1040,10 @@ func (con *converter) visitCallListIndex(expr *exprpb.Expr) error {
 	if constExpr := index.GetConstExpr(); constExpr != nil {
 		idx := constExpr.GetInt64Value()
 		if idx == math.MaxInt64 {
-			return errors.New("array index overflow: cannot convert math.MaxInt64 to 1-based indexing")
+			return fmt.Errorf("%w: array index overflow, cannot convert math.MaxInt64 to 1-based indexing", ErrInvalidArguments)
 		}
 		if idx < 0 {
-			return fmt.Errorf("invalid negative array index: %d", idx)
+			return fmt.Errorf("%w: negative array index %d is not supported", ErrInvalidArguments, idx)
 		}
 		con.str.WriteString(strconv.FormatInt(idx+1, 10))
 	} else {
@@ -1081,8 +1080,8 @@ func (con *converter) visitComprehension(expr *exprpb.Expr) error {
 
 	// Check comprehension depth limit before context check (fail fast)
 	if con.comprehensionDepth > maxComprehensionDepth {
-		return fmt.Errorf("comprehension nesting depth %d exceeds maximum of %d",
-			con.comprehensionDepth, maxComprehensionDepth)
+		return fmt.Errorf("%w: depth %d exceeds limit of %d",
+			ErrMaxComprehensionDepthExceeded, con.comprehensionDepth, maxComprehensionDepth)
 	}
 
 	// Check for context cancellation before processing comprehensions (potentially expensive)
@@ -1092,7 +1091,7 @@ func (con *converter) visitComprehension(expr *exprpb.Expr) error {
 
 	info, err := con.identifyComprehension(expr)
 	if err != nil {
-		return fmt.Errorf("failed to identify comprehension: %w", err)
+		return fmt.Errorf("%w: failed to identify comprehension: %w", ErrInvalidComprehension, err)
 	}
 
 	switch info.Type {
@@ -1468,14 +1467,14 @@ func (con *converter) visitTransformMapComprehension(_ *exprpb.Expr, _ *Comprehe
 	// Generate SQL for TRANSFORM_MAP comprehension: work with map entries
 	// This is complex for PostgreSQL - maps are typically represented as JSON or composite types
 	// For now, return an error indicating this needs special handling
-	return errors.New("TRANSFORM_MAP comprehension requires map/JSON support: not yet implemented")
+	return fmt.Errorf("%w: TRANSFORM_MAP comprehension requires map/JSON support (not yet implemented)", ErrInvalidComprehension)
 }
 
 func (con *converter) visitTransformMapEntryComprehension(_ *exprpb.Expr, _ *ComprehensionInfo) error {
 	// Generate SQL for TRANSFORM_MAP_ENTRY comprehension: work with map key-value pairs
 	// This is complex for PostgreSQL - maps are typically represented as JSON or composite types
 	// For now, return an error indicating this needs special handling
-	return errors.New("TRANSFORM_MAP_ENTRY comprehension requires map/JSON support: not yet implemented")
+	return fmt.Errorf("%w: TRANSFORM_MAP_ENTRY comprehension requires map/JSON support (not yet implemented)", ErrInvalidComprehension)
 }
 
 func (con *converter) visitConst(expr *exprpb.Expr) error {
@@ -1522,7 +1521,7 @@ func (con *converter) visitConst(expr *exprpb.Expr) error {
 		str := c.GetStringValue()
 		// Reject strings containing null bytes
 		if strings.Contains(str, "\x00") {
-			return errors.New("string literals cannot contain null bytes")
+			return fmt.Errorf("%w: string literals cannot contain null bytes", ErrInvalidArguments)
 		}
 
 		if con.parameterize {
@@ -1547,7 +1546,7 @@ func (con *converter) visitConst(expr *exprpb.Expr) error {
 		} else {
 			// Validate byte array length to prevent resource exhaustion (CWE-400)
 			if len(b) > maxByteArrayLength {
-				return fmt.Errorf("byte array exceeds maximum length of %d bytes (got %d bytes)", maxByteArrayLength, len(b))
+				return fmt.Errorf("%w: %d bytes exceeds limit of %d bytes", ErrInvalidByteArrayLength, len(b), maxByteArrayLength)
 			}
 			con.str.WriteString("'\\x")
 			con.str.WriteString(hex.EncodeToString(b))
@@ -1564,7 +1563,7 @@ func (con *converter) visitIdent(expr *exprpb.Expr) error {
 
 	// Validate identifier name for security (prevent SQL injection)
 	if err := validateFieldName(identName); err != nil {
-		return fmt.Errorf("invalid identifier name: %w", err)
+		return fmt.Errorf("%w: %w", ErrInvalidFieldName, err)
 	}
 
 	// Check if this identifier needs numeric casting for JSON comprehensions
@@ -1601,7 +1600,7 @@ func (con *converter) visitSelect(expr *exprpb.Expr) error {
 	// Validate field name for security (prevent SQL injection)
 	fieldName := sel.GetField()
 	if err := validateFieldName(fieldName); err != nil {
-		return fmt.Errorf("invalid field name in select expression: %w", err)
+		return fmt.Errorf("%w: %w", ErrInvalidFieldName, err)
 	}
 
 	// Handle the case when the select expression was generated by the has() macro.
@@ -1966,7 +1965,7 @@ func isBinaryOrTernaryOperator(expr *exprpb.Expr) bool {
 func convertRE2ToPOSIX(re2Pattern string) (string, bool, error) {
 	// 1. Check pattern length to prevent processing extremely long patterns
 	if len(re2Pattern) > maxRegexPatternLength {
-		return "", false, fmt.Errorf("regex pattern exceeds maximum length of %d characters", maxRegexPatternLength)
+		return "", false, fmt.Errorf("%w: pattern length %d exceeds limit of %d characters", ErrInvalidRegexPattern, len(re2Pattern), maxRegexPatternLength)
 	}
 
 	// 2. Extract case-insensitive flag if present
@@ -1979,19 +1978,19 @@ func convertRE2ToPOSIX(re2Pattern string) (string, bool, error) {
 	// 3. Detect unsupported RE2 features and return errors
 	// Lookahead assertions
 	if strings.Contains(re2Pattern, "(?=") || strings.Contains(re2Pattern, "(?!") {
-		return "", false, errors.New("lookahead assertions (?=...), (?!...) are not supported in PostgreSQL POSIX regex")
+		return "", false, fmt.Errorf("%w: lookahead assertions (?=...), (?!...) are not supported in PostgreSQL POSIX regex", ErrInvalidRegexPattern)
 	}
 	// Lookbehind assertions
 	if strings.Contains(re2Pattern, "(?<=") || strings.Contains(re2Pattern, "(?<!") {
-		return "", false, errors.New("lookbehind assertions (?<=...), (?<!...) are not supported in PostgreSQL POSIX regex")
+		return "", false, fmt.Errorf("%w: lookbehind assertions (?<=...), (?<!...) are not supported in PostgreSQL POSIX regex", ErrInvalidRegexPattern)
 	}
 	// Named capture groups
 	if strings.Contains(re2Pattern, "(?P<") {
-		return "", false, errors.New("named capture groups (?P<name>...) are not supported in PostgreSQL POSIX regex")
+		return "", false, fmt.Errorf("%w: named capture groups (?P<name>...) are not supported in PostgreSQL POSIX regex", ErrInvalidRegexPattern)
 	}
 	// Other inline flags (after we've already handled (?i))
 	if strings.Contains(re2Pattern, "(?m") || strings.Contains(re2Pattern, "(?s") || strings.Contains(re2Pattern, "(?-") {
-		return "", false, errors.New("inline flags other than (?i) are not supported in PostgreSQL POSIX regex")
+		return "", false, fmt.Errorf("%w: inline flags other than (?i) are not supported in PostgreSQL POSIX regex", ErrInvalidRegexPattern)
 	}
 
 	// 4. Detect catastrophic nested quantifiers that cause exponential backtracking
@@ -1999,7 +1998,7 @@ func convertRE2ToPOSIX(re2Pattern string) (string, bool, error) {
 
 	// Check for doubled quantifiers
 	if matched, _ := regexp.MatchString(`[*+][*+]`, re2Pattern); matched {
-		return "", false, errors.New("regex contains catastrophic nested quantifiers that could cause ReDoS")
+		return "", false, fmt.Errorf("%w: regex contains catastrophic nested quantifiers that could cause ReDoS", ErrInvalidRegexPattern)
 	}
 
 	// Check for groups that contain quantifiers and are themselves quantified
@@ -2030,7 +2029,7 @@ func convertRE2ToPOSIX(re2Pattern string) (string, bool, error) {
 					if nextChar == '*' || nextChar == '+' || nextChar == '?' || nextChar == '{' {
 						// This group is quantified. Check if it contains quantifiers
 						if len(groupHasQuantifier) > 0 && groupHasQuantifier[len(groupHasQuantifier)-1] {
-							return "", false, errors.New("regex contains catastrophic nested quantifiers that could cause ReDoS")
+							return "", false, fmt.Errorf("%w: regex contains catastrophic nested quantifiers that could cause ReDoS", ErrInvalidRegexPattern)
 						}
 					}
 				}
@@ -2061,7 +2060,7 @@ func convertRE2ToPOSIX(re2Pattern string) (string, bool, error) {
 	// 5. Count and limit capture groups to prevent memory exhaustion
 	groupCount := strings.Count(re2Pattern, "(") - strings.Count(re2Pattern, `\(`)
 	if groupCount > maxRegexGroups {
-		return "", false, fmt.Errorf("regex contains %d capture groups, exceeds maximum of %d", groupCount, maxRegexGroups)
+		return "", false, fmt.Errorf("%w: regex contains %d capture groups, exceeds limit of %d", ErrInvalidRegexPattern, groupCount, maxRegexGroups)
 	}
 
 	// 6. Detect exponential alternation patterns like (a|a)*b or (a|ab)*
@@ -2069,7 +2068,7 @@ func convertRE2ToPOSIX(re2Pattern string) (string, bool, error) {
 	if alternationPattern.MatchString(re2Pattern) {
 		// Check if alternation has overlapping branches (more dangerous)
 		// This is a simple heuristic - full analysis would be more complex
-		return "", false, errors.New("regex contains quantified alternation that could cause ReDoS")
+		return "", false, fmt.Errorf("%w: regex contains quantified alternation that could cause ReDoS", ErrInvalidRegexPattern)
 	}
 
 	// 7. Check nesting depth to prevent deeply nested patterns
@@ -2086,7 +2085,7 @@ func convertRE2ToPOSIX(re2Pattern string) (string, bool, error) {
 		}
 	}
 	if maxDepth > maxRegexNestingDepth {
-		return "", false, fmt.Errorf("regex nesting depth %d exceeds maximum of %d", maxDepth, maxRegexNestingDepth)
+		return "", false, fmt.Errorf("%w: nesting depth %d exceeds limit of %d", ErrInvalidRegexPattern, maxDepth, maxRegexNestingDepth)
 	}
 
 	// Passed all security checks - proceed with conversion

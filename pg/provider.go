@@ -16,6 +16,12 @@ import (
 	"github.com/spandigital/cel2sql/v3/sqltypes"
 )
 
+// Sentinel errors specific to the pg package
+var (
+	// ErrInvalidSchema indicates a problem with the provided schema
+	ErrInvalidSchema = errors.New("invalid schema")
+)
+
 const (
 	typeJSON  = "json"
 	typeJSONB = "jsonb"
@@ -116,7 +122,7 @@ func NewTypeProvider(schemas map[string]Schema) TypeProvider {
 func NewTypeProviderWithConnection(ctx context.Context, connectionString string) (TypeProvider, error) {
 	// Validate connection string length to prevent DoS and align with industry standards
 	if len(connectionString) > MaxConnectionStringLength {
-		return nil, fmt.Errorf("connection string exceeds maximum length of %d characters", MaxConnectionStringLength)
+		return nil, fmt.Errorf("%w: connection string exceeds maximum length of %d characters", ErrInvalidSchema, MaxConnectionStringLength)
 	}
 
 	pool, err := pgxpool.New(ctx, connectionString)
@@ -124,14 +130,14 @@ func NewTypeProviderWithConnection(ctx context.Context, connectionString string)
 		// Security: Don't wrap the error with %w to prevent exposing connection details
 		// (credentials, hostnames, database names) in error messages or logs.
 		// See pgx issues #1271 and #1428, CWE-209, CWE-532.
-		return nil, errors.New("failed to create connection pool")
+		return nil, fmt.Errorf("%w: failed to create connection pool", ErrInvalidSchema)
 	}
 
 	// Validate connection works immediately rather than on first query
 	if err := pool.Ping(ctx); err != nil {
 		pool.Close()
 		// Security: Same sanitized error approach as above
-		return nil, errors.New("failed to connect to database")
+		return nil, fmt.Errorf("%w: failed to connect to database", ErrInvalidSchema)
 	}
 
 	return &typeProvider{
@@ -143,7 +149,7 @@ func NewTypeProviderWithConnection(ctx context.Context, connectionString string)
 // LoadTableSchema loads schema information for a table from the database
 func (p *typeProvider) LoadTableSchema(ctx context.Context, tableName string) error {
 	if p.pool == nil {
-		return errors.New("no database connection available")
+		return fmt.Errorf("%w: no database connection available", ErrInvalidSchema)
 	}
 
 	query := `
@@ -169,7 +175,7 @@ func (p *typeProvider) LoadTableSchema(ctx context.Context, tableName string) er
 
 	rows, err := p.pool.Query(ctx, query, tableName)
 	if err != nil {
-		return fmt.Errorf("failed to query table schema: %w", err)
+		return fmt.Errorf("%w: failed to query table schema: %w", ErrInvalidSchema, err)
 	}
 	defer rows.Close()
 
@@ -181,7 +187,7 @@ func (p *typeProvider) LoadTableSchema(ctx context.Context, tableName string) er
 
 		err := rows.Scan(&columnName, &dataType, &isNullable, &columnDefault, &elementType)
 		if err != nil {
-			return fmt.Errorf("failed to scan row: %w", err)
+			return fmt.Errorf("%w: failed to scan row: %w", ErrInvalidSchema, err)
 		}
 
 		isArray := dataType == "ARRAY"
@@ -206,7 +212,7 @@ func (p *typeProvider) LoadTableSchema(ctx context.Context, tableName string) er
 	}
 
 	if err := rows.Err(); err != nil {
-		return fmt.Errorf("error iterating rows: %w", err)
+		return fmt.Errorf("%w: error iterating rows: %w", ErrInvalidSchema, err)
 	}
 
 	p.schemas[tableName] = NewSchema(fields)

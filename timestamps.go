@@ -1,7 +1,6 @@
 package cel2sql
 
 import (
-	"errors"
 	"fmt"
 	"strconv"
 	"time"
@@ -82,7 +81,7 @@ func (con *converter) callTimestampOperation(fun string, lhs *exprpb.Expr, rhs *
 // callDuration converts CEL duration expressions to PostgreSQL INTERVAL
 func (con *converter) callDuration(_ *exprpb.Expr, args []*exprpb.Expr) error {
 	if len(args) != 1 {
-		return errors.New("arguments must be single")
+		return fmt.Errorf("%w: duration function requires exactly 1 argument, got %d", ErrInvalidArguments, len(args))
 	}
 	arg := args[0]
 	var durationString string
@@ -212,5 +211,5 @@ func (con *converter) callTimestampFromString(_ *exprpb.Expr, args []*exprpb.Exp
 		return nil
 	}
 
-	return fmt.Errorf("timestamp function expects 1 or 2 arguments, got %d", len(args))
+	return fmt.Errorf("%w: timestamp function expects 1 or 2 arguments, got %d", ErrInvalidArguments, len(args))
 }

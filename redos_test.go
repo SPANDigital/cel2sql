@@ -136,7 +136,7 @@ func TestReDoSProtection_PatternLength(t *testing.T) {
 	sql, err := cel2sql.Convert(ast)
 	require.Error(t, err, "Should reject excessively long pattern")
 	assert.Empty(t, sql)
-	assert.Contains(t, err.Error(), "exceeds maximum length", "Error should mention length limit")
+	assert.Contains(t, err.Error(), "exceeds limit", "Error should mention length limit")
 }
 
 // TestReDoSProtection_GroupLimit tests protection against excessive capture groups

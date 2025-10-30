@@ -2,7 +2,7 @@ package cel2sql
 
 import (
 	"context"
-	"errors"
+	"fmt"
 	"log/slog"
 
 	exprpb "google.golang.org/genproto/googleapis/api/expr/v1alpha1"
@@ -120,7 +120,7 @@ func (con *converter) isNestedJSONAccess(expr *exprpb.Expr) bool {
 func (con *converter) visitNestedJSONForArray(expr *exprpb.Expr) error {
 	selectExpr := expr.GetSelectExpr()
 	if selectExpr == nil {
-		return errors.New("expected select expression for nested JSON access")
+		return fmt.Errorf("%w: expected select expression for nested JSON access", ErrInvalidJSONPath)
 	}
 
 	// For array operations, we need to use -> throughout to preserve JSON type
@@ -132,7 +132,7 @@ func (con *converter) visitNestedJSONForArray(expr *exprpb.Expr) error {
 func (con *converter) buildJSONPathForArray(expr *exprpb.Expr) error {
 	selectExpr := expr.GetSelectExpr()
 	if selectExpr == nil {
-		return errors.New("expected select expression for JSON array path")
+		return fmt.Errorf("%w: expected select expression for JSON array path", ErrInvalidJSONPath)
 	}
 
 	operand := selectExpr.GetOperand()
@@ -312,7 +312,7 @@ func (con *converter) buildJSONPath(expr *exprpb.Expr) error {
 func (con *converter) buildJSONPathInternal(expr *exprpb.Expr, isFinalField bool) error {
 	selectExpr := expr.GetSelectExpr()
 	if selectExpr == nil {
-		return errors.New("expected select expression for JSON path")
+		return fmt.Errorf("%w: expected select expression for JSON path", ErrInvalidJSONPath)
 	}
 
 	operand := selectExpr.GetOperand()

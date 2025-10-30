@@ -2,7 +2,7 @@ package cel2sql
 
 import (
 	"context"
-	"errors"
+	"fmt"
 	"log/slog"
 
 	"github.com/google/cel-go/common/operators"
@@ -67,7 +67,7 @@ type ComprehensionInfo struct {
 func (con *converter) identifyComprehension(expr *exprpb.Expr) (*ComprehensionInfo, error) {
 	comprehension := expr.GetComprehensionExpr()
 	if comprehension == nil {
-		return nil, errors.New("expression is not a comprehension")
+		return nil, fmt.Errorf("%w: expression is not a comprehension", ErrInvalidComprehension)
 	}
 
 	// Analyze the comprehension structure to determine its type

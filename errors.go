@@ -1,7 +1,60 @@
 package cel2sql
 
 import (
+	"errors"
 	"fmt"
+)
+
+// Sentinel errors for common error conditions.
+// These exported errors allow callers to use errors.Is() for specific error handling.
+var (
+	// ErrUnsupportedExpression indicates an unsupported CEL expression type
+	ErrUnsupportedExpression = errors.New("unsupported expression type")
+
+	// ErrInvalidFieldName indicates an invalid or empty field name
+	ErrInvalidFieldName = errors.New("invalid field name")
+
+	// ErrInvalidSchema indicates a problem with the provided schema
+	ErrInvalidSchema = errors.New("invalid schema")
+
+	// ErrInvalidRegexPattern indicates an invalid regex pattern
+	ErrInvalidRegexPattern = errors.New("invalid regex pattern")
+
+	// ErrMaxDepthExceeded indicates recursion depth limit exceeded
+	ErrMaxDepthExceeded = errors.New("maximum recursion depth exceeded")
+
+	// ErrMaxOutputLengthExceeded indicates output length limit exceeded
+	ErrMaxOutputLengthExceeded = errors.New("maximum output length exceeded")
+
+	// ErrInvalidComprehension indicates an invalid comprehension expression
+	ErrInvalidComprehension = errors.New("invalid comprehension expression")
+
+	// ErrMaxComprehensionDepthExceeded indicates comprehension nesting depth exceeded
+	ErrMaxComprehensionDepthExceeded = errors.New("maximum comprehension depth exceeded")
+
+	// ErrInvalidArguments indicates invalid function arguments
+	ErrInvalidArguments = errors.New("invalid function arguments")
+
+	// ErrInvalidTimestampOperation indicates an invalid timestamp operation
+	ErrInvalidTimestampOperation = errors.New("invalid timestamp operation")
+
+	// ErrInvalidDuration indicates an invalid duration value
+	ErrInvalidDuration = errors.New("invalid duration value")
+
+	// ErrInvalidJSONPath indicates an invalid JSON path expression
+	ErrInvalidJSONPath = errors.New("invalid JSON path")
+
+	// ErrInvalidOperator indicates an invalid operator
+	ErrInvalidOperator = errors.New("invalid operator")
+
+	// ErrUnsupportedType indicates an unsupported type
+	ErrUnsupportedType = errors.New("unsupported type")
+
+	// ErrContextCanceled indicates the operation was cancelled via context
+	ErrContextCanceled = errors.New("operation cancelled")
+
+	// ErrInvalidByteArrayLength indicates byte array exceeds maximum length
+	ErrInvalidByteArrayLength = errors.New("byte array exceeds maximum length")
 )
 
 // ConversionError represents an error that occurred during CEL to SQL conversion.
@@ -105,18 +158,19 @@ func wrapConversionError(err error, internalContext string) *ConversionError {
 }
 
 // Common error messages (sanitized for end users)
+// These use sentence case (capitalize first word) for consistency
 const (
-	errMsgUnsupportedExpression      = "unsupported expression type"
-	errMsgInvalidOperator            = "invalid operator in expression"
-	errMsgUnsupportedType            = "unsupported type in expression"
-	errMsgUnsupportedComprehension   = "unsupported comprehension operation"
-	errMsgComprehensionDepthExceeded = "comprehension nesting exceeds maximum depth"
-	errMsgInvalidFieldAccess         = "invalid field access in expression"
-	errMsgConversionFailed           = "failed to convert expression component"
-	errMsgInvalidTimestampOp         = "invalid timestamp operation"
-	errMsgInvalidDuration            = "invalid duration value"
-	errMsgInvalidArguments           = "invalid function arguments"
-	errMsgUnknownType                = "unknown type in schema"
-	errMsgUnknownEnum                = "unknown enum value"
-	errMsgInvalidPattern             = "invalid pattern in expression"
+	errMsgUnsupportedExpression      = "Unsupported expression type"
+	errMsgInvalidOperator            = "Invalid operator in expression"
+	errMsgUnsupportedType            = "Unsupported type in expression"
+	errMsgUnsupportedComprehension   = "Unsupported comprehension operation"
+	errMsgComprehensionDepthExceeded = "Comprehension nesting exceeds maximum depth"
+	errMsgInvalidFieldAccess         = "Invalid field access in expression"
+	errMsgConversionFailed           = "Failed to convert expression component"
+	errMsgInvalidTimestampOp         = "Invalid timestamp operation"
+	errMsgInvalidDuration            = "Invalid duration value"
+	errMsgInvalidArguments           = "Invalid function arguments"
+	errMsgUnknownType                = "Unknown type in schema"
+	errMsgUnknownEnum                = "Unknown enum value"
+	errMsgInvalidPattern             = "Invalid pattern in expression"
 )

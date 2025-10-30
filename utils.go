@@ -1,7 +1,6 @@
 package cel2sql
 
 import (
-	"errors"
 	"fmt"
 	"regexp"
 	"strings"
@@ -115,22 +114,22 @@ var (
 func validateFieldName(name string) error {
 	// Check length (PostgreSQL max identifier length is 63 characters)
 	if len(name) > maxPostgreSQLIdentifierLength {
-		return fmt.Errorf("field name \"%s\" exceeds PostgreSQL maximum identifier length of %d characters", name, maxPostgreSQLIdentifierLength)
+		return fmt.Errorf("%w: field name \"%s\" exceeds PostgreSQL maximum identifier length of %d characters", ErrInvalidFieldName, name, maxPostgreSQLIdentifierLength)
 	}
 
 	// Check if empty
 	if len(name) == 0 {
-		return errors.New("field name cannot be empty")
+		return fmt.Errorf("%w: field name cannot be empty", ErrInvalidFieldName)
 	}
 
 	// Check format (must start with letter or underscore, contain only alphanumeric and underscore)
 	if !fieldNameRegexp.MatchString(name) {
-		return fmt.Errorf("invalid field name \"%s\": must start with a letter or underscore and contain only alphanumeric characters and underscores", name)
+		return fmt.Errorf("%w: field name \"%s\" must start with a letter or underscore and contain only alphanumeric characters and underscores", ErrInvalidFieldName, name)
 	}
 
 	// Check for reserved SQL keywords (case-insensitive)
 	if reservedSQLKeywords[strings.ToLower(name)] {
-		return fmt.Errorf("field name \"%s\" is a reserved SQL keyword and cannot be used without quoting", name)
+		return fmt.Errorf("%w: field name \"%s\" is a reserved SQL keyword and cannot be used without quoting", ErrInvalidFieldName, name)
 	}
 
 	return nil
@@ -139,7 +138,7 @@ func validateFieldName(name string) error {
 // extractFieldName extracts a field name from a string literal expression
 func extractFieldName(node *exprpb.Expr) (string, error) {
 	if !isStringLiteral(node) {
-		return "", fmt.Errorf("unsupported type: %v", node)
+		return "", fmt.Errorf("%w: expected string literal for field name, got %T", ErrInvalidFieldName, node.ExprKind)
 	}
 	fieldName := node.GetConstExpr().GetStringValue()
 	if err := validateFieldName(fieldName); err != nil {
