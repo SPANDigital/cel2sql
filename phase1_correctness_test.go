@@ -25,25 +25,25 @@ func TestIssue40_LikeEscapeClause(t *testing.T) {
 		{
 			name:         "startsWith with literal includes ESCAPE",
 			expression:   `person.name.startsWith("test")`,
-			wantContains: "ESCAPE '\\\\'",
+			wantContains: "ESCAPE E'\\\\'",
 			description:  "startsWith should include explicit ESCAPE clause",
 		},
 		{
 			name:         "endsWith with literal includes ESCAPE",
 			expression:   `person.name.endsWith("test")`,
-			wantContains: "ESCAPE '\\\\'",
+			wantContains: "ESCAPE E'\\\\'",
 			description:  "endsWith should include explicit ESCAPE clause",
 		},
 		{
 			name:         "startsWith with special chars includes ESCAPE",
 			expression:   `person.name.startsWith("test%")`,
-			wantContains: "ESCAPE '\\\\'",
+			wantContains: "ESCAPE E'\\\\'",
 			description:  "Escaped patterns should still include ESCAPE clause",
 		},
 		{
 			name:         "endsWith with special chars includes ESCAPE",
 			expression:   `person.name.endsWith("test_")`,
-			wantContains: "ESCAPE '\\\\'",
+			wantContains: "ESCAPE E'\\\\'",
 			description:  "Escaped patterns should still include ESCAPE clause",
 		},
 	}
@@ -94,7 +94,7 @@ func TestIssue43_VariableLikeEscaping(t *testing.T) {
 			expression: `person.name.startsWith(prefix)`,
 			wantContains: []string{
 				"REPLACE(REPLACE(REPLACE(prefix",
-				"ESCAPE '\\\\'",
+				"ESCAPE E'\\\\'",
 			},
 			description: "startsWith with variable should escape backslash at runtime",
 		},
@@ -104,7 +104,7 @@ func TestIssue43_VariableLikeEscaping(t *testing.T) {
 			wantContains: []string{
 				"REPLACE(",
 				", '%', '\\%')", // Escapes percent
-				"ESCAPE '\\\\'",
+				"ESCAPE E'\\\\'",
 			},
 			description: "startsWith with variable should escape percent at runtime",
 		},
@@ -114,7 +114,7 @@ func TestIssue43_VariableLikeEscaping(t *testing.T) {
 			wantContains: []string{
 				"REPLACE(",
 				", '_', '\\_')", // Escapes underscore
-				"ESCAPE '\\\\'",
+				"ESCAPE E'\\\\'",
 			},
 			description: "startsWith with variable should escape underscore at runtime",
 		},
@@ -123,7 +123,7 @@ func TestIssue43_VariableLikeEscaping(t *testing.T) {
 			expression: `person.name.endsWith(suffix)`,
 			wantContains: []string{
 				"'%' || REPLACE(REPLACE(REPLACE(",
-				"ESCAPE '\\\\'",
+				"ESCAPE E'\\\\'",
 			},
 			description: "endsWith with variable should use REPLACE chain",
 		},
@@ -173,7 +173,7 @@ func TestIssue43_VariableLikeEscaping(t *testing.T) {
 // TestIssue48_JSONComprehensionValidation tests that JSON comprehensions no longer have type checks
 func TestIssue48_JSONComprehensionValidation(t *testing.T) {
 	schema := pg.NewSchema([]pg.FieldSchema{
-		{Name: "tags", Type: "integer", Repeated: true},  // Regular array, not JSONB
+		{Name: "tags", Type: "integer", Repeated: true}, // Regular array, not JSONB
 		{Name: "metadata", Type: "jsonb"},
 	})
 	provider := pg.NewTypeProvider(map[string]pg.Schema{"Person": schema})
@@ -347,8 +347,8 @@ func TestPhase1Integration(t *testing.T) {
 			name:       "Combined LIKE escaping and comprehension",
 			expression: `person.name.startsWith("test") && person.tags.all(t, t > 0)`,
 			wantContains: []string{
-				"ESCAPE '\\\\'", // Issue #40
-				"NOT EXISTS",    // Issue #48
+				"ESCAPE E'\\\\'", // Issue #40
+				"NOT EXISTS",     // Issue #48
 			},
 			description: "Both LIKE ESCAPE and comprehension without type checks",
 		},
@@ -357,7 +357,7 @@ func TestPhase1Integration(t *testing.T) {
 			expression: `person.name.startsWith(prefix) && person.tags.exists(t, t > 0)`,
 			wantContains: []string{
 				"REPLACE(REPLACE(REPLACE(", // Issue #43
-				"ESCAPE '\\\\'",            // Issue #40/#43
+				"ESCAPE E'\\\\'",           // Issue #40/#43
 				"EXISTS",                   // Issue #48
 			},
 			description: "Variable escaping with comprehension",
@@ -423,7 +423,7 @@ func TestPhase1WithContext(t *testing.T) {
 		t.Fatalf("Failed to convert: %v", err)
 	}
 
-	if !strings.Contains(sql, "ESCAPE '\\\\'") {
+	if !strings.Contains(sql, "ESCAPE E'\\\\'") {
 		t.Errorf("ESCAPE clause missing in context-aware conversion: %s", sql)
 	}
 }

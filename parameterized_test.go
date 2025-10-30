@@ -172,14 +172,14 @@ func TestConvertParameterized(t *testing.T) {
 		{
 			name:           "startsWith with parameter",
 			celExpr:        `name.startsWith("Jo")`,
-			wantSQL:        "name LIKE 'Jo%' ESCAPE '\\'",
+			wantSQL:        "name LIKE 'Jo%' ESCAPE E'\\\\'",
 			wantParamCount: 0,
 			wantParams:     nil,
 		},
 		{
 			name:           "endsWith with parameter",
 			celExpr:        `name.endsWith("hn")`,
-			wantSQL:        "name LIKE '%hn' ESCAPE '\\'",
+			wantSQL:        "name LIKE '%hn' ESCAPE E'\\\\'",
 			wantParamCount: 0,
 			wantParams:     nil,
 		},

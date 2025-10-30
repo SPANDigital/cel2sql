@@ -728,14 +728,14 @@ func (con *converter) callStartsWith(target *exprpb.Expr, args []*exprpb.Expr) e
 		escaped := escapeLikePattern(prefix)
 		con.str.WriteString("'")
 		con.str.WriteString(escaped)
-		con.str.WriteString("%' ESCAPE '\\\\'")
+		con.str.WriteString("%' ESCAPE E'\\\\'")
 	} else {
 		// For non-literal patterns, escape special characters at runtime and concatenate with %
 		con.str.WriteString("REPLACE(REPLACE(REPLACE(")
 		if err := con.visit(args[0]); err != nil {
 			return err
 		}
-		con.str.WriteString(", '\\\\', '\\\\\\\\'), '%', '\\%'), '_', '\\_') || '%' ESCAPE '\\\\'")
+		con.str.WriteString(", '\\\\', '\\\\\\\\'), '%', '\\%'), '_', '\\_') || '%' ESCAPE E'\\\\'")
 	}
 
 	return nil
@@ -770,14 +770,14 @@ func (con *converter) callEndsWith(target *exprpb.Expr, args []*exprpb.Expr) err
 		escaped := escapeLikePattern(suffix)
 		con.str.WriteString("'%")
 		con.str.WriteString(escaped)
-		con.str.WriteString("' ESCAPE '\\\\'")
+		con.str.WriteString("' ESCAPE E'\\\\'")
 	} else {
 		// For non-literal patterns, escape special characters at runtime and concatenate with %
 		con.str.WriteString("'%' || REPLACE(REPLACE(REPLACE(")
 		if err := con.visit(args[0]); err != nil {
 			return err
 		}
-		con.str.WriteString(", '\\\\', '\\\\\\\\'), '%', '\\%'), '_', '\\_') ESCAPE '\\\\'")
+		con.str.WriteString(", '\\\\', '\\\\\\\\'), '%', '\\%'), '_', '\\_') ESCAPE E'\\\\'")
 	}
 
 	return nil

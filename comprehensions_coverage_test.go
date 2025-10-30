@@ -101,7 +101,7 @@ func TestFilterComprehension(t *testing.T) {
 		{
 			name:        "filter_string_array",
 			expression:  `record.tags.filter(t, t.startsWith("high"))`,
-			expectedSQL: `ARRAY(SELECT t FROM UNNEST(record.tags) AS t WHERE t LIKE 'high%')`,
+			expectedSQL: `ARRAY(SELECT t FROM UNNEST(record.tags) AS t WHERE t LIKE 'high%' ESCAPE E'\\')`,
 			description: "filter on string array field with startsWith",
 		},
 		{

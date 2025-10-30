@@ -241,8 +241,8 @@ func FuzzEscapeLikePattern(f *testing.F) {
 				t.Errorf("Expected LIKE in output for pattern %q, got: %q", pattern, sqlOutput)
 			}
 
-			// Check for proper quoting - all LIKE patterns should be quoted
-			if strings.Contains(sqlOutput, "LIKE ") && !strings.Contains(sqlOutput, "LIKE '") {
+			// Check for proper quoting - all LIKE patterns should be quoted or use REPLACE()
+			if strings.Contains(sqlOutput, "LIKE ") && !strings.Contains(sqlOutput, "LIKE '") && !strings.Contains(sqlOutput, "LIKE REPLACE(") && !strings.Contains(sqlOutput, "LIKE '%' ||") {
 				t.Errorf("LIKE pattern not properly quoted: %q", sqlOutput)
 			}
 

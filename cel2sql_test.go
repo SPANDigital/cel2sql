@@ -87,13 +87,13 @@ func TestConvert(t *testing.T) {
 		{
 			name:    "startsWith",
 			args:    args{source: `name.startsWith("a")`},
-			want:    "name LIKE 'a%' ESCAPE '\\'",
+			want:    "name LIKE 'a%' ESCAPE E'\\\\'",
 			wantErr: false,
 		},
 		{
 			name:    "endsWith",
 			args:    args{source: `name.endsWith("z")`},
-			want:    "name LIKE '%z' ESCAPE '\\'",
+			want:    "name LIKE '%z' ESCAPE E'\\\\'",
 			wantErr: false,
 		},
 		{
@@ -141,19 +141,19 @@ func TestConvert(t *testing.T) {
 		{
 			name:    "&&",
 			args:    args{source: `name.startsWith("a") && name.endsWith("z")`},
-			want:    "name LIKE 'a%' ESCAPE '\\' AND name LIKE '%z' ESCAPE '\\'",
+			want:    "name LIKE 'a%' ESCAPE E'\\\\' AND name LIKE '%z' ESCAPE E'\\\\'",
 			wantErr: false,
 		},
 		{
 			name:    "||",
 			args:    args{source: `name.startsWith("a") || name.endsWith("z")`},
-			want:    "name LIKE 'a%' ESCAPE '\\' OR name LIKE '%z' ESCAPE '\\'",
+			want:    "name LIKE 'a%' ESCAPE E'\\\\' OR name LIKE '%z' ESCAPE E'\\\\'",
 			wantErr: false,
 		},
 		{
 			name:    "()",
 			args:    args{source: `age >= 10 && (name.startsWith("a") || name.endsWith("z"))`},
-			want:    "age >= 10 AND (name LIKE 'a%' ESCAPE '\\' OR name LIKE '%z' ESCAPE '\\')",
+			want:    "age >= 10 AND (name LIKE 'a%' ESCAPE E'\\\\' OR name LIKE '%z' ESCAPE E'\\\\')",
 			wantErr: false,
 		},
 		{
@@ -423,7 +423,7 @@ func TestConvert(t *testing.T) {
 		{
 			name:    "fieldSelect_startsWith",
 			args:    args{source: `page.title.startsWith("test")`},
-			want:    "page.title LIKE 'test%' ESCAPE '\\'",
+			want:    "page.title LIKE 'test%' ESCAPE E'\\\\'",
 			wantErr: false,
 		},
 		{
