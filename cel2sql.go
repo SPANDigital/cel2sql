@@ -728,13 +728,14 @@ func (con *converter) callStartsWith(target *exprpb.Expr, args []*exprpb.Expr) e
 		escaped := escapeLikePattern(prefix)
 		con.str.WriteString("'")
 		con.str.WriteString(escaped)
-		con.str.WriteString("%'")
+		con.str.WriteString("%' ESCAPE '\\\\'")
 	} else {
-		// For non-literal patterns, concatenate with %
+		// For non-literal patterns, escape special characters at runtime and concatenate with %
+		con.str.WriteString("REPLACE(REPLACE(REPLACE(")
 		if err := con.visit(args[0]); err != nil {
 			return err
 		}
-		con.str.WriteString(" || '%'")
+		con.str.WriteString(", '\\\\', '\\\\\\\\'), '%', '\\%'), '_', '\\_') || '%' ESCAPE '\\\\'")
 	}
 
 	return nil
@@ -769,13 +770,14 @@ func (con *converter) callEndsWith(target *exprpb.Expr, args []*exprpb.Expr) err
 		escaped := escapeLikePattern(suffix)
 		con.str.WriteString("'%")
 		con.str.WriteString(escaped)
-		con.str.WriteString("'")
+		con.str.WriteString("' ESCAPE '\\\\'")
 	} else {
-		// For non-literal patterns, concatenate with %
-		con.str.WriteString("'%' || ")
+		// For non-literal patterns, escape special characters at runtime and concatenate with %
+		con.str.WriteString("'%' || REPLACE(REPLACE(REPLACE(")
 		if err := con.visit(args[0]); err != nil {
 			return err
 		}
+		con.str.WriteString(", '\\\\', '\\\\\\\\'), '%', '\\%'), '_', '\\_') ESCAPE '\\\\'")
 	}
 
 	return nil
@@ -1152,29 +1154,8 @@ func (con *converter) visitAllComprehension(expr *exprpb.Expr, info *Comprehensi
 	con.str.WriteString(" AS ")
 	con.str.WriteString(info.IterVar)
 
-	con.str.WriteString(" WHERE ")
-
-	// Add null checks for JSON arrays
-	if isJSONArray {
-		if err := con.visit(iterRange); err != nil {
-			return wrapConversionError(err, "visiting iter range for null check")
-		}
-		con.str.WriteString(" IS NOT NULL AND ")
-		typeofFunc := con.getJSONTypeofFunction(iterRange)
-		con.str.WriteString(typeofFunc)
-		con.str.WriteString("(")
-		if err := con.visit(iterRange); err != nil {
-			return wrapConversionError(err, "visiting iter range for type check")
-		}
-		con.str.WriteString(") = 'array'")
-
-		if info.Predicate != nil {
-			con.str.WriteString(" AND ")
-		}
-	}
-
 	if info.Predicate != nil {
-		con.str.WriteString("NOT (")
+		con.str.WriteString(" WHERE NOT (")
 		if err := con.visit(info.Predicate); err != nil {
 			return wrapConversionError(err, "visiting predicate in ALL comprehension")
 		}
@@ -1219,28 +1200,8 @@ func (con *converter) visitExistsComprehension(expr *exprpb.Expr, info *Comprehe
 	con.str.WriteString(" AS ")
 	con.str.WriteString(info.IterVar)
 
-	con.str.WriteString(" WHERE ")
-
-	// Add null checks for JSON arrays
-	if isJSONArray {
-		if err := con.visit(iterRange); err != nil {
-			return wrapConversionError(err, "visiting iter range for null check")
-		}
-		con.str.WriteString(" IS NOT NULL AND ")
-		typeofFunc := con.getJSONTypeofFunction(iterRange)
-		con.str.WriteString(typeofFunc)
-		con.str.WriteString("(")
-		if err := con.visit(iterRange); err != nil {
-			return wrapConversionError(err, "visiting iter range for type check")
-		}
-		con.str.WriteString(") = 'array'")
-
-		if info.Predicate != nil {
-			con.str.WriteString(" AND ")
-		}
-	}
-
 	if info.Predicate != nil {
+		con.str.WriteString(" WHERE ")
 		if err := con.visit(info.Predicate); err != nil {
 			return wrapConversionError(err, "visiting predicate in EXISTS comprehension")
 		}
@@ -1284,28 +1245,8 @@ func (con *converter) visitExistsOneComprehension(expr *exprpb.Expr, info *Compr
 	con.str.WriteString(" AS ")
 	con.str.WriteString(info.IterVar)
 
-	con.str.WriteString(" WHERE ")
-
-	// Add null checks for JSON arrays
-	if isJSONArray {
-		if err := con.visit(iterRange); err != nil {
-			return wrapConversionError(err, "visiting iter range for null check")
-		}
-		con.str.WriteString(" IS NOT NULL AND ")
-		typeofFunc := con.getJSONTypeofFunction(iterRange)
-		con.str.WriteString(typeofFunc)
-		con.str.WriteString("(")
-		if err := con.visit(iterRange); err != nil {
-			return wrapConversionError(err, "visiting iter range for type check")
-		}
-		con.str.WriteString(") = 'array'")
-
-		if info.Predicate != nil {
-			con.str.WriteString(" AND ")
-		}
-	}
-
 	if info.Predicate != nil {
+		con.str.WriteString(" WHERE ")
 		if err := con.visit(info.Predicate); err != nil {
 			return wrapConversionError(err, "visiting predicate in EXISTS_ONE comprehension")
 		}

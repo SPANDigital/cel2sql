@@ -174,7 +174,7 @@ func TestStringFunctionEdgeCases(t *testing.T) {
 		{
 			name:        "startsWith_empty",
 			expression:  `text.startsWith("")`,
-			expectedSQL: `text LIKE '' || '%'`,
+			expectedSQL: `text LIKE '' || '%' ESCAPE '\\'`,
 			description: "StartsWith empty string",
 		},
 		{
@@ -186,31 +186,31 @@ func TestStringFunctionEdgeCases(t *testing.T) {
 		{
 			name:        "startsWith_underscore",
 			expression:  `text.startsWith("_prefix")`,
-			expectedSQL: `text LIKE '\_prefix%'`,
+			expectedSQL: `text LIKE '\_prefix%' ESCAPE '\\'`,
 			description: "StartsWith string containing _ (LIKE special char)",
 		},
 		{
 			name:        "startsWith_backslash",
 			expression:  `text.startsWith("\\path")`,
-			expectedSQL: `text LIKE '\\path%'`,
+			expectedSQL: `text LIKE '\\path%' ESCAPE '\\'`,
 			description: "StartsWith string containing backslash",
 		},
 		{
 			name:        "endsWith_empty",
 			expression:  `text.endsWith("")`,
-			expectedSQL: `text LIKE '%' || ''`,
+			expectedSQL: `text LIKE '%' ESCAPE '\\' ESCAPE '\\' || ''`,
 			description: "EndsWith empty string",
 		},
 		{
 			name:        "endsWith_percent",
 			expression:  `text.endsWith("100%")`,
-			expectedSQL: `text LIKE '%100\%'`,
+			expectedSQL: `text LIKE '%100\%' ESCAPE '\\'`,
 			description: "EndsWith string containing %",
 		},
 		{
 			name:        "endsWith_underscore",
 			expression:  `text.endsWith("suffix_")`,
-			expectedSQL: `text LIKE '%suffix\_'`,
+			expectedSQL: `text LIKE '%suffix\_' ESCAPE '\\'`,
 			description: "EndsWith string containing _",
 		},
 		{

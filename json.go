@@ -194,14 +194,6 @@ func (con *converter) isJSONObjectFieldAccess(expr *exprpb.Expr) bool {
 	return false
 }
 
-// getJSONTypeofFunction returns the appropriate typeof function for JSON/JSONB fields
-func (con *converter) getJSONTypeofFunction(expr *exprpb.Expr) string {
-	if con.isJSONBField(expr) {
-		return "jsonb_typeof"
-	}
-	return "json_typeof"
-}
-
 // isJSONArrayField determines if the expression refers to a JSON/JSONB array field
 func (con *converter) isJSONArrayField(expr *exprpb.Expr) bool {
 	// Check if this is a field selection on a JSON field
