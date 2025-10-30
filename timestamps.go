@@ -164,7 +164,7 @@ func (con *converter) callExtractFromTimestamp(function string, target *exprpb.E
 		return err
 	}
 	if isTimestampType(con.getType(target)) && len(args) == 1 {
-		con.str.WriteString(" AT ")
+		con.str.WriteString(" AT TIME ZONE ")
 		if err := con.visit(args[0]); err != nil {
 			return err
 		}

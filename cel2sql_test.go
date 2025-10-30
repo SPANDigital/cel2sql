@@ -387,7 +387,7 @@ func TestConvert(t *testing.T) {
 		{
 			name:    "\"timestamp_getHours_withTimezone",
 			args:    args{source: `created_at.getHours("Asia/Tokyo")`},
-			want:    "EXTRACT(HOUR FROM created_at AT 'Asia/Tokyo')",
+			want:    "EXTRACT(HOUR FROM created_at AT TIME ZONE 'Asia/Tokyo')",
 			wantErr: false,
 		},
 		{
