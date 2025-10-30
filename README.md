@@ -78,6 +78,7 @@ cel2sql includes comprehensive security protections:
 - 🚫 **ReDoS Protection** - Validates regex patterns to prevent catastrophic backtracking
 - 🔄 **Recursion Depth Limits** - Prevents stack overflow from deeply nested expressions (default: 100)
 - 📏 **SQL Output Length Limits** - Prevents memory exhaustion from extremely large SQL queries (default: 50,000 chars)
+- 🔢 **Byte Array Length Limits** - Prevents memory exhaustion from large hex-encoded byte arrays (max: 10,000 bytes)
 - ⏱️ **Context Timeouts** - Optional timeout protection for complex expressions
 
 All security features are enabled by default with zero configuration required.

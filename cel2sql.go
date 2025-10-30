@@ -46,6 +46,12 @@ const (
 	// to prevent resource exhaustion from deeply nested UNNEST/subquery operations (CWE-400).
 	maxComprehensionDepth = 3
 
+	// maxByteArrayLength is the maximum allowed length for byte arrays in non-parameterized mode
+	// to prevent memory exhaustion from large hex-encoded SQL strings (CWE-400).
+	// Each byte expands to ~4 characters in hex format (e.g., \xDE).
+	// 10,000 bytes → ~40KB SQL output.
+	maxByteArrayLength = 10000
+
 	// defaultMaxSQLOutputLength is the default maximum length of generated SQL output
 	// to prevent resource exhaustion from extremely large SQL queries (CWE-400).
 	defaultMaxSQLOutputLength = 50000
@@ -1539,6 +1545,10 @@ func (con *converter) visitConst(expr *exprpb.Expr) error {
 			con.str.WriteString(fmt.Sprintf("$%d", con.paramCount))
 			con.parameters = append(con.parameters, b)
 		} else {
+			// Validate byte array length to prevent resource exhaustion (CWE-400)
+			if len(b) > maxByteArrayLength {
+				return fmt.Errorf("byte array exceeds maximum length of %d bytes (got %d bytes)", maxByteArrayLength, len(b))
+			}
 			con.str.WriteString("'\\x")
 			con.str.WriteString(hex.EncodeToString(b))
 			con.str.WriteString("'")

@@ -635,6 +635,12 @@ cel2sql includes multiple layers of protection against resource exhaustion attac
 - **Fixed limit**: 3 levels of nested comprehensions
 - **Protection**: Prevents resource exhaustion from deeply nested UNNEST/subquery operations
 
+**Byte Array Length Limits:**
+- **Fixed limit**: 10,000 bytes maximum
+- **Applies to**: Non-parameterized mode (hex encoding)
+- **Protection**: Prevents memory exhaustion from large hex-encoded SQL strings (each byte → ~4 chars)
+- **Note**: Parameterized mode bypasses this limit (bytes passed directly to database driver)
+
 **Examples:**
 ```go
 // Use default limits (recommended)
@@ -659,6 +665,7 @@ sql, err := cel2sql.Convert(ast,
 - Stack overflow from deeply nested expressions
 - Memory exhaustion from extremely large SQL output
 - CPU/memory exhaustion from deeply nested comprehensions
+- Memory exhaustion from large hex-encoded byte arrays
 - DoS attacks via resource consumption
 
 #### Context Timeouts
