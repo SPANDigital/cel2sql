@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/google/cel-go/cel"
+	"github.com/google/cel-go/ext"
 
 	"github.com/spandigital/cel2sql/v3"
 	"github.com/spandigital/cel2sql/v3/pg"
@@ -22,6 +23,7 @@ func setupSimpleBenchmarkEnv(b *testing.B) *cel.Env {
 		cel.Variable("score", cel.DoubleType),
 		cel.Variable("tags", cel.ListType(cel.StringType)),
 		cel.Variable("scores", cel.ListType(cel.IntType)),
+		ext.Strings(), // Enable string extension functions
 	)
 	if err != nil {
 		b.Fatal(err)
@@ -395,6 +397,12 @@ func BenchmarkConvertStringOperations(b *testing.B) {
 		{"contains", `name.contains("admin")`},
 		{"concatenation", `name + " " + email`},
 		{"multiple_string_ops", `name.startsWith("A") && email.endsWith(".com") && name.contains("test")`},
+		{"split_basic", `name.split(",").size() > 0`},
+		{"split_with_limit", `name.split(",", 3).size() == 3`},
+		{"join_basic", `["a", "b", "c"].join(",")`},
+		{"join_no_delimiter", `["a", "b", "c"].join()`},
+		{"format_simple", `"%s: %s".format([name, email])`},
+		{"format_multiple_args", `"%s is %d years old".format(["John", 30])`},
 	}
 
 	for _, tt := range tests {

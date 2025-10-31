@@ -2,6 +2,33 @@
 
 ## [Unreleased]
 
+## [3.4.0] - 2025-10-31
+
+### Added
+- **CEL String Extension Functions: split(), join(), format()** (fixes #87)
+  - Implemented `split(delimiter [, limit])` → `STRING_TO_ARRAY()` with full limit support
+    * Basic splitting: `"a,b,c".split(",")` → `STRING_TO_ARRAY('a,b,c', ',')`
+    * With limit: `"a,b,c".split(",", 2)` → `(STRING_TO_ARRAY('a,b,c', ','))[1:2]`
+    * Limit=0: Returns empty array `ARRAY[]::text[]`
+    * Limit=1: Returns original string in array (no split)
+    * Limit=-1: Unlimited splits (default)
+  - Implemented `join([delimiter])` → `ARRAY_TO_STRING()`
+    * Basic joining: `["a", "b"].join(",")` → `ARRAY_TO_STRING(ARRAY['a', 'b'], ',', '')`
+    * No delimiter: `["a", "b"].join()` → Uses empty string delimiter
+    * Null handling: Replaces nulls with empty strings
+  - Implemented `format(args)` → `FORMAT()` with specifier support
+    * Supported specifiers: `%s` (string), `%d` (decimal), `%f` (float)
+    * Unsupported specifiers return clear errors (`%b`, `%x`, etc.)
+    * Format string must be constant (max 1000 chars)
+    * Arguments must be constant list
+    * Argument count validation
+  - All functions work in comprehensions (exists, all, filter, map)
+  - Security validations: null byte checks, format string limits, specifier whitelisting
+  - Comprehensive test suite with 100+ test cases
+  - Performance benchmarks added
+  - Working example in `examples/string_extensions/`
+  - Note: `quote()` not implemented (not part of CEL `ext.Strings()` standard extension)
+
 ## [3.3.0] - 2025-10-31
 
 ### Fixed

@@ -495,70 +495,373 @@ func TestStringFunctions_Reverse(t *testing.T) {
 	}
 }
 
-// Tests for unsupported functions that should return errors
+// Tests for split(), join(), and format() functions
 
-func TestStringFunctions_UnsupportedSplit(t *testing.T) {
+func TestStringFunctions_Split(t *testing.T) {
+	tests := []struct {
+		name     string
+		expr     string
+		expected string
+	}{
+		{
+			name:     "method call - basic split",
+			expr:     "'a,b,c'.split(',') == ['a', 'b', 'c']",
+			expected: "STRING_TO_ARRAY('a,b,c', ',') = ARRAY['a', 'b', 'c']",
+		},
+		{
+			name:     "field split",
+			expr:     "person.csv.split(',').size() > 0",
+			expected: "COALESCE(ARRAY_LENGTH(STRING_TO_ARRAY(person.csv, ','), 1), 0) > 0",
+		},
+		{
+			name:     "split with limit -1 (unlimited)",
+			expr:     "'a,b,c,d'.split(',', -1) == ['a', 'b', 'c', 'd']",
+			expected: "STRING_TO_ARRAY('a,b,c,d', ',') = ARRAY['a', 'b', 'c', 'd']",
+		},
+		{
+			name:     "split with limit 0 (empty array)",
+			expr:     "'a,b,c'.split(',', 0).size() == 0",
+			expected: "COALESCE(ARRAY_LENGTH(ARRAY[]::text[], 1), 0) = 0",
+		},
+		{
+			name:     "split with limit 1 (no split)",
+			expr:     "'a,b,c'.split(',', 1) == ['a,b,c']",
+			expected: "ARRAY['a,b,c'] = ARRAY['a,b,c']",
+		},
+		{
+			name:     "split with limit 2",
+			expr:     "'a,b,c,d'.split(',', 2).size() == 2",
+			expected: "COALESCE(ARRAY_LENGTH((STRING_TO_ARRAY('a,b,c,d', ','))[1:2], 1), 0) = 2",
+		},
+		{
+			name:     "split with limit 3",
+			expr:     "'one;two;three;four'.split(';', 3) == ['one', 'two', 'three']",
+			expected: "(STRING_TO_ARRAY('one;two;three;four', ';'))[1:3] = ARRAY['one', 'two', 'three']",
+		},
+		{
+			name:     "split with space delimiter",
+			expr:     "'hello world'.split(' ') == ['hello', 'world']",
+			expected: "STRING_TO_ARRAY('hello world', ' ') = ARRAY['hello', 'world']",
+		},
+	}
+
+	schema := pg.NewSchema([]pg.FieldSchema{
+		{Name: "csv", Type: "text"},
+	})
+	schemas := map[string]pg.Schema{"person": schema}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			env, err := cel.NewEnv(
+				cel.CustomTypeProvider(pg.NewTypeProvider(schemas)),
+				cel.Variable("person", cel.ObjectType("person")),
+				ext.Strings(),
+			)
+			require.NoError(t, err)
+
+			ast, issues := env.Compile(tt.expr)
+			require.Nil(t, issues)
+
+			sql, err := cel2sql.Convert(ast, cel2sql.WithSchemas(schemas))
+			require.NoError(t, err)
+			assert.Equal(t, tt.expected, sql)
+		})
+	}
+}
+
+func TestStringFunctions_Split_InComprehensions(t *testing.T) {
+	tests := []struct {
+		name     string
+		expr     string
+		expected string
+	}{
+		{
+			name:     "split in exists comprehension",
+			expr:     "person.csv.split(',').exists(x, x == 'target')",
+			expected: "EXISTS (SELECT 1 FROM UNNEST(STRING_TO_ARRAY(person.csv, ',')) AS x WHERE x = 'target')",
+		},
+		{
+			name:     "split in all comprehension",
+			expr:     "person.csv.split(',').all(x, x.size() > 0)",
+			expected: "NOT EXISTS (SELECT 1 FROM UNNEST(STRING_TO_ARRAY(person.csv, ',')) AS x WHERE NOT (LENGTH(x) > 0))",
+		},
+		{
+			name:     "split in filter comprehension",
+			expr:     "person.csv.split(',').filter(x, x.startsWith('a')).size() > 0",
+			expected: "COALESCE(ARRAY_LENGTH(ARRAY(SELECT x FROM UNNEST(STRING_TO_ARRAY(person.csv, ',')) AS x WHERE x LIKE 'a%' ESCAPE E'\\\\'), 1), 0) > 0",
+		},
+		{
+			name:     "split in map comprehension",
+			expr:     "person.csv.split(',').map(x, x.upperAscii())",
+			expected: "ARRAY(SELECT UPPER(x) FROM UNNEST(STRING_TO_ARRAY(person.csv, ',')) AS x)",
+		},
+	}
+
+	schema := pg.NewSchema([]pg.FieldSchema{
+		{Name: "csv", Type: "text"},
+	})
+	schemas := map[string]pg.Schema{"person": schema}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			env, err := cel.NewEnv(
+				cel.CustomTypeProvider(pg.NewTypeProvider(schemas)),
+				cel.Variable("person", cel.ObjectType("person")),
+				ext.Strings(),
+			)
+			require.NoError(t, err)
+
+			ast, issues := env.Compile(tt.expr)
+			require.Nil(t, issues)
+
+			sql, err := cel2sql.Convert(ast, cel2sql.WithSchemas(schemas))
+			require.NoError(t, err)
+			assert.Equal(t, tt.expected, sql)
+		})
+	}
+}
+
+func TestStringFunctions_Split_Errors(t *testing.T) {
+	tests := []struct {
+		name          string
+		expr          string
+		expectedError string
+	}{
+		{
+			name:          "negative limit other than -1",
+			expr:          "'a,b,c'.split(',', -2)",
+			expectedError: "split() with negative limit other than -1 is not supported",
+		},
+	}
+
 	schema := pg.NewSchema([]pg.FieldSchema{
 		{Name: "text", Type: "text"},
 	})
 	schemas := map[string]pg.Schema{"person": schema}
 
-	env, err := cel.NewEnv(
-		cel.CustomTypeProvider(pg.NewTypeProvider(schemas)),
-		cel.Variable("person", cel.ObjectType("person")),
-		ext.Strings(),
-	)
-	require.NoError(t, err)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			env, err := cel.NewEnv(
+				cel.CustomTypeProvider(pg.NewTypeProvider(schemas)),
+				cel.Variable("person", cel.ObjectType("person")),
+				ext.Strings(),
+			)
+			require.NoError(t, err)
 
-	ast, issues := env.Compile("person.text.split(',').size() > 0")
-	require.Nil(t, issues)
+			ast, issues := env.Compile(tt.expr)
+			require.Nil(t, issues)
 
-	_, err = cel2sql.Convert(ast, cel2sql.WithSchemas(schemas))
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "split() returns arrays and cannot be converted inline to SQL")
+			_, err = cel2sql.Convert(ast, cel2sql.WithSchemas(schemas))
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), tt.expectedError)
+		})
+	}
 }
 
-func TestStringFunctions_UnsupportedJoin(t *testing.T) {
+func TestStringFunctions_Join(t *testing.T) {
+	tests := []struct {
+		name     string
+		expr     string
+		expected string
+	}{
+		{
+			name:     "method call - basic join with delimiter",
+			expr:     "['a', 'b', 'c'].join(',') == 'a,b,c'",
+			expected: "ARRAY_TO_STRING(ARRAY['a', 'b', 'c'], ',', '') = 'a,b,c'",
+		},
+		{
+			name:     "join without delimiter (empty string)",
+			expr:     "['a', 'b', 'c'].join() == 'abc'",
+			expected: "ARRAY_TO_STRING(ARRAY['a', 'b', 'c'], '', '') = 'abc'",
+		},
+		{
+			name:     "join array field",
+			expr:     "person.tags.join(',') == 'tag1,tag2'",
+			expected: "ARRAY_TO_STRING(person.tags, ',', '') = 'tag1,tag2'",
+		},
+		{
+			name:     "join with space delimiter",
+			expr:     "['hello', 'world'].join(' ') == 'hello world'",
+			expected: "ARRAY_TO_STRING(ARRAY['hello', 'world'], ' ', '') = 'hello world'",
+		},
+		{
+			name:     "join with pipe delimiter",
+			expr:     "person.tags.join('|').contains('tag1')",
+			expected: "POSITION('tag1' IN ARRAY_TO_STRING(person.tags, '|', '')) > 0",
+		},
+	}
+
 	schema := pg.NewSchema([]pg.FieldSchema{
-		{Name: "items", Type: "text", Repeated: true},
+		{Name: "tags", Type: "text", Repeated: true},
 	})
 	schemas := map[string]pg.Schema{"person": schema}
 
-	env, err := cel.NewEnv(
-		cel.CustomTypeProvider(pg.NewTypeProvider(schemas)),
-		cel.Variable("person", cel.ObjectType("person")),
-		ext.Strings(),
-	)
-	require.NoError(t, err)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			env, err := cel.NewEnv(
+				cel.CustomTypeProvider(pg.NewTypeProvider(schemas)),
+				cel.Variable("person", cel.ObjectType("person")),
+				ext.Strings(),
+			)
+			require.NoError(t, err)
 
-	ast, issues := env.Compile("person.items.join(',') == 'a,b,c'")
-	require.Nil(t, issues)
+			ast, issues := env.Compile(tt.expr)
+			require.Nil(t, issues)
 
-	_, err = cel2sql.Convert(ast, cel2sql.WithSchemas(schemas))
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "join() on arrays is not supported in SQL conversion")
+			sql, err := cel2sql.Convert(ast, cel2sql.WithSchemas(schemas))
+			require.NoError(t, err)
+			assert.Equal(t, tt.expected, sql)
+		})
+	}
 }
 
-func TestStringFunctions_UnsupportedFormat(t *testing.T) {
+func TestStringFunctions_Join_WithComprehensions(t *testing.T) {
+	tests := []struct {
+		name     string
+		expr     string
+		expected string
+	}{
+		{
+			name:     "join filtered array",
+			expr:     "person.tags.filter(t, t.startsWith('a')).join(',') == 'apple,apricot'",
+			expected: "ARRAY_TO_STRING(ARRAY(SELECT t FROM UNNEST(person.tags) AS t WHERE t LIKE 'a%' ESCAPE E'\\\\'), ',', '') = 'apple,apricot'",
+		},
+		{
+			name:     "join mapped array",
+			expr:     "person.tags.map(t, t.upperAscii()).join(',') == 'TAG1,TAG2'",
+			expected: "ARRAY_TO_STRING(ARRAY(SELECT UPPER(t) FROM UNNEST(person.tags) AS t), ',', '') = 'TAG1,TAG2'",
+		},
+	}
+
+	schema := pg.NewSchema([]pg.FieldSchema{
+		{Name: "tags", Type: "text", Repeated: true},
+	})
+	schemas := map[string]pg.Schema{"person": schema}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			env, err := cel.NewEnv(
+				cel.CustomTypeProvider(pg.NewTypeProvider(schemas)),
+				cel.Variable("person", cel.ObjectType("person")),
+				ext.Strings(),
+			)
+			require.NoError(t, err)
+
+			ast, issues := env.Compile(tt.expr)
+			require.Nil(t, issues)
+
+			sql, err := cel2sql.Convert(ast, cel2sql.WithSchemas(schemas))
+			require.NoError(t, err)
+			assert.Equal(t, tt.expected, sql)
+		})
+	}
+}
+
+func TestStringFunctions_Format(t *testing.T) {
+	tests := []struct {
+		name     string
+		expr     string
+		expected string
+	}{
+		{
+			name:     "method call - format with %s",
+			expr:     "'Hello %s'.format(['World']) == 'Hello World'",
+			expected: "FORMAT('Hello %s', 'World') = 'Hello World'",
+		},
+		{
+			name:     "format with %d (converted to %s)",
+			expr:     "'Age: %d'.format([30]) == 'Age: 30'",
+			expected: "FORMAT('Age: %s', 30) = 'Age: 30'",
+		},
+		{
+			name:     "format with %f (converted to %s)",
+			expr:     "'Price: %f'.format([19.99]) == 'Price: 19.99'",
+			expected: "FORMAT('Price: %s', 19.99) = 'Price: 19.99'",
+		},
+		{
+			name:     "format with multiple args",
+			expr:     "'%s is %d years old'.format(['John', 30]) == 'John is 30 years old'",
+			expected: "FORMAT('%s is %s years old', 'John', 30) = 'John is 30 years old'",
+		},
+		{
+			name:     "format with field values",
+			expr:     "'Name: %s, Age: %d'.format([person.name, person.age]) == 'Name: John, Age: 30'",
+			expected: "FORMAT('Name: %s, Age: %s', person.name, person.age) = 'Name: John, Age: 30'",
+		},
+		{
+			name:     "format with escaped %%",
+			expr:     "'100%% complete'.format([]) == '100% complete'",
+			expected: "FORMAT('100%% complete') = '100% complete'",
+		},
+	}
+
 	schema := pg.NewSchema([]pg.FieldSchema{
 		{Name: "name", Type: "text"},
 		{Name: "age", Type: "bigint"},
 	})
 	schemas := map[string]pg.Schema{"person": schema}
 
-	env, err := cel.NewEnv(
-		cel.CustomTypeProvider(pg.NewTypeProvider(schemas)),
-		cel.Variable("person", cel.ObjectType("person")),
-		ext.Strings(),
-	)
-	require.NoError(t, err)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			env, err := cel.NewEnv(
+				cel.CustomTypeProvider(pg.NewTypeProvider(schemas)),
+				cel.Variable("person", cel.ObjectType("person")),
+				ext.Strings(),
+			)
+			require.NoError(t, err)
 
-	ast, issues := env.Compile("'%s is %d'.format([person.name, person.age]) == 'John is 30'")
-	require.Nil(t, issues)
+			ast, issues := env.Compile(tt.expr)
+			require.Nil(t, issues)
 
-	_, err = cel2sql.Convert(ast, cel2sql.WithSchemas(schemas))
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "format() with printf-style formatting is too complex for SQL conversion")
+			sql, err := cel2sql.Convert(ast, cel2sql.WithSchemas(schemas))
+			require.NoError(t, err)
+			assert.Equal(t, tt.expected, sql)
+		})
+	}
+}
+
+func TestStringFunctions_Format_Errors(t *testing.T) {
+	tests := []struct {
+		name          string
+		expr          string
+		expectedError string
+	}{
+		{
+			name:          "unsupported %b specifier",
+			expr:          "'Binary: %b'.format([5])",
+			expectedError: "unsupported format specifier %b",
+		},
+		{
+			name:          "unsupported %x specifier",
+			expr:          "'Hex: %x'.format([255])",
+			expectedError: "unsupported format specifier %x",
+		},
+		// Note: argument count mismatches are caught by CEL's type checker at compile time,
+		// so we don't need to test for them here
+	}
+
+	schema := pg.NewSchema([]pg.FieldSchema{
+		{Name: "name", Type: "text"},
+	})
+	schemas := map[string]pg.Schema{"person": schema}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			env, err := cel.NewEnv(
+				cel.CustomTypeProvider(pg.NewTypeProvider(schemas)),
+				cel.Variable("person", cel.ObjectType("person")),
+				ext.Strings(),
+			)
+			require.NoError(t, err)
+
+			ast, issues := env.Compile(tt.expr)
+			require.Nil(t, issues)
+
+			_, err = cel2sql.Convert(ast, cel2sql.WithSchemas(schemas))
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), tt.expectedError)
+		})
+	}
 }
 
 // Note: quote() function is not available in CEL ext.Strings() standard extension

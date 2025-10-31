@@ -83,6 +83,10 @@ status == "active" || status == "pending"
 | `matches()` | Regex pattern match | `email.matches(r".*@test\.com")` | `email ~ '.*@test\.com'` |
 | `+` | String concatenation | `first + " " + last` | `first \|\| ' ' \|\| last` |
 | `size()` | String length | `size(name)` | `CHAR_LENGTH(name)` |
+| `split()` | Split string to array | `"a,b,c".split(",")` | `STRING_TO_ARRAY('a,b,c', ',')` |
+| `split(limit)` | Split with limit | `text.split(",", 3)` | `(STRING_TO_ARRAY(text, ','))[1:3]` |
+| `join()` | Join array to string | `tags.join(",")` | `ARRAY_TO_STRING(tags, ',', '')` |
+| `format()` | Format string | `"%s: %d".format([name, age])` | `FORMAT('%s: %s', name, age)` |
 
 ### Examples
 
@@ -106,7 +110,116 @@ email.matches(r"^[a-z]+@example\.com$")
 // Concatenation
 first_name + " " + last_name
 // SQL: first_name || ' ' || last_name
+
+// Split string to array
+"a,b,c".split(",")
+// SQL: STRING_TO_ARRAY('a,b,c', ',')
+
+// Split with limit
+text.split(",", 3)
+// SQL: (STRING_TO_ARRAY(text, ','))[1:3]
+
+// Join array to string
+tags.join(",")
+// SQL: ARRAY_TO_STRING(tags, ',', '')
+
+// Format string
+"Name: %s, Age: %d".format([person.name, person.age])
+// SQL: FORMAT('Name: %s, Age: %s', person.name, person.age)
 ```
+
+### String Extension Functions (v3.4.0+)
+
+cel2sql v3.4.0 adds support for three CEL `ext.Strings()` functions:
+
+#### split(delimiter [, limit])
+
+Splits a string into an array using a delimiter.
+
+```go
+// Basic split (unlimited)
+"a,b,c".split(",")
+// SQL: STRING_TO_ARRAY('a,b,c', ',')
+
+// Split with limit
+"a,b,c,d".split(",", 2)
+// SQL: (STRING_TO_ARRAY('a,b,c,d', ','))[1:2]
+
+// Special cases
+"text".split(",", 0)  // Returns: ARRAY[]::text[] (empty array)
+"text".split(",", 1)  // Returns: ARRAY['text'] (no split)
+"text".split(",", -1) // Returns: STRING_TO_ARRAY('text', ',') (unlimited, default)
+```
+
+**Supported in comprehensions:**
+```go
+person.csv.split(',').exists(x, x == 'target')
+// SQL: EXISTS (SELECT 1 FROM UNNEST(STRING_TO_ARRAY(person.csv, ',')) AS x WHERE x = 'target')
+```
+
+**Limitations:**
+- Dynamic limits not supported (must be constant)
+- Negative limits other than -1 not supported
+
+#### join([delimiter])
+
+Joins an array into a string using a delimiter.
+
+```go
+// Join with delimiter
+["a", "b", "c"].join(",")
+// SQL: ARRAY_TO_STRING(ARRAY['a', 'b', 'c'], ',', '')
+
+// Join without delimiter (empty string)
+["a", "b", "c"].join()
+// SQL: ARRAY_TO_STRING(ARRAY['a', 'b', 'c'], '', '')
+
+// Join array field
+person.tags.join(", ")
+// SQL: ARRAY_TO_STRING(person.tags, ', ', '')
+```
+
+**Supported in comprehensions:**
+```go
+person.tags.filter(t, t.startsWith('a')).join(',')
+// SQL: ARRAY_TO_STRING(ARRAY(SELECT t FROM UNNEST(person.tags) AS t WHERE t LIKE 'a%'), ',', '')
+```
+
+**Note:** Null elements are replaced with empty strings.
+
+#### format(args)
+
+Formats a string using printf-style placeholders.
+
+```go
+// Basic formatting
+"Hello %s".format(["World"])
+// SQL: FORMAT('Hello %s', 'World')
+
+// Multiple arguments
+"%s is %d years old".format(["John", 30])
+// SQL: FORMAT('%s is %s years old', 'John', 30)
+
+// With field values
+"User: %s, Email: %s".format([person.name, person.email])
+// SQL: FORMAT('User: %s, Email: %s', person.name, person.email)
+```
+
+**Supported specifiers:**
+- `%s`: String (stays as %s)
+- `%d`: Decimal/integer (converted to %s)
+- `%f`: Float (converted to %s)
+- `%%`: Escaped percent sign
+
+**Unsupported specifiers:** `%b`, `%x`, `%X`, `%o`, `%e`, `%E`, `%g`, `%G`
+
+**Limitations:**
+- Format string must be constant (not dynamic)
+- Arguments must be constant list
+- Format string max length: 1000 characters
+- Argument count must match placeholder count
+
+See `examples/string_extensions/` for complete working examples.
 
 ## Type Conversion Functions
 

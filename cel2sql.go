@@ -1366,24 +1366,301 @@ func (con *converter) callReverse(target *exprpb.Expr, args []*exprpb.Expr) erro
 	return nil
 }
 
-// callSplit handles CEL split() string function - returns error (not supported)
-func (con *converter) callSplit(_ *exprpb.Expr, _ []*exprpb.Expr) error {
-	return fmt.Errorf("%w: split() returns arrays and cannot be converted inline to SQL - consider using STRING_TO_ARRAY() in schema or restructuring your query", ErrUnsupportedOperation)
+// callSplit handles CEL split() string function
+func (con *converter) callSplit(target *exprpb.Expr, args []*exprpb.Expr) error {
+	// CEL split function: string.split(delimiter) or string.split(delimiter, limit)
+	// Convert to PostgreSQL: STRING_TO_ARRAY(string, delimiter)
+	// With limit support:
+	//   limit = -1 or no limit: STRING_TO_ARRAY(string, delimiter) (unlimited)
+	//   limit = 0: ARRAY[]::text[] (empty array)
+	//   limit = 1: ARRAY[string] (no split)
+	//   limit > 1: Complex SQL with REGEXP_SPLIT_TO_ARRAY and array slicing
+
+	var stringExpr *exprpb.Expr
+	var delimiterExpr *exprpb.Expr
+	var limitExpr *exprpb.Expr
+
+	if target != nil {
+		// Method call: string.split(delimiter [, limit])
+		stringExpr = target
+		if len(args) > 0 {
+			delimiterExpr = args[0]
+		}
+		if len(args) > 1 {
+			limitExpr = args[1]
+		}
+	} else if len(args) >= 2 {
+		// Function call: split(string, delimiter [, limit])
+		stringExpr = args[0]
+		delimiterExpr = args[1]
+		if len(args) > 2 {
+			limitExpr = args[2]
+		}
+	}
+
+	if stringExpr == nil || delimiterExpr == nil {
+		return fmt.Errorf("%w: split() requires string and delimiter arguments", ErrInvalidArguments)
+	}
+
+	// Validate delimiter for security (check for null bytes)
+	if constExpr := delimiterExpr.GetConstExpr(); constExpr != nil {
+		if strVal := constExpr.GetStringValue(); strings.ContainsRune(strVal, '\x00') {
+			return fmt.Errorf("%w: split() delimiter cannot contain null bytes", ErrInvalidArguments)
+		}
+	}
+
+	// Handle limit parameter
+	var limit int64 = -1 // Default: unlimited splits
+	if limitExpr != nil {
+		if constExpr := limitExpr.GetConstExpr(); constExpr != nil {
+			limit = constExpr.GetInt64Value()
+		} else {
+			return fmt.Errorf("%w: split() with dynamic limit is not supported in SQL conversion", ErrUnsupportedOperation)
+		}
+	}
+
+	// Generate SQL based on limit value
+	switch {
+	case limit == 0:
+		// Empty array
+		con.str.WriteString("ARRAY[]::text[]")
+		return nil
+
+	case limit == 1:
+		// Return original string as single-element array
+		con.str.WriteString("ARRAY[")
+		nested := isBinaryOrTernaryOperator(stringExpr)
+		if err := con.visitMaybeNested(stringExpr, nested); err != nil {
+			return err
+		}
+		con.str.WriteString("]")
+		return nil
+
+	case limit == -1:
+		// Unlimited splits (default PostgreSQL behavior)
+		con.str.WriteString("STRING_TO_ARRAY(")
+		nested := isBinaryOrTernaryOperator(stringExpr)
+		if err := con.visitMaybeNested(stringExpr, nested); err != nil {
+			return err
+		}
+		con.str.WriteString(", ")
+		if err := con.visit(delimiterExpr); err != nil {
+			return err
+		}
+		con.str.WriteString(")")
+		return nil
+
+	case limit > 1:
+		// Arbitrary positive limit - use array slicing with REGEXP_SPLIT_TO_ARRAY
+		// REGEXP_SPLIT_TO_ARRAY is more powerful and allows us to limit splits
+		// Result: (REGEXP_SPLIT_TO_ARRAY(string, delimiter))[1:limit]
+		con.str.WriteString("(STRING_TO_ARRAY(")
+		nested := isBinaryOrTernaryOperator(stringExpr)
+		if err := con.visitMaybeNested(stringExpr, nested); err != nil {
+			return err
+		}
+		con.str.WriteString(", ")
+		if err := con.visit(delimiterExpr); err != nil {
+			return err
+		}
+		con.str.WriteString("))[1:")
+		con.str.WriteString(strconv.FormatInt(limit, 10))
+		con.str.WriteString("]")
+		return nil
+
+	default:
+		// Negative limits other than -1 are not supported
+		return fmt.Errorf("%w: split() with negative limit other than -1 is not supported", ErrUnsupportedOperation)
+	}
 }
 
-// callJoin handles CEL join() function - returns error (not supported)
-func (con *converter) callJoin(_ *exprpb.Expr, _ []*exprpb.Expr) error {
-	return fmt.Errorf("%w: join() on arrays is not supported in SQL conversion - consider using ARRAY_TO_STRING() in schema or restructuring your query", ErrUnsupportedOperation)
+// callJoin handles CEL join() function
+func (con *converter) callJoin(target *exprpb.Expr, args []*exprpb.Expr) error {
+	// CEL join function: array.join() or array.join(delimiter)
+	// Convert to PostgreSQL: ARRAY_TO_STRING(array, delimiter, '')
+	// Default delimiter is empty string if not provided
+
+	var arrayExpr *exprpb.Expr
+	var delimiterExpr *exprpb.Expr
+
+	if target != nil {
+		// Method call: array.join([delimiter])
+		arrayExpr = target
+		if len(args) > 0 {
+			delimiterExpr = args[0]
+		}
+	} else if len(args) >= 1 {
+		// Function call: join(array [, delimiter])
+		arrayExpr = args[0]
+		if len(args) > 1 {
+			delimiterExpr = args[1]
+		}
+	}
+
+	if arrayExpr == nil {
+		return fmt.Errorf("%w: join() requires an array argument", ErrInvalidArguments)
+	}
+
+	// Validate delimiter for security (check for null bytes)
+	if delimiterExpr != nil {
+		if constExpr := delimiterExpr.GetConstExpr(); constExpr != nil {
+			if strVal := constExpr.GetStringValue(); strings.ContainsRune(strVal, '\x00') {
+				return fmt.Errorf("%w: join() delimiter cannot contain null bytes", ErrInvalidArguments)
+			}
+		}
+	}
+
+	// Generate SQL
+	con.str.WriteString("ARRAY_TO_STRING(")
+	nested := isBinaryOrTernaryOperator(arrayExpr)
+	if err := con.visitMaybeNested(arrayExpr, nested); err != nil {
+		return err
+	}
+	con.str.WriteString(", ")
+
+	// Use provided delimiter or empty string default
+	if delimiterExpr != nil {
+		if err := con.visit(delimiterExpr); err != nil {
+			return err
+		}
+	} else {
+		con.str.WriteString("''")
+	}
+
+	// Third parameter: null_string (use empty string to replace nulls)
+	con.str.WriteString(", '')")
+	return nil
 }
 
-// callFormat handles CEL format() function - returns error (not supported)
-func (con *converter) callFormat(_ *exprpb.Expr, _ []*exprpb.Expr) error {
-	return fmt.Errorf("%w: format() with printf-style formatting is too complex for SQL conversion - consider pre-formatting values or using PostgreSQL FORMAT() function in schema", ErrUnsupportedOperation)
+// callFormat handles CEL format() function
+func (con *converter) callFormat(target *exprpb.Expr, args []*exprpb.Expr) error {
+	// CEL format function: format_string.format(args_list)
+	// Convert to PostgreSQL: FORMAT(format_string, arg1, arg2, ...)
+	// Supports: %s (string), %d (decimal/integer), %f (float)
+	// Unsupported: %b (binary), %x (hex), etc.
+
+	var formatExpr *exprpb.Expr
+	var argsExpr *exprpb.Expr
+
+	if target != nil {
+		// Method call: format_string.format(args)
+		formatExpr = target
+		if len(args) > 0 {
+			argsExpr = args[0]
+		}
+	} else if len(args) >= 2 {
+		// Function call: format(format_string, args)
+		formatExpr = args[0]
+		argsExpr = args[1]
+	}
+
+	if formatExpr == nil || argsExpr == nil {
+		return fmt.Errorf("%w: format() requires format string and arguments list", ErrInvalidArguments)
+	}
+
+	// Format string must be a constant
+	constFormat := formatExpr.GetConstExpr()
+	if constFormat == nil {
+		return fmt.Errorf("%w: format() requires a constant format string", ErrUnsupportedOperation)
+	}
+
+	formatString := constFormat.GetStringValue()
+
+	// Security: Check format string length limit (1000 chars)
+	if len(formatString) > 1000 {
+		return fmt.Errorf("%w: format() format string exceeds maximum length of 1000 characters", ErrInvalidArguments)
+	}
+
+	// Parse format string to extract specifiers and validate
+	specifiers, err := parseFormatString(formatString)
+	if err != nil {
+		return fmt.Errorf("%w: %v", ErrInvalidArguments, err)
+	}
+
+	// Arguments must be a constant list
+	listExpr := argsExpr.GetListExpr()
+	if listExpr == nil {
+		return fmt.Errorf("%w: format() requires a constant list of arguments", ErrUnsupportedOperation)
+	}
+
+	argElements := listExpr.GetElements()
+
+	// Validate argument count matches specifier count
+	if len(argElements) != len(specifiers) {
+		return fmt.Errorf("%w: format() argument count mismatch - format string has %d placeholders but got %d arguments", ErrInvalidArguments, len(specifiers), len(argElements))
+	}
+
+	// Convert CEL format specifiers to PostgreSQL format specifiers
+	pgFormatString := convertFormatString(formatString, specifiers)
+
+	// Generate SQL: FORMAT(format_string, arg1, arg2, ...)
+	con.str.WriteString("FORMAT(")
+	con.str.WriteString("'")
+	con.str.WriteString(strings.ReplaceAll(pgFormatString, "'", "''")) // Escape single quotes
+	con.str.WriteString("'")
+
+	// Add each argument
+	for _, argExpr := range argElements {
+		con.str.WriteString(", ")
+		if err := con.visit(argExpr); err != nil {
+			return err
+		}
+	}
+
+	con.str.WriteString(")")
+	return nil
 }
 
-// callQuote handles CEL quote() function - returns error (not supported)
+// parseFormatString extracts format specifiers from a CEL format string
+// Returns list of specifiers (%s, %d, %f) and validates them
+func parseFormatString(format string) ([]string, error) {
+	var specifiers []string
+	i := 0
+	for i < len(format) {
+		if format[i] == '%' {
+			if i+1 >= len(format) {
+				return nil, fmt.Errorf("%w: incomplete format specifier at end of string", ErrInvalidArguments)
+			}
+
+			nextChar := format[i+1]
+			switch nextChar {
+			case 's', 'd', 'f':
+				// Supported specifiers
+				specifiers = append(specifiers, "%"+string(nextChar))
+				i += 2
+			case '%':
+				// Escaped percent sign %%
+				i += 2
+			case 'b', 'x', 'X', 'o', 'e', 'E', 'g', 'G':
+				// Unsupported specifiers
+				return nil, fmt.Errorf("unsupported format specifier %%%c - only %%s, %%d, and %%f are supported", nextChar)
+			default:
+				return nil, fmt.Errorf("invalid format specifier %%%c", nextChar)
+			}
+		} else {
+			i++
+		}
+	}
+	return specifiers, nil
+}
+
+// convertFormatString converts CEL format string to PostgreSQL FORMAT syntax
+// PostgreSQL uses %s for all types, but we keep %d and %f for type hinting
+func convertFormatString(format string, _ []string) string {
+	// PostgreSQL FORMAT() uses %s for strings, %I for identifiers, %L for literals
+	// For our purposes, we convert all to %s and let PostgreSQL handle type conversion
+	result := format
+	result = strings.ReplaceAll(result, "%d", "%s")
+	result = strings.ReplaceAll(result, "%f", "%s")
+	// %s stays as %s
+	return result
+}
+
+// callQuote handles CEL quote() function - returns error (not in ext.Strings())
 func (con *converter) callQuote(_ *exprpb.Expr, _ []*exprpb.Expr) error {
-	return fmt.Errorf("%w: quote() for string escaping is not supported in SQL conversion", ErrUnsupportedOperation)
+	// Note: quote() is not actually part of CEL's ext.Strings() standard extension
+	// It may be part of CEL spec but is not commonly implemented
+	return fmt.Errorf("%w: quote() is not part of CEL ext.Strings() standard extension", ErrUnsupportedOperation)
 }
 
 func (con *converter) visitCallFunc(expr *exprpb.Expr) error {
