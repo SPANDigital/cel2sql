@@ -784,6 +784,9 @@ func (con *converter) callEndsWith(target *exprpb.Expr, args []*exprpb.Expr) err
 }
 
 func (con *converter) callCasting(function string, _ *exprpb.Expr, args []*exprpb.Expr) error {
+	if len(args) == 0 {
+		return fmt.Errorf("%w: type conversion requires an argument", ErrInvalidArguments)
+	}
 	arg := args[0]
 	if function == overloads.TypeConvertInt && isTimestampType(con.getType(arg)) {
 		con.str.WriteString("EXTRACT(EPOCH FROM ")
@@ -892,6 +895,497 @@ func (con *converter) callMatches(target *exprpb.Expr, args []*exprpb.Expr) erro
 	return nil
 }
 
+// callLowerASCII handles CEL lowerAscii() string function
+func (con *converter) callLowerASCII(target *exprpb.Expr, args []*exprpb.Expr) error {
+	// CEL lowerAscii function: string.lowerAscii()
+	// Convert to PostgreSQL: LOWER(string)
+
+	var stringExpr *exprpb.Expr
+	switch {
+	case target != nil:
+		// Method call: string.lowerAscii()
+		stringExpr = target
+	case len(args) > 0:
+		// Function call: lowerAscii(string)
+		stringExpr = args[0]
+	default:
+		return fmt.Errorf("%w: lowerAscii() requires a string argument", ErrInvalidArguments)
+	}
+
+	con.str.WriteString("LOWER(")
+	nested := isBinaryOrTernaryOperator(stringExpr)
+	if err := con.visitMaybeNested(stringExpr, nested); err != nil {
+		return err
+	}
+	con.str.WriteString(")")
+	return nil
+}
+
+// callUpperASCII handles CEL upperAscii() string function
+func (con *converter) callUpperASCII(target *exprpb.Expr, args []*exprpb.Expr) error {
+	// CEL upperAscii function: string.upperAscii()
+	// Convert to PostgreSQL: UPPER(string)
+
+	var stringExpr *exprpb.Expr
+	switch {
+	case target != nil:
+		// Method call: string.upperAscii()
+		stringExpr = target
+	case len(args) > 0:
+		// Function call: upperAscii(string)
+		stringExpr = args[0]
+	default:
+		return fmt.Errorf("%w: upperAscii() requires a string argument", ErrInvalidArguments)
+	}
+
+	con.str.WriteString("UPPER(")
+	nested := isBinaryOrTernaryOperator(stringExpr)
+	if err := con.visitMaybeNested(stringExpr, nested); err != nil {
+		return err
+	}
+	con.str.WriteString(")")
+	return nil
+}
+
+// callTrim handles CEL trim() string function
+func (con *converter) callTrim(target *exprpb.Expr, args []*exprpb.Expr) error {
+	// CEL trim function: string.trim()
+	// Convert to PostgreSQL: TRIM(string)
+
+	var stringExpr *exprpb.Expr
+	switch {
+	case target != nil:
+		// Method call: string.trim()
+		stringExpr = target
+	case len(args) > 0:
+		// Function call: trim(string)
+		stringExpr = args[0]
+	default:
+		return fmt.Errorf("%w: trim() requires a string argument", ErrInvalidArguments)
+	}
+
+	con.str.WriteString("TRIM(")
+	nested := isBinaryOrTernaryOperator(stringExpr)
+	if err := con.visitMaybeNested(stringExpr, nested); err != nil {
+		return err
+	}
+	con.str.WriteString(")")
+	return nil
+}
+
+// callCharAt handles CEL charAt() string function
+func (con *converter) callCharAt(target *exprpb.Expr, args []*exprpb.Expr) error {
+	// CEL charAt function: string.charAt(index)
+	// Convert to PostgreSQL: SUBSTRING(string, index+1, 1)
+	// Note: CEL is 0-indexed, PostgreSQL SUBSTRING is 1-indexed
+
+	var stringExpr *exprpb.Expr
+	var indexExpr *exprpb.Expr
+
+	if target != nil {
+		// Method call: string.charAt(index)
+		stringExpr = target
+		if len(args) > 0 {
+			indexExpr = args[0]
+		}
+	} else if len(args) >= 2 {
+		// Function call: charAt(string, index)
+		stringExpr = args[0]
+		indexExpr = args[1]
+	}
+
+	if stringExpr == nil || indexExpr == nil {
+		return fmt.Errorf("%w: charAt() requires both string and index arguments", ErrInvalidArguments)
+	}
+
+	con.str.WriteString("SUBSTRING(")
+	nested := isBinaryOrTernaryOperator(stringExpr)
+	if err := con.visitMaybeNested(stringExpr, nested); err != nil {
+		return err
+	}
+	con.str.WriteString(", ")
+
+	// Convert 0-indexed to 1-indexed
+	// If index is a constant, we can add 1 at compile time
+	if constExpr := indexExpr.GetConstExpr(); constExpr != nil {
+		idx := constExpr.GetInt64Value()
+		con.str.WriteString(strconv.FormatInt(idx+1, 10))
+	} else {
+		// For dynamic index, add 1 at runtime
+		if err := con.visit(indexExpr); err != nil {
+			return err
+		}
+		con.str.WriteString(" + 1")
+	}
+
+	con.str.WriteString(", 1)")
+	return nil
+}
+
+// callIndexOf handles CEL indexOf() string function
+func (con *converter) callIndexOf(target *exprpb.Expr, args []*exprpb.Expr) error {
+	// CEL indexOf function: string.indexOf(substring) or string.indexOf(substring, offset)
+	// Convert to PostgreSQL: POSITION(substring IN string) - 1 (to convert to 0-indexed)
+	// Note: PostgreSQL POSITION is 1-indexed and returns 0 for not found, CEL returns -1 for not found
+
+	var stringExpr *exprpb.Expr
+	var substringExpr *exprpb.Expr
+	var offsetExpr *exprpb.Expr
+
+	if target != nil {
+		// Method call: string.indexOf(substring [, offset])
+		stringExpr = target
+		if len(args) > 0 {
+			substringExpr = args[0]
+		}
+		if len(args) > 1 {
+			offsetExpr = args[1]
+		}
+	} else if len(args) >= 2 {
+		// Function call: indexOf(string, substring [, offset])
+		stringExpr = args[0]
+		substringExpr = args[1]
+		if len(args) > 2 {
+			offsetExpr = args[2]
+		}
+	}
+
+	if stringExpr == nil || substringExpr == nil {
+		return fmt.Errorf("%w: indexOf() requires both string and substring arguments", ErrInvalidArguments)
+	}
+
+	if offsetExpr != nil {
+		// With offset: use SUBSTRING to search from offset, then adjust result
+		con.str.WriteString("CASE WHEN POSITION(")
+		if err := con.visit(substringExpr); err != nil {
+			return err
+		}
+		con.str.WriteString(" IN SUBSTRING(")
+		nested := isBinaryOrTernaryOperator(stringExpr)
+		if err := con.visitMaybeNested(stringExpr, nested); err != nil {
+			return err
+		}
+		con.str.WriteString(", ")
+		// Convert 0-indexed offset to 1-indexed
+		if constExpr := offsetExpr.GetConstExpr(); constExpr != nil {
+			offset := constExpr.GetInt64Value()
+			con.str.WriteString(strconv.FormatInt(offset+1, 10))
+		} else {
+			if err := con.visit(offsetExpr); err != nil {
+				return err
+			}
+			con.str.WriteString(" + 1")
+		}
+		con.str.WriteString(")) > 0 THEN POSITION(")
+		if err := con.visit(substringExpr); err != nil {
+			return err
+		}
+		con.str.WriteString(" IN SUBSTRING(")
+		nested = isBinaryOrTernaryOperator(stringExpr)
+		if err := con.visitMaybeNested(stringExpr, nested); err != nil {
+			return err
+		}
+		con.str.WriteString(", ")
+		if constExpr := offsetExpr.GetConstExpr(); constExpr != nil {
+			offset := constExpr.GetInt64Value()
+			con.str.WriteString(strconv.FormatInt(offset+1, 10))
+		} else {
+			if err := con.visit(offsetExpr); err != nil {
+				return err
+			}
+			con.str.WriteString(" + 1")
+		}
+		con.str.WriteString(")) + ")
+		if err := con.visit(offsetExpr); err != nil {
+			return err
+		}
+		con.str.WriteString(" - 1 ELSE -1 END")
+	} else {
+		// Without offset: POSITION(substring IN string) - 1, return -1 if not found
+		con.str.WriteString("CASE WHEN POSITION(")
+		if err := con.visit(substringExpr); err != nil {
+			return err
+		}
+		con.str.WriteString(" IN ")
+		nested := isBinaryOrTernaryOperator(stringExpr)
+		if err := con.visitMaybeNested(stringExpr, nested); err != nil {
+			return err
+		}
+		con.str.WriteString(") > 0 THEN POSITION(")
+		if err := con.visit(substringExpr); err != nil {
+			return err
+		}
+		con.str.WriteString(" IN ")
+		nested = isBinaryOrTernaryOperator(stringExpr)
+		if err := con.visitMaybeNested(stringExpr, nested); err != nil {
+			return err
+		}
+		con.str.WriteString(") - 1 ELSE -1 END")
+	}
+
+	return nil
+}
+
+// callLastIndexOf handles CEL lastIndexOf() string function
+func (con *converter) callLastIndexOf(target *exprpb.Expr, args []*exprpb.Expr) error {
+	// CEL lastIndexOf function: string.lastIndexOf(substring)
+	// Convert to PostgreSQL: LENGTH(string) - POSITION(REVERSE(substring) IN REVERSE(string)) - LENGTH(substring) + 1
+	// Returns -1 if not found (CEL convention)
+
+	var stringExpr *exprpb.Expr
+	var substringExpr *exprpb.Expr
+
+	if target != nil {
+		// Method call: string.lastIndexOf(substring)
+		stringExpr = target
+		if len(args) > 0 {
+			substringExpr = args[0]
+		}
+	} else if len(args) >= 2 {
+		// Function call: lastIndexOf(string, substring)
+		stringExpr = args[0]
+		substringExpr = args[1]
+	}
+
+	if stringExpr == nil || substringExpr == nil {
+		return fmt.Errorf("%w: lastIndexOf() requires both string and substring arguments", ErrInvalidArguments)
+	}
+
+	// Return -1 if not found, otherwise calculate position
+	con.str.WriteString("CASE WHEN POSITION(REVERSE(")
+	if err := con.visit(substringExpr); err != nil {
+		return err
+	}
+	con.str.WriteString(") IN REVERSE(")
+	nested := isBinaryOrTernaryOperator(stringExpr)
+	if err := con.visitMaybeNested(stringExpr, nested); err != nil {
+		return err
+	}
+	con.str.WriteString(")) > 0 THEN LENGTH(")
+	nested = isBinaryOrTernaryOperator(stringExpr)
+	if err := con.visitMaybeNested(stringExpr, nested); err != nil {
+		return err
+	}
+	con.str.WriteString(") - POSITION(REVERSE(")
+	if err := con.visit(substringExpr); err != nil {
+		return err
+	}
+	con.str.WriteString(") IN REVERSE(")
+	nested = isBinaryOrTernaryOperator(stringExpr)
+	if err := con.visitMaybeNested(stringExpr, nested); err != nil {
+		return err
+	}
+	con.str.WriteString(")) - LENGTH(")
+	if err := con.visit(substringExpr); err != nil {
+		return err
+	}
+	con.str.WriteString(") + 1 ELSE -1 END")
+
+	return nil
+}
+
+// callSubstring handles CEL substring() string function
+func (con *converter) callSubstring(target *exprpb.Expr, args []*exprpb.Expr) error {
+	// CEL substring function: string.substring(start) or string.substring(start, end)
+	// Convert to PostgreSQL: SUBSTRING(string, start+1 [, end-start])
+	// Note: CEL is 0-indexed and end is exclusive, PostgreSQL SUBSTRING is 1-indexed
+
+	var stringExpr *exprpb.Expr
+	var startExpr *exprpb.Expr
+	var endExpr *exprpb.Expr
+
+	if target != nil {
+		// Method call: string.substring(start [, end])
+		stringExpr = target
+		if len(args) > 0 {
+			startExpr = args[0]
+		}
+		if len(args) > 1 {
+			endExpr = args[1]
+		}
+	} else if len(args) >= 2 {
+		// Function call: substring(string, start [, end])
+		stringExpr = args[0]
+		startExpr = args[1]
+		if len(args) > 2 {
+			endExpr = args[2]
+		}
+	}
+
+	if stringExpr == nil || startExpr == nil {
+		return fmt.Errorf("%w: substring() requires string and start arguments", ErrInvalidArguments)
+	}
+
+	con.str.WriteString("SUBSTRING(")
+	nested := isBinaryOrTernaryOperator(stringExpr)
+	if err := con.visitMaybeNested(stringExpr, nested); err != nil {
+		return err
+	}
+	con.str.WriteString(", ")
+
+	// Convert 0-indexed start to 1-indexed
+	if constExpr := startExpr.GetConstExpr(); constExpr != nil {
+		start := constExpr.GetInt64Value()
+		con.str.WriteString(strconv.FormatInt(start+1, 10))
+	} else {
+		if err := con.visit(startExpr); err != nil {
+			return err
+		}
+		con.str.WriteString(" + 1")
+	}
+
+	// If end is provided, calculate length as (end - start)
+	if endExpr != nil {
+		con.str.WriteString(", ")
+		// If both start and end are constants, calculate length at compile time
+		if startConst := startExpr.GetConstExpr(); startConst != nil {
+			if endConst := endExpr.GetConstExpr(); endConst != nil {
+				start := startConst.GetInt64Value()
+				end := endConst.GetInt64Value()
+				length := end - start
+				if length < 0 {
+					length = 0
+				}
+				con.str.WriteString(strconv.FormatInt(length, 10))
+			} else {
+				// End is dynamic, start is constant
+				if err := con.visit(endExpr); err != nil {
+					return err
+				}
+				con.str.WriteString(" - ")
+				start := startConst.GetInt64Value()
+				con.str.WriteString(strconv.FormatInt(start, 10))
+			}
+		} else {
+			// Start is dynamic
+			if err := con.visit(endExpr); err != nil {
+				return err
+			}
+			con.str.WriteString(" - (")
+			if err := con.visit(startExpr); err != nil {
+				return err
+			}
+			con.str.WriteString(")")
+		}
+	}
+
+	con.str.WriteString(")")
+	return nil
+}
+
+// callReplace handles CEL replace() string function
+func (con *converter) callReplace(target *exprpb.Expr, args []*exprpb.Expr) error {
+	// CEL replace function: string.replace(old, new) or string.replace(old, new, limit)
+	// Convert to PostgreSQL: REPLACE(string, old, new)
+	// Note: PostgreSQL REPLACE replaces all occurrences, limit parameter not supported
+
+	var stringExpr *exprpb.Expr
+	var oldExpr *exprpb.Expr
+	var newExpr *exprpb.Expr
+	var limitExpr *exprpb.Expr
+
+	if target != nil {
+		// Method call: string.replace(old, new [, limit])
+		stringExpr = target
+		if len(args) > 0 {
+			oldExpr = args[0]
+		}
+		if len(args) > 1 {
+			newExpr = args[1]
+		}
+		if len(args) > 2 {
+			limitExpr = args[2]
+		}
+	} else if len(args) >= 3 {
+		// Function call: replace(string, old, new [, limit])
+		stringExpr = args[0]
+		oldExpr = args[1]
+		newExpr = args[2]
+		if len(args) > 3 {
+			limitExpr = args[3]
+		}
+	}
+
+	if stringExpr == nil || oldExpr == nil || newExpr == nil {
+		return fmt.Errorf("%w: replace() requires string, old, and new arguments", ErrInvalidArguments)
+	}
+
+	// Check if limit is provided and is not -1 (replace all)
+	if limitExpr != nil {
+		if constExpr := limitExpr.GetConstExpr(); constExpr != nil {
+			limit := constExpr.GetInt64Value()
+			if limit != -1 {
+				return fmt.Errorf("%w: replace() with limit != -1 is not supported in SQL conversion (PostgreSQL REPLACE replaces all occurrences)", ErrUnsupportedOperation)
+			}
+		} else {
+			// Dynamic limit - we can't determine if it's -1 at compile time
+			return fmt.Errorf("%w: replace() with dynamic limit is not supported in SQL conversion", ErrUnsupportedOperation)
+		}
+	}
+
+	con.str.WriteString("REPLACE(")
+	nested := isBinaryOrTernaryOperator(stringExpr)
+	if err := con.visitMaybeNested(stringExpr, nested); err != nil {
+		return err
+	}
+	con.str.WriteString(", ")
+	if err := con.visit(oldExpr); err != nil {
+		return err
+	}
+	con.str.WriteString(", ")
+	if err := con.visit(newExpr); err != nil {
+		return err
+	}
+	con.str.WriteString(")")
+	return nil
+}
+
+// callReverse handles CEL reverse() string function
+func (con *converter) callReverse(target *exprpb.Expr, args []*exprpb.Expr) error {
+	// CEL reverse function: string.reverse()
+	// Convert to PostgreSQL: REVERSE(string)
+
+	var stringExpr *exprpb.Expr
+	switch {
+	case target != nil:
+		// Method call: string.reverse()
+		stringExpr = target
+	case len(args) > 0:
+		// Function call: reverse(string)
+		stringExpr = args[0]
+	default:
+		return fmt.Errorf("%w: reverse() requires a string argument", ErrInvalidArguments)
+	}
+
+	con.str.WriteString("REVERSE(")
+	nested := isBinaryOrTernaryOperator(stringExpr)
+	if err := con.visitMaybeNested(stringExpr, nested); err != nil {
+		return err
+	}
+	con.str.WriteString(")")
+	return nil
+}
+
+// callSplit handles CEL split() string function - returns error (not supported)
+func (con *converter) callSplit(_ *exprpb.Expr, _ []*exprpb.Expr) error {
+	return fmt.Errorf("%w: split() returns arrays and cannot be converted inline to SQL - consider using STRING_TO_ARRAY() in schema or restructuring your query", ErrUnsupportedOperation)
+}
+
+// callJoin handles CEL join() function - returns error (not supported)
+func (con *converter) callJoin(_ *exprpb.Expr, _ []*exprpb.Expr) error {
+	return fmt.Errorf("%w: join() on arrays is not supported in SQL conversion - consider using ARRAY_TO_STRING() in schema or restructuring your query", ErrUnsupportedOperation)
+}
+
+// callFormat handles CEL format() function - returns error (not supported)
+func (con *converter) callFormat(_ *exprpb.Expr, _ []*exprpb.Expr) error {
+	return fmt.Errorf("%w: format() with printf-style formatting is too complex for SQL conversion - consider pre-formatting values or using PostgreSQL FORMAT() function in schema", ErrUnsupportedOperation)
+}
+
+// callQuote handles CEL quote() function - returns error (not supported)
+func (con *converter) callQuote(_ *exprpb.Expr, _ []*exprpb.Expr) error {
+	return fmt.Errorf("%w: quote() for string escaping is not supported in SQL conversion", ErrUnsupportedOperation)
+}
+
 func (con *converter) visitCallFunc(expr *exprpb.Expr) error {
 	c := expr.GetCallExpr()
 	fun := c.GetFunction()
@@ -930,22 +1424,69 @@ func (con *converter) visitCallFunc(expr *exprpb.Expr) error {
 		overloads.TypeConvertString,
 		overloads.TypeConvertUint:
 		return con.callCasting(fun, target, args)
+	// CEL string extension functions
+	case "lowerAscii":
+		return con.callLowerASCII(target, args)
+	case "upperAscii":
+		return con.callUpperASCII(target, args)
+	case "trim":
+		return con.callTrim(target, args)
+	case "charAt":
+		return con.callCharAt(target, args)
+	case "indexOf":
+		return con.callIndexOf(target, args)
+	case "lastIndexOf":
+		return con.callLastIndexOf(target, args)
+	case "substring":
+		return con.callSubstring(target, args)
+	case "replace":
+		return con.callReplace(target, args)
+	case "reverse":
+		return con.callReverse(target, args)
+	// Unsupported string extension functions (return errors)
+	case "split":
+		return con.callSplit(target, args)
+	case "join":
+		return con.callJoin(target, args)
+	case "format":
+		return con.callFormat(target, args)
+	case "quote":
+		return con.callQuote(target, args)
 	}
 	sqlFun, ok := standardSQLFunctions[fun]
 	if !ok {
 		if fun == overloads.Size {
-			argType := con.getType(args[0])
+			// Handle both method calls (target != nil) and function calls (len(args) > 0)
+			var argExpr *exprpb.Expr
 			switch {
-			case argType.GetPrimitive() == exprpb.Type_STRING:
-				sqlFun = "LENGTH"
-			case argType.GetPrimitive() == exprpb.Type_BYTES:
-				sqlFun = "LENGTH"
+			case target != nil:
+				// Method call: t.size()
+				argExpr = target
+			case len(args) > 0:
+				// Function call: size(t) - though this is rare for size()
+				argExpr = args[0]
+			default:
+				return fmt.Errorf("%w: size() requires a target or argument", ErrInvalidArguments)
+			}
+
+			argType := con.getType(argExpr)
+			switch {
+			case argType.GetPrimitive() == exprpb.Type_STRING, argType.GetPrimitive() == exprpb.Type_BYTES:
+				// For strings and bytes, directly write LENGTH(arg) and return
+				con.str.WriteString("LENGTH(")
+				nested := isBinaryOrTernaryOperator(argExpr)
+				err := con.visitMaybeNested(argExpr, nested)
+				if err != nil {
+					return err
+				}
+				con.str.WriteString(")")
+				return nil
 			case isListType(argType):
 				// Check if this is a JSON array field
-				if len(args) > 0 && con.isJSONArrayField(args[0]) {
+				if con.isJSONArrayField(argExpr) {
 					// For JSON arrays, use jsonb_array_length wrapped in COALESCE
 					con.str.WriteString("COALESCE(jsonb_array_length(")
-					err := con.visit(args[0])
+					err := con.visit(argExpr)
 					if err != nil {
 						return err
 					}
@@ -955,22 +1496,10 @@ func (con *converter) visitCallFunc(expr *exprpb.Expr) error {
 				// For PostgreSQL, we need to specify the array dimension (1 for 1D arrays)
 				// Wrap in COALESCE to handle NULL arrays (ARRAY_LENGTH returns NULL for NULL input)
 				con.str.WriteString("COALESCE(ARRAY_LENGTH(")
-				if target != nil {
-					nested := isBinaryOrTernaryOperator(target)
-					err := con.visitMaybeNested(target, nested)
-					if err != nil {
-						return err
-					}
-					con.str.WriteString(", ")
-				}
-				for i, arg := range args {
-					err := con.visit(arg)
-					if err != nil {
-						return err
-					}
-					if i < len(args)-1 {
-						con.str.WriteString(", ")
-					}
+				nested := isBinaryOrTernaryOperator(argExpr)
+				err := con.visitMaybeNested(argExpr, nested)
+				if err != nil {
+					return err
 				}
 				con.str.WriteString(", 1), 0)")
 				return nil
@@ -1005,7 +1534,11 @@ func (con *converter) visitCallFunc(expr *exprpb.Expr) error {
 }
 
 func (con *converter) visitCallIndex(expr *exprpb.Expr) error {
-	if isMapType(con.getType(expr.GetCallExpr().GetArgs()[0])) {
+	args := expr.GetCallExpr().GetArgs()
+	if len(args) == 0 {
+		return fmt.Errorf("%w: index operator requires at least one argument", ErrInvalidArguments)
+	}
+	if isMapType(con.getType(args[0])) {
 		return con.visitCallMapIndex(expr)
 	}
 	return con.visitCallListIndex(expr)
@@ -1014,6 +1547,9 @@ func (con *converter) visitCallIndex(expr *exprpb.Expr) error {
 func (con *converter) visitCallMapIndex(expr *exprpb.Expr) error {
 	c := expr.GetCallExpr()
 	args := c.GetArgs()
+	if len(args) < 2 {
+		return fmt.Errorf("%w: map index operator requires map and key arguments", ErrInvalidArguments)
+	}
 	m := args[0]
 	nested := isBinaryOrTernaryOperator(m)
 	if err := con.visitMaybeNested(m, nested); err != nil {
@@ -1031,6 +1567,9 @@ func (con *converter) visitCallMapIndex(expr *exprpb.Expr) error {
 func (con *converter) visitCallListIndex(expr *exprpb.Expr) error {
 	c := expr.GetCallExpr()
 	args := c.GetArgs()
+	if len(args) < 2 {
+		return fmt.Errorf("%w: list index operator requires list and index arguments", ErrInvalidArguments)
+	}
 	l := args[0]
 	nested := isBinaryOrTernaryOperator(l)
 	if err := con.visitMaybeNested(l, nested); err != nil {
@@ -1062,6 +1601,9 @@ func (con *converter) visitCallUnary(expr *exprpb.Expr) error {
 	c := expr.GetCallExpr()
 	fun := c.GetFunction()
 	args := c.GetArgs()
+	if len(args) == 0 {
+		return fmt.Errorf("%w: unary operator requires an argument", ErrInvalidArguments)
+	}
 	var operator string
 	if op, found := standardSQLUnaryOperators[fun]; found {
 		operator = op

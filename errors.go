@@ -35,6 +35,9 @@ var (
 	// ErrInvalidArguments indicates invalid function arguments
 	ErrInvalidArguments = errors.New("invalid function arguments")
 
+	// ErrUnsupportedOperation indicates an operation that cannot be converted to SQL
+	ErrUnsupportedOperation = errors.New("unsupported operation")
+
 	// ErrInvalidTimestampOperation indicates an invalid timestamp operation
 	ErrInvalidTimestampOperation = errors.New("invalid timestamp operation")
 
