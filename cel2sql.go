@@ -486,6 +486,57 @@ func (con *converter) getFieldElementType(tableName, fieldName string) string {
 	return ""
 }
 
+// getArrayDimension returns the number of array dimensions for a field expression.
+// Returns 1 if no schema information is available (backward compatible default).
+// For multi-dimensional arrays, returns the detected dimension count (2 for int[][], 3 for int[][][], etc.)
+func (con *converter) getArrayDimension(expr *exprpb.Expr) int {
+	// Default to 1D arrays if we can't determine from schema
+	if con.schemas == nil {
+		return 1
+	}
+
+	// Try to extract field name from the select expression
+	selectExpr := expr.GetSelectExpr()
+	if selectExpr == nil {
+		return 1
+	}
+
+	fieldName := selectExpr.GetField()
+	operand := selectExpr.GetOperand()
+
+	// Get the type of the operand from the type map
+	operandType := con.typeMap[operand.GetId()]
+	if operandType == nil {
+		return 1
+	}
+
+	// Extract the type name (e.g., "TestTable" from the object type)
+	typeName := operandType.GetMessageType()
+	if typeName == "" {
+		return 1
+	}
+
+	// Look up the schema by type name
+	schema, ok := con.schemas[typeName]
+	if !ok {
+		return 1
+	}
+
+	// Find the field in the schema
+	field, found := schema.FindField(fieldName)
+	if !found || !field.Repeated {
+		return 1
+	}
+
+	// If dimensions is explicitly set and > 0, use it
+	if field.Dimensions > 0 {
+		return field.Dimensions
+	}
+
+	// Otherwise default to 1
+	return 1
+}
+
 func (con *converter) visitCall(expr *exprpb.Expr) error {
 	// Check for context cancellation before processing function calls
 	if err := con.checkContext(); err != nil {
@@ -1770,7 +1821,10 @@ func (con *converter) visitCallFunc(expr *exprpb.Expr) error {
 					con.str.WriteString("), 0)")
 					return nil
 				}
-				// For PostgreSQL, we need to specify the array dimension (1 for 1D arrays)
+				// For PostgreSQL, we need to specify the array dimension
+				// Detect the dimension from schema if available, otherwise default to 1
+				dimension := con.getArrayDimension(argExpr)
+
 				// Wrap in COALESCE to handle NULL arrays (ARRAY_LENGTH returns NULL for NULL input)
 				con.str.WriteString("COALESCE(ARRAY_LENGTH(")
 				nested := isBinaryOrTernaryOperator(argExpr)
@@ -1778,7 +1832,7 @@ func (con *converter) visitCallFunc(expr *exprpb.Expr) error {
 				if err != nil {
 					return err
 				}
-				con.str.WriteString(", 1), 0)")
+				con.str.WriteString(fmt.Sprintf(", %d), 0)", dimension))
 				return nil
 			default:
 				return newConversionErrorf(errMsgUnsupportedType, "size() argument type: %s", argType.String())

@@ -41,6 +41,7 @@ type FieldSchema struct {
 	Name        string
 	Type        string        // PostgreSQL type name (text, integer, boolean, etc.)
 	Repeated    bool          // true for arrays
+	Dimensions  int           // number of array dimensions (1 for integer[], 2 for integer[][], etc.)
 	Schema      []FieldSchema // for composite types
 	IsJSON      bool          // true for json/jsonb types
 	IsJSONB     bool          // true for jsonb (vs json)
@@ -153,23 +154,24 @@ func (p *typeProvider) LoadTableSchema(ctx context.Context, tableName string) er
 	}
 
 	query := `
-		SELECT 
-			column_name, 
-			data_type, 
-			is_nullable, 
+		SELECT
+			column_name,
+			data_type,
+			is_nullable,
 			column_default,
-			CASE 
-				WHEN data_type = 'ARRAY' THEN 
-					(SELECT data_type FROM information_schema.element_types 
-					 WHERE object_name = $1 
+			CASE
+				WHEN data_type = 'ARRAY' THEN
+					(SELECT data_type FROM information_schema.element_types
+					 WHERE object_name = $1
 					 AND collection_type_identifier = (
-						SELECT dtd_identifier FROM information_schema.columns 
+						SELECT dtd_identifier FROM information_schema.columns
 						WHERE table_name = $1 AND column_name = c.column_name
 					))
 				ELSE data_type
-			END as element_type
+			END as element_type,
+			udt_name
 		FROM information_schema.columns c
-		WHERE table_name = $1 
+		WHERE table_name = $1
 		ORDER BY ordinal_position
 	`
 
@@ -183,9 +185,9 @@ func (p *typeProvider) LoadTableSchema(ctx context.Context, tableName string) er
 	for rows.Next() {
 		var columnName, dataType, isNullable string
 		var columnDefault *string
-		var elementType string
+		var elementType, udtName string
 
-		err := rows.Scan(&columnName, &dataType, &isNullable, &columnDefault, &elementType)
+		err := rows.Scan(&columnName, &dataType, &isNullable, &columnDefault, &elementType, &udtName)
 		if err != nil {
 			return fmt.Errorf("%w: failed to scan row: %w", ErrInvalidSchema, err)
 		}
@@ -194,10 +196,18 @@ func (p *typeProvider) LoadTableSchema(ctx context.Context, tableName string) er
 		isJSON := elementType == typeJSON || elementType == typeJSONB
 		isJSONB := elementType == typeJSONB
 
+		// Detect array dimensions from UDT name (e.g., _int4 = 1D, _int4[] = 2D)
+		dimensions := detectArrayDimensions(udtName)
+		if dimensions == 0 && isArray {
+			// Fallback: if data_type says ARRAY but we didn't detect dimensions, assume 1D
+			dimensions = 1
+		}
+
 		field := FieldSchema{
 			Name:        columnName,
 			Type:        elementType, // Use element type for arrays, or data_type for non-arrays
 			Repeated:    isArray,
+			Dimensions:  dimensions,
 			IsJSON:      isJSON,
 			IsJSONB:     isJSONB,
 			ElementType: "", // Will be set below for arrays
@@ -224,6 +234,36 @@ func (p *typeProvider) Close() {
 	if p.pool != nil {
 		p.pool.Close()
 	}
+}
+
+// detectArrayDimensions detects the number of array dimensions from a PostgreSQL type string.
+// Examples:
+//   - "integer" -> 0 (not an array)
+//   - "integer[]" or "_int4" -> 1 (1D array)
+//   - "integer[][]" or "_int4[]" -> 2 (2D array)
+//   - "integer[][][]" -> 3 (3D array)
+func detectArrayDimensions(pgType string) int {
+	if pgType == "" {
+		return 0
+	}
+
+	// Count trailing [] pairs
+	dimensions := 0
+	for i := len(pgType) - 1; i >= 1; i -= 2 {
+		if pgType[i] == ']' && pgType[i-1] == '[' {
+			dimensions++
+		} else {
+			break
+		}
+	}
+
+	// PostgreSQL also uses underscore prefix for arrays (e.g., _int4 for integer[])
+	// Underscore adds 1 dimension, so _int4 = 1D, _int4[] = 2D, _int4[][] = 3D
+	if len(pgType) > 0 && pgType[0] == '_' {
+		dimensions++
+	}
+
+	return dimensions
 }
 
 // GetSchemas returns the schema map
