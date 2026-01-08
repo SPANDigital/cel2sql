@@ -31,7 +31,7 @@ jobs:
         run: go install golang.org/x/vuln/cmd/govulncheck@latest
 
       - name: Run govulncheck
-        run: govulncheck ./...
+        run: $(go env GOPATH)/bin/govulncheck ./...
 
   osv-scanner:
     name: OSV Security Scan
@@ -52,7 +52,7 @@ jobs:
         run: go install github.com/google/osv-scanner/cmd/osv-scanner@latest
 
       - name: Run OSV Scanner
-        run: osv-scanner scan source -r .
+        run: $(go env GOPATH)/bin/osv-scanner scan source -r .
 
   gosec:
     name: Go Security Analysis
@@ -73,7 +73,7 @@ jobs:
         run: go install github.com/securego/gosec/v2/cmd/gosec@latest
 
       - name: Run gosec Security Scanner
-        run: gosec -fmt sarif -out results.sarif ./...
+        run: $(go env GOPATH)/bin/gosec -fmt sarif -out results.sarif ./...
 
       - name: Upload SARIF file
         uses: github/codeql-action/upload-sarif@v3
