@@ -408,10 +408,12 @@ func TestLongStringConcatenations(t *testing.T) {
 			require.NoError(t, err)
 
 			// Build string concatenation expression
-			expr := "s"
+			var builder strings.Builder
+			builder.WriteString("s")
 			for i := 0; i < tt.stringCount; i++ {
-				expr += ` + "test"`
+				builder.WriteString(` + "test"`)
 			}
+			expr := builder.String()
 
 			ast, issues := env.Compile(expr)
 			require.NoError(t, issues.Err())

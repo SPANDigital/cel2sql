@@ -1,6 +1,7 @@
 package cel2sql_test
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/google/cel-go/cel"
@@ -322,10 +323,14 @@ func BenchmarkConvertLargeExpression(b *testing.B) {
 	env := setupSimpleBenchmarkEnv(b)
 
 	// Large AND expression
-	largeAnd := `age > 0`
+	var builder strings.Builder
+	builder.WriteString(`age > 0`)
 	for i := 1; i < 20; i++ {
-		largeAnd += ` && name != "test` + string(rune('0'+i)) + `"`
+		builder.WriteString(` && name != "test`)
+		builder.WriteRune(rune('0' + i))
+		builder.WriteString(`"`)
 	}
+	largeAnd := builder.String()
 
 	tests := []struct {
 		name       string
