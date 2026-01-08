@@ -52,7 +52,7 @@ jobs:
         run: go install github.com/google/osv-scanner/cmd/osv-scanner@latest
 
       - name: Run OSV Scanner
-        run: osv-scanner --lockfile=go.mod .
+        run: osv-scanner scan source -r .
 
   gosec:
     name: Go Security Analysis
