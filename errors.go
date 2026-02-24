@@ -105,7 +105,7 @@ func newConversionError(userMsg string, internalDetails string) *ConversionError
 }
 
 // newConversionErrorf creates a ConversionError with formatted internal details
-func newConversionErrorf(userMsg string, internalFormat string, args ...interface{}) *ConversionError {
+func newConversionErrorf(userMsg string, internalFormat string, args ...any) *ConversionError {
 	return &ConversionError{
 		UserMessage:     userMsg,
 		InternalDetails: fmt.Sprintf(internalFormat, args...),

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"slices"
 
 	exprpb "google.golang.org/genproto/googleapis/api/expr/v1alpha1"
 )
@@ -85,26 +86,14 @@ func (con *converter) needsNumericCasting(identName string) bool {
 	// Common iteration variable names that come from numeric JSON arrays
 	numericIterationVars := []string{"score", "value", "num", "amount", "count", "level"}
 
-	for _, numericVar := range numericIterationVars {
-		if identName == numericVar {
-			return true
-		}
-	}
-
-	return false
+	return slices.Contains(numericIterationVars, identName)
 }
 
 // isNumericJSONField checks if a JSON field name typically contains numeric values
 func (con *converter) isNumericJSONField(fieldName string) bool {
 	numericFields := []string{"level", "score", "value", "count", "amount", "price", "rating", "age", "size", "capacity", "megapixels", "cores", "threads", "ram", "storage", "vram", "weight", "frequency", "helpful"}
 
-	for _, numericField := range numericFields {
-		if fieldName == numericField {
-			return true
-		}
-	}
-
-	return false
+	return slices.Contains(numericFields, fieldName)
 }
 
 // isNestedJSONAccess checks if this is nested JSON field access like settings.permissions
@@ -184,10 +173,8 @@ func (con *converter) isJSONObjectFieldAccess(expr *exprpb.Expr) bool {
 			jsonObjectVars := []string{"attr", "item", "element", "obj", "feature", "review"}
 			identName := identExpr.GetName()
 
-			for _, jsonVar := range jsonObjectVars {
-				if identName == jsonVar {
-					return true
-				}
+			if slices.Contains(jsonObjectVars, identName) {
+				return true
 			}
 		}
 	}

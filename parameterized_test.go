@@ -30,7 +30,7 @@ func TestConvertParameterized(t *testing.T) {
 		celExpr        string
 		wantSQL        string
 		wantParamCount int
-		wantParams     []interface{}
+		wantParams     []any
 	}{
 		// String parameters
 		{
@@ -38,21 +38,21 @@ func TestConvertParameterized(t *testing.T) {
 			celExpr:        `name == "John"`,
 			wantSQL:        "name = $1",
 			wantParamCount: 1,
-			wantParams:     []interface{}{"John"},
+			wantParams:     []any{"John"},
 		},
 		{
 			name:           "multiple string parameters",
 			celExpr:        `name == "John" && name != "Jane"`,
 			wantSQL:        "name = $1 AND name != $2",
 			wantParamCount: 2,
-			wantParams:     []interface{}{"John", "Jane"},
+			wantParams:     []any{"John", "Jane"},
 		},
 		{
 			name:           "string with escaped quotes",
 			celExpr:        `name == "O'Brien"`,
 			wantSQL:        "name = $1",
 			wantParamCount: 1,
-			wantParams:     []interface{}{"O'Brien"},
+			wantParams:     []any{"O'Brien"},
 		},
 
 		// Integer parameters
@@ -61,21 +61,21 @@ func TestConvertParameterized(t *testing.T) {
 			celExpr:        `age == 18`,
 			wantSQL:        "age = $1",
 			wantParamCount: 1,
-			wantParams:     []interface{}{int64(18)},
+			wantParams:     []any{int64(18)},
 		},
 		{
 			name:           "integer comparison",
 			celExpr:        `age > 21 && age < 65`,
 			wantSQL:        "age > $1 AND age < $2",
 			wantParamCount: 2,
-			wantParams:     []interface{}{int64(21), int64(65)},
+			wantParams:     []any{int64(21), int64(65)},
 		},
 		{
 			name:           "negative integer",
 			celExpr:        `age == -5`,
 			wantSQL:        "age = $1",
 			wantParamCount: 1,
-			wantParams:     []interface{}{int64(-5)},
+			wantParams:     []any{int64(-5)},
 		},
 
 		// Double parameters
@@ -84,14 +84,14 @@ func TestConvertParameterized(t *testing.T) {
 			celExpr:        `salary == 50000.50`,
 			wantSQL:        "salary = $1",
 			wantParamCount: 1,
-			wantParams:     []interface{}{50000.50},
+			wantParams:     []any{50000.50},
 		},
 		{
 			name:           "double comparison",
 			celExpr:        `salary >= 30000.0 && salary <= 100000.0`,
 			wantSQL:        "salary >= $1 AND salary <= $2",
 			wantParamCount: 2,
-			wantParams:     []interface{}{30000.0, 100000.0},
+			wantParams:     []any{30000.0, 100000.0},
 		},
 
 		// Boolean and NULL constants (kept inline)
@@ -114,7 +114,7 @@ func TestConvertParameterized(t *testing.T) {
 			celExpr:        `active == true && age == 18`,
 			wantSQL:        "active IS TRUE AND age = $1",
 			wantParamCount: 1,
-			wantParams:     []interface{}{int64(18)},
+			wantParams:     []any{int64(18)},
 		},
 
 		// Bytes parameters
@@ -123,7 +123,7 @@ func TestConvertParameterized(t *testing.T) {
 			celExpr:        `data == b"hello"`,
 			wantSQL:        "data = $1",
 			wantParamCount: 1,
-			wantParams:     []interface{}{[]byte("hello")},
+			wantParams:     []any{[]byte("hello")},
 		},
 
 		// Complex expressions with multiple parameters
@@ -132,21 +132,21 @@ func TestConvertParameterized(t *testing.T) {
 			celExpr:        `name == "John" && age >= 18 && salary > 50000.0`,
 			wantSQL:        "name = $1 AND age >= $2 AND salary > $3",
 			wantParamCount: 3,
-			wantParams:     []interface{}{"John", int64(18), 50000.0},
+			wantParams:     []any{"John", int64(18), 50000.0},
 		},
 		{
 			name:           "complex OR expression",
 			celExpr:        `name == "John" || name == "Jane" || age == 25`,
 			wantSQL:        "name = $1 OR name = $2 OR age = $3",
 			wantParamCount: 3,
-			wantParams:     []interface{}{"John", "Jane", int64(25)},
+			wantParams:     []any{"John", "Jane", int64(25)},
 		},
 		{
 			name:           "nested parentheses with params",
 			celExpr:        `(name == "John" && age == 18) || (name == "Jane" && age == 21)`,
 			wantSQL:        "name = $1 AND age = $2 OR name = $3 AND age = $4",
 			wantParamCount: 4,
-			wantParams:     []interface{}{"John", int64(18), "Jane", int64(21)},
+			wantParams:     []any{"John", int64(18), "Jane", int64(21)},
 		},
 
 		// Parameter ordering test
@@ -155,7 +155,7 @@ func TestConvertParameterized(t *testing.T) {
 			celExpr:        `name == "First" && age == 1 && salary == 100.0 && name != "Second"`,
 			wantSQL:        "name = $1 AND age = $2 AND salary = $3 AND name != $4",
 			wantParamCount: 4,
-			wantParams:     []interface{}{"First", int64(1), 100.0, "Second"},
+			wantParams:     []any{"First", int64(1), 100.0, "Second"},
 		},
 
 		// Empty parameter list
@@ -188,7 +188,7 @@ func TestConvertParameterized(t *testing.T) {
 			celExpr:        `name.contains("oh")`,
 			wantSQL:        "POSITION($1 IN name) > 0",
 			wantParamCount: 1,
-			wantParams:     []interface{}{"oh"},
+			wantParams:     []any{"oh"},
 		},
 
 		// IN operator with parameters
@@ -197,14 +197,14 @@ func TestConvertParameterized(t *testing.T) {
 			celExpr:        `age in [18, 21, 25]`,
 			wantSQL:        "age = ANY(ARRAY[$1, $2, $3])",
 			wantParamCount: 3,
-			wantParams:     []interface{}{int64(18), int64(21), int64(25)},
+			wantParams:     []any{int64(18), int64(21), int64(25)},
 		},
 		{
 			name:           "string IN with array literal",
 			celExpr:        `name in ["John", "Jane", "Bob"]`,
 			wantSQL:        "name = ANY(ARRAY[$1, $2, $3])",
 			wantParamCount: 3,
-			wantParams:     []interface{}{"John", "Jane", "Bob"},
+			wantParams:     []any{"John", "Jane", "Bob"},
 		},
 
 		// Ternary operator with parameters
@@ -213,7 +213,7 @@ func TestConvertParameterized(t *testing.T) {
 			celExpr:        `age > 18 ? "adult" : "minor"`,
 			wantSQL:        "CASE WHEN age > $1 THEN $2 ELSE $3 END",
 			wantParamCount: 3,
-			wantParams:     []interface{}{int64(18), "adult", "minor"},
+			wantParams:     []any{int64(18), "adult", "minor"},
 		},
 
 		// Type casting with parameters
@@ -222,7 +222,7 @@ func TestConvertParameterized(t *testing.T) {
 			celExpr:        `string(age) == "18"`,
 			wantSQL:        "CAST(age AS TEXT) = $1",
 			wantParamCount: 1,
-			wantParams:     []interface{}{"18"},
+			wantParams:     []any{"18"},
 		},
 	}
 
@@ -273,28 +273,28 @@ func TestConvertParameterized_JSONFields(t *testing.T) {
 		celExpr        string
 		wantSQL        string
 		wantParamCount int
-		wantParams     []interface{}
+		wantParams     []any
 	}{
 		{
 			name:           "JSON field comparison with parameter",
 			celExpr:        `usr.metadata.username == "john_doe"`,
 			wantSQL:        "usr.metadata->>'username' = $1",
 			wantParamCount: 1,
-			wantParams:     []interface{}{"john_doe"},
+			wantParams:     []any{"john_doe"},
 		},
 		{
 			name:           "nested JSON field comparison",
 			celExpr:        `usr.metadata.settings.theme == "dark"`,
 			wantSQL:        "usr.metadata->'settings'->>'theme' = $1",
 			wantParamCount: 1,
-			wantParams:     []interface{}{"dark"},
+			wantParams:     []any{"dark"},
 		},
 		{
 			name:           "JSON and regular field with parameters",
 			celExpr:        `usr.name == "John" && usr.metadata.age == "25"`,
 			wantSQL:        "usr.name = $1 AND usr.metadata->>'age' = $2",
 			wantParamCount: 2,
-			wantParams:     []interface{}{"John", "25"},
+			wantParams:     []any{"John", "25"},
 		},
 	}
 
@@ -339,35 +339,35 @@ func TestConvertParameterized_Comprehensions(t *testing.T) {
 		celExpr        string
 		wantSQL        string
 		wantParamCount int
-		wantParams     []interface{}
+		wantParams     []any
 	}{
 		{
 			name:           "all() with parameterized predicate",
 			celExpr:        `scores.all(x, x > 50)`,
 			wantSQL:        "NOT EXISTS (SELECT 1 FROM UNNEST(scores) AS x WHERE NOT (x > $1))",
 			wantParamCount: 1,
-			wantParams:     []interface{}{int64(50)},
+			wantParams:     []any{int64(50)},
 		},
 		{
 			name:           "exists() with parameterized predicate",
 			celExpr:        `scores.exists(x, x == 100)`,
 			wantSQL:        "EXISTS (SELECT 1 FROM UNNEST(scores) AS x WHERE x = $1)",
 			wantParamCount: 1,
-			wantParams:     []interface{}{int64(100)},
+			wantParams:     []any{int64(100)},
 		},
 		{
 			name:           "exists_one() with parameterized predicate",
 			celExpr:        `scores.exists_one(x, x == 42)`,
 			wantSQL:        "(SELECT COUNT(*) FROM UNNEST(scores) AS x WHERE x = $1) = 1",
 			wantParamCount: 1,
-			wantParams:     []interface{}{int64(42)},
+			wantParams:     []any{int64(42)},
 		},
 		{
 			name:           "map() with parameterized transform",
 			celExpr:        `scores.map(x, x + 10).exists(y, y == 110)`,
 			wantSQL:        "EXISTS (SELECT 1 FROM UNNEST(ARRAY(SELECT x + $1 FROM UNNEST(scores) AS x)) AS y WHERE y = $2)",
 			wantParamCount: 2,
-			wantParams:     []interface{}{int64(10), int64(110)},
+			wantParams:     []any{int64(10), int64(110)},
 		},
 	}
 

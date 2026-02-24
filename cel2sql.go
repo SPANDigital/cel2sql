@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"math"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -172,8 +173,8 @@ func WithMaxOutputLength(maxLength int) ConvertOption {
 // Result represents the output of a CEL to SQL conversion with parameterized queries.
 // It contains the SQL string with placeholders ($1, $2, etc.) and the corresponding parameter values.
 type Result struct {
-	SQL        string        // The generated SQL WHERE clause with placeholders
-	Parameters []interface{} // Parameter values in order ($1, $2, etc.)
+	SQL        string // The generated SQL WHERE clause with placeholders
+	Parameters []any  // Parameter values in order ($1, $2, etc.)
 }
 
 // Convert converts a CEL AST to a PostgreSQL SQL WHERE clause condition.
@@ -312,13 +313,13 @@ type converter struct {
 	schemas            map[string]pg.Schema
 	ctx                context.Context
 	logger             *slog.Logger
-	depth              int           // Current recursion depth
-	maxDepth           int           // Maximum allowed recursion depth
-	maxOutputLen       int           // Maximum allowed SQL output length
-	comprehensionDepth int           // Current comprehension nesting depth
-	parameterize       bool          // Enable parameterized output
-	parameters         []interface{} // Collected parameters for parameterized queries
-	paramCount         int           // Parameter counter for placeholders ($1, $2, etc.)
+	depth              int   // Current recursion depth
+	maxDepth           int   // Maximum allowed recursion depth
+	maxOutputLen       int   // Maximum allowed SQL output length
+	comprehensionDepth int   // Current comprehension nesting depth
+	parameterize       bool  // Enable parameterized output
+	parameters         []any // Collected parameters for parameterized queries
+	paramCount         int   // Parameter counter for placeholders ($1, $2, etc.)
 }
 
 // checkContext checks if the context has been cancelled or expired.
@@ -1293,10 +1294,7 @@ func (con *converter) callSubstring(target *exprpb.Expr, args []*exprpb.Expr) er
 			if endConst := endExpr.GetConstExpr(); endConst != nil {
 				start := startConst.GetInt64Value()
 				end := endConst.GetInt64Value()
-				length := end - start
-				if length < 0 {
-					length = 0
-				}
+				length := max(end-start, 0)
 				con.str.WriteString(strconv.FormatInt(length, 10))
 			} else {
 				// End is dynamic, start is constant
@@ -2524,10 +2522,8 @@ func (con *converter) isDirectJSONFieldAccess(operand *exprpb.Expr, _ string) bo
 
 		// Check if the parent field is a known JSON column
 		jsonFields := []string{"metadata", "properties", "content", "structure", "taxonomy", "analytics", "classification"}
-		for _, jsonField := range jsonFields {
-			if parentField == jsonField {
-				return true
-			}
+		if slices.Contains(jsonFields, parentField) {
+			return true
 		}
 	}
 

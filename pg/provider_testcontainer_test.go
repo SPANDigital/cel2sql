@@ -923,7 +923,7 @@ func TestLoadTableSchema_JsonComprehensions(t *testing.T) {
 		for rows.Next() {
 			var id int
 			var name string
-			var tags, scores interface{}
+			var tags, scores any
 			err = rows.Scan(&id, &name, &tags, &scores)
 			require.NoError(t, err)
 			t.Logf("User %d: %s, tags: %v (type: %T), scores: %v (type: %T)", id, name, tags, tags, scores, scores)

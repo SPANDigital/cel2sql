@@ -1023,7 +1023,7 @@ func TestParameterizedQueryPerformance(t *testing.T) {
 	const iterations = 100
 	var totalDuration time.Duration
 
-	for i := 0; i < iterations; i++ {
+	for range iterations {
 		start := time.Now()
 		var count int
 		err := db.QueryRow(query, result.Parameters...).Scan(&count)

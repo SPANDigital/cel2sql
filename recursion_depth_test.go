@@ -169,7 +169,7 @@ func TestMaxDepthWithOtherOptions(t *testing.T) {
 func TestRecursionDepthErrorMessage(t *testing.T) {
 	// Verify error message format
 	expr := "x"
-	for i := 0; i < 150; i++ {
+	for range 150 {
 		expr = "(" + expr + " + 1)"
 	}
 
@@ -207,7 +207,7 @@ func TestDeeplyNestedExpressions(t *testing.T) {
 			name: "nested AND conditions",
 			buildExpr: func() string {
 				expr := "x > 0"
-				for i := 0; i < 60; i++ {
+				for range 60 {
 					expr = "(" + expr + " && x < 100)"
 				}
 				return expr
@@ -219,7 +219,7 @@ func TestDeeplyNestedExpressions(t *testing.T) {
 			name: "nested OR conditions",
 			buildExpr: func() string {
 				expr := "x == 1"
-				for i := 0; i < 60; i++ {
+				for range 60 {
 					expr = "(" + expr + " || x == 2)"
 				}
 				return expr
@@ -231,7 +231,7 @@ func TestDeeplyNestedExpressions(t *testing.T) {
 			name: "nested function calls",
 			buildExpr: func() string {
 				expr := "x"
-				for i := 0; i < 60; i++ {
+				for range 60 {
 					expr = "int(" + expr + ")"
 				}
 				return expr + " > 0"
@@ -243,7 +243,7 @@ func TestDeeplyNestedExpressions(t *testing.T) {
 			name: "deeply nested ternary",
 			buildExpr: func() string {
 				expr := "x"
-				for i := 0; i < 25; i++ {
+				for range 25 {
 					expr = "(" + expr + " > 0 ? 1 : 0)"
 				}
 				return expr + " == 1"
@@ -255,7 +255,7 @@ func TestDeeplyNestedExpressions(t *testing.T) {
 			name: "exceeds limit nested arithmetic",
 			buildExpr: func() string {
 				expr := "x"
-				for i := 0; i < 150; i++ {
+				for range 150 {
 					expr = "(" + expr + " + 1)"
 				}
 				return expr + " > 0"
@@ -310,7 +310,7 @@ func TestDepthResetBetweenCalls(t *testing.T) {
 
 	// Build an expression at 75% of default limit
 	expr := "x"
-	for i := 0; i < 75; i++ {
+	for range 75 {
 		expr = "(" + expr + " + 1)"
 	}
 

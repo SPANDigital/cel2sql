@@ -348,7 +348,7 @@ func Test_typeProvider_PostgreSQLTypes(t *testing.T) {
 func BenchmarkFieldLookup_Small(b *testing.B) {
 	// 10 fields - small schema
 	fields := make([]pg.FieldSchema, 10)
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		fields[i] = pg.FieldSchema{
 			Name: "field_" + string(rune('a'+i)),
 			Type: "text",
@@ -369,7 +369,7 @@ func BenchmarkFieldLookup_Small(b *testing.B) {
 func BenchmarkFieldLookup_Medium(b *testing.B) {
 	// 100 fields - medium schema
 	fields := make([]pg.FieldSchema, 100)
-	for i := 0; i < 100; i++ {
+	for i := range 100 {
 		fields[i] = pg.FieldSchema{
 			Name: "field_" + string(rune('0'+i%10)) + string(rune('0'+i/10)),
 			Type: "text",
@@ -390,7 +390,7 @@ func BenchmarkFieldLookup_Medium(b *testing.B) {
 func BenchmarkFieldLookup_Large(b *testing.B) {
 	// 1000 fields - large schema (real-world worst case)
 	fields := make([]pg.FieldSchema, 1000)
-	for i := 0; i < 1000; i++ {
+	for i := range 1000 {
 		fields[i] = pg.FieldSchema{
 			Name: "field_" + string(rune('0'+i%10)) + string(rune('0'+(i/10)%10)) + string(rune('0'+i/100)),
 			Type: "text",
@@ -410,7 +410,7 @@ func BenchmarkFieldLookup_Large(b *testing.B) {
 
 func BenchmarkFieldNames_Small(b *testing.B) {
 	fields := make([]pg.FieldSchema, 10)
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		fields[i] = pg.FieldSchema{
 			Name: "field_" + string(rune('a'+i)),
 			Type: "text",
@@ -429,7 +429,7 @@ func BenchmarkFieldNames_Small(b *testing.B) {
 
 func BenchmarkFieldNames_Large(b *testing.B) {
 	fields := make([]pg.FieldSchema, 1000)
-	for i := 0; i < 1000; i++ {
+	for i := range 1000 {
 		fields[i] = pg.FieldSchema{
 			Name: "field_" + string(rune('0'+i%10)) + string(rune('0'+(i/10)%10)) + string(rune('0'+i/100)),
 			Type: "text",
