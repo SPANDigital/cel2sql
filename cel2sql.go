@@ -18,7 +18,7 @@ import (
 	"github.com/google/cel-go/common/overloads"
 	exprpb "google.golang.org/genproto/googleapis/api/expr/v1alpha1"
 
-	"github.com/spandigital/cel2sql/v3/pg"
+	"github.com/spandigital/cel2sql/v3/schema"
 )
 
 // Implementations based on `google/cel-go`'s unparser
@@ -62,7 +62,7 @@ type ConvertOption func(*convertOptions)
 
 // convertOptions holds configuration options for the Convert function.
 type convertOptions struct {
-	schemas      map[string]pg.Schema
+	schemas      map[string]schema.Schema
 	ctx          context.Context
 	logger       *slog.Logger
 	maxDepth     int // Maximum recursion depth (0 = use default)
@@ -76,7 +76,7 @@ type convertOptions struct {
 //
 //	schemas := provider.GetSchemas()
 //	sql, err := cel2sql.Convert(ast, cel2sql.WithSchemas(schemas))
-func WithSchemas(schemas map[string]pg.Schema) ConvertOption {
+func WithSchemas(schemas map[string]schema.Schema) ConvertOption {
 	return func(o *convertOptions) {
 		o.schemas = schemas
 	}
@@ -310,7 +310,7 @@ func ConvertParameterized(ast *cel.Ast, opts ...ConvertOption) (*Result, error) 
 type converter struct {
 	str                strings.Builder
 	typeMap            map[int64]*exprpb.Type
-	schemas            map[string]pg.Schema
+	schemas            map[string]schema.Schema
 	ctx                context.Context
 	logger             *slog.Logger
 	depth              int   // Current recursion depth

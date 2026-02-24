@@ -13,6 +13,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	exprpb "google.golang.org/genproto/googleapis/api/expr/v1alpha1"
 
+	"github.com/spandigital/cel2sql/v3/schema"
 	"github.com/spandigital/cel2sql/v3/sqltypes"
 )
 
@@ -36,70 +37,17 @@ const (
 	errMsgUnknownType = "unknown type in schema"
 )
 
-// FieldSchema represents a PostgreSQL field type with name, type, and optional nested schema.
-type FieldSchema struct {
-	Name        string
-	Type        string        // PostgreSQL type name (text, integer, boolean, etc.)
-	Repeated    bool          // true for arrays
-	Dimensions  int           // number of array dimensions (1 for integer[], 2 for integer[][], etc.)
-	Schema      []FieldSchema // for composite types
-	IsJSON      bool          // true for json/jsonb types
-	IsJSONB     bool          // true for jsonb (vs json)
-	ElementType string        // for arrays: element type name
-}
+// FieldSchema is an alias for schema.FieldSchema for backward compatibility.
+// New code should prefer schema.FieldSchema directly.
+type FieldSchema = schema.FieldSchema
 
-// Schema represents a PostgreSQL table schema with O(1) field lookup.
-// It contains a slice of fields for ordered iteration and a map index for fast lookups.
-type Schema struct {
-	fields     []FieldSchema
-	fieldIndex map[string]*FieldSchema
-}
+// Schema is an alias for schema.Schema for backward compatibility.
+// New code should prefer schema.Schema directly.
+type Schema = schema.Schema
 
-// NewSchema creates a new Schema with field indexing for O(1) lookups.
-// This improves performance for tables with many columns.
-func NewSchema(fields []FieldSchema) Schema {
-	index := make(map[string]*FieldSchema, len(fields))
-	for i := range fields {
-		index[fields[i].Name] = &fields[i]
-
-		// Build indices for nested schemas recursively
-		if len(fields[i].Schema) > 0 {
-			fields[i].Schema = rebuildSchemaIndex(fields[i].Schema)
-		}
-	}
-
-	return Schema{
-		fields:     fields,
-		fieldIndex: index,
-	}
-}
-
-// rebuildSchemaIndex recursively rebuilds indices for nested schemas.
-// This is used internally when converting old-style []FieldSchema to new Schema struct.
-func rebuildSchemaIndex(oldSchema []FieldSchema) []FieldSchema {
-	// For nested schemas, we need to ensure they're properly indexed too
-	// But since nested schemas are stored as []FieldSchema in FieldSchema.Schema,
-	// we keep them as slices but process them when needed
-	return oldSchema
-}
-
-// Fields returns the ordered slice of field schemas.
-// Use this when you need to iterate over fields in their defined order.
-func (s Schema) Fields() []FieldSchema {
-	return s.fields
-}
-
-// FindField performs an O(1) lookup for a field by name.
-// Returns the field schema and true if found, nil and false otherwise.
-func (s Schema) FindField(name string) (*FieldSchema, bool) {
-	field, found := s.fieldIndex[name]
-	return field, found
-}
-
-// Len returns the number of fields in the schema.
-func (s Schema) Len() int {
-	return len(s.fields)
-}
+// NewSchema creates a new Schema. This is an alias for schema.NewSchema.
+// New code should prefer schema.NewSchema directly.
+var NewSchema = schema.NewSchema
 
 // TypeProvider interface for PostgreSQL type providers
 type TypeProvider interface {
@@ -294,7 +242,7 @@ func (p *typeProvider) findSchema(typeName string) (Schema, bool) {
 	}
 
 	// For nested types, traverse the schema hierarchy using O(1) lookups
-	currentFields := schema.fields
+	currentFields := schema.Fields()
 	for _, tn := range typeNames[1:] {
 		// Use O(1) indexed lookup instead of linear search
 		var nestedField *FieldSchema
