@@ -1832,7 +1832,7 @@ func (con *converter) visitCallFunc(expr *exprpb.Expr) error {
 				if err != nil {
 					return err
 				}
-				con.str.WriteString(fmt.Sprintf(", %d), 0)", dimension))
+				fmt.Fprintf(&con.str, ", %d), 0)", dimension)
 				return nil
 			default:
 				return newConversionErrorf(errMsgUnsupportedType, "size() argument type: %s", argType.String())
@@ -2307,7 +2307,7 @@ func (con *converter) visitConst(expr *exprpb.Expr) error {
 	case *exprpb.Constant_Int64Value:
 		if con.parameterize {
 			con.paramCount++
-			con.str.WriteString(fmt.Sprintf("$%d", con.paramCount))
+			fmt.Fprintf(&con.str, "$%d", con.paramCount)
 			con.parameters = append(con.parameters, c.GetInt64Value())
 		} else {
 			i := strconv.FormatInt(c.GetInt64Value(), 10)
@@ -2316,7 +2316,7 @@ func (con *converter) visitConst(expr *exprpb.Expr) error {
 	case *exprpb.Constant_Uint64Value:
 		if con.parameterize {
 			con.paramCount++
-			con.str.WriteString(fmt.Sprintf("$%d", con.paramCount))
+			fmt.Fprintf(&con.str, "$%d", con.paramCount)
 			con.parameters = append(con.parameters, c.GetUint64Value())
 		} else {
 			ui := strconv.FormatUint(c.GetUint64Value(), 10)
@@ -2325,7 +2325,7 @@ func (con *converter) visitConst(expr *exprpb.Expr) error {
 	case *exprpb.Constant_DoubleValue:
 		if con.parameterize {
 			con.paramCount++
-			con.str.WriteString(fmt.Sprintf("$%d", con.paramCount))
+			fmt.Fprintf(&con.str, "$%d", con.paramCount)
 			con.parameters = append(con.parameters, c.GetDoubleValue())
 		} else {
 			d := strconv.FormatFloat(c.GetDoubleValue(), 'g', -1, 64)
@@ -2340,7 +2340,7 @@ func (con *converter) visitConst(expr *exprpb.Expr) error {
 
 		if con.parameterize {
 			con.paramCount++
-			con.str.WriteString(fmt.Sprintf("$%d", con.paramCount))
+			fmt.Fprintf(&con.str, "$%d", con.paramCount)
 			con.parameters = append(con.parameters, str)
 		} else {
 			// Use single quotes for PostgreSQL string literals
@@ -2355,7 +2355,7 @@ func (con *converter) visitConst(expr *exprpb.Expr) error {
 
 		if con.parameterize {
 			con.paramCount++
-			con.str.WriteString(fmt.Sprintf("$%d", con.paramCount))
+			fmt.Fprintf(&con.str, "$%d", con.paramCount)
 			con.parameters = append(con.parameters, b)
 		} else {
 			// Validate byte array length to prevent resource exhaustion (CWE-400)

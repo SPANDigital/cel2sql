@@ -26,7 +26,7 @@ func TestConnectionStringLengthValidation(t *testing.T) {
 		expectErr bool
 		errMsg    string
 	}{
-		{
+		{ //nolint:gosec // test data with fake credentials
 			name:      "valid_short_connection_string",
 			connStr:   "postgresql://user:pass@localhost:5432/db",
 			expectErr: false,
@@ -94,9 +94,9 @@ func TestMalformedConnectionStringsNoCredentialExposure(t *testing.T) {
 			connStr: "postgressql://user:P@ss123!@[invalid", // Invalid URI syntax
 			secrets: []string{"P@ss123!", "user"},
 		},
-		{
+		{ //nolint:gosec // test data with fake credentials
 			name:    "broken_url_encoding",
-			connStr: "postgresql://app:pass%@host/db", // Invalid URL encoding
+			connStr: "postgresql://app:pass%@host/db",
 			secrets: []string{"pass%", "app"},
 		},
 	}
@@ -183,7 +183,7 @@ func TestInvalidConnectionFormats(t *testing.T) {
 		name    string
 		connStr string
 	}{
-		{
+		{ //nolint:gosec // test data with fake credentials
 			name:    "invalid_scheme",
 			connStr: "mysql://user:pass@localhost/db",
 		},
@@ -294,7 +294,7 @@ func TestConnectionStringLengthConstant(t *testing.T) {
 		"MaxConnectionStringLength should be 1000 (aligns with ODBC standard of 1024)")
 
 	// Verify typical connection strings fit well within limit
-	typicalConnStr := "postgresql://username:password@hostname.example.com:5432/database_name?sslmode=require&connect_timeout=10"
+	typicalConnStr := "postgresql://username:password@hostname.example.com:5432/database_name?sslmode=require&connect_timeout=10" //nolint:gosec // test data with fake credentials
 	assert.Less(t, len(typicalConnStr), pg.MaxConnectionStringLength,
 		"Typical connection string should fit within limit")
 
