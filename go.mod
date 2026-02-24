@@ -1,6 +1,6 @@
 module github.com/spandigital/cel2sql/v3
 
-go 1.25.5
+go 1.25.7
 
 require (
 	github.com/google/cel-go v0.26.0

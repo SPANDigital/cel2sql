@@ -15,7 +15,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        go-version: ['1.25.x']  # Go 1.25.5+ required
+        go-version: ['1.25.x']  # Go 1.25.7+ required
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
