@@ -261,7 +261,7 @@ func TestBigQueryOperatorsIntegration(t *testing.T) {
 			name:         "String contains",
 			celExpr:      `text_val.contains("world")`,
 			expectedRows: 2, // "world", "hello world"
-			description:  "String contains function (INSTR)",
+			description:  "String contains function (STRPOS)",
 		},
 		{
 			name:         "String startsWith",

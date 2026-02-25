@@ -167,7 +167,7 @@ sql, err := cel2sql.Convert(ast, cel2sql.WithDialect(bigquery.New()))
 | UNNEST | `UNNEST(x)` | `JSON_TABLE(...)` | `json_each(x)` | `UNNEST(x)` | `UNNEST(x)` |
 | Param placeholder | `$1, $2` | `?, ?` | `?, ?` | `$1, $2` | `@p1, @p2` |
 | Timestamp cast | `TIMESTAMP WITH TIME ZONE` | `DATETIME` | `datetime()` | `TIMESTAMPTZ` | `TIMESTAMP` |
-| Contains | `POSITION()` | `LOCATE()` | `INSTR()` | `CONTAINS()` | `INSTR()` |
+| Contains | `POSITION()` | `LOCATE()` | `INSTR()` | `CONTAINS()` | `STRPOS()` |
 | Index analysis | BTREE, GIN, GIN+trgm | BTREE, FULLTEXT | BTREE | ART | CLUSTERING, SEARCH_INDEX |
 
 ### Per-Dialect Type Providers

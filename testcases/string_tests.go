@@ -14,7 +14,7 @@ func StringTests() []ConvertTestCase {
 				dialect.MySQL:      "name LIKE 'a%' ESCAPE '\\\\'",
 				dialect.SQLite:     "name LIKE 'a%' ESCAPE '\\'",
 				dialect.DuckDB:     "name LIKE 'a%' ESCAPE '\\\\'",
-				dialect.BigQuery:   "name LIKE 'a%' ESCAPE '\\\\'",
+				dialect.BigQuery:   "name LIKE 'a%'",
 			},
 		},
 		{
@@ -26,7 +26,7 @@ func StringTests() []ConvertTestCase {
 				dialect.MySQL:      "name LIKE '%z' ESCAPE '\\\\'",
 				dialect.SQLite:     "name LIKE '%z' ESCAPE '\\'",
 				dialect.DuckDB:     "name LIKE '%z' ESCAPE '\\\\'",
-				dialect.BigQuery:   "name LIKE '%z' ESCAPE '\\\\'",
+				dialect.BigQuery:   "name LIKE '%z'",
 			},
 		},
 		{
@@ -38,7 +38,7 @@ func StringTests() []ConvertTestCase {
 				dialect.MySQL:      "LOCATE('abc', name) > 0",
 				dialect.SQLite:     "INSTR(name, 'abc') > 0",
 				dialect.DuckDB:     "CONTAINS(name, 'abc')",
-				dialect.BigQuery:   "INSTR(name, 'abc') != 0",
+				dialect.BigQuery:   "STRPOS(name, 'abc') > 0",
 			},
 		},
 		{
@@ -62,7 +62,7 @@ func StringTests() []ConvertTestCase {
 				dialect.MySQL:      "name LIKE 'a%' ESCAPE '\\\\' AND name LIKE '%z' ESCAPE '\\\\'",
 				dialect.SQLite:     "name LIKE 'a%' ESCAPE '\\' AND name LIKE '%z' ESCAPE '\\'",
 				dialect.DuckDB:     "name LIKE 'a%' ESCAPE '\\\\' AND name LIKE '%z' ESCAPE '\\\\'",
-				dialect.BigQuery:   "name LIKE 'a%' ESCAPE '\\\\' AND name LIKE '%z' ESCAPE '\\\\'",
+				dialect.BigQuery:   "name LIKE 'a%' AND name LIKE '%z'",
 			},
 		},
 	}

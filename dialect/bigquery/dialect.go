@@ -75,9 +75,10 @@ func (d *Dialect) WriteRegexMatch(w *strings.Builder, writeTarget func() error, 
 	return nil
 }
 
-// WriteLikeEscape writes the BigQuery LIKE escape clause.
-func (d *Dialect) WriteLikeEscape(w *strings.Builder) {
-	w.WriteString(" ESCAPE '\\\\'")
+// WriteLikeEscape is a no-op for BigQuery.
+// BigQuery uses backslash as the default escape character in LIKE patterns
+// and does not support the ESCAPE keyword.
+func (d *Dialect) WriteLikeEscape(_ *strings.Builder) {
 }
 
 // WriteArrayMembership writes a BigQuery array membership test using IN UNNEST().
@@ -349,9 +350,9 @@ func (d *Dialect) WriteTimestampArithmetic(w *strings.Builder, op string, writeT
 
 // --- String Functions ---
 
-// WriteContains writes INSTR(haystack, needle) != 0 for BigQuery.
+// WriteContains writes STRPOS(haystack, needle) > 0 for BigQuery.
 func (d *Dialect) WriteContains(w *strings.Builder, writeHaystack, writeNeedle func() error) error {
-	w.WriteString("INSTR(")
+	w.WriteString("STRPOS(")
 	if err := writeHaystack(); err != nil {
 		return err
 	}
@@ -359,7 +360,7 @@ func (d *Dialect) WriteContains(w *strings.Builder, writeHaystack, writeNeedle f
 	if err := writeNeedle(); err != nil {
 		return err
 	}
-	w.WriteString(") != 0")
+	w.WriteString(") > 0")
 	return nil
 }
 
