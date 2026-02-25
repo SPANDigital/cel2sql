@@ -131,14 +131,10 @@ func (con *converter) buildJSONPathForArray(expr *exprpb.Expr) error {
 	if operandSelect := operand.GetSelectExpr(); operandSelect != nil {
 		// This is nested access - recursively build the path for the operand
 		if con.hasJSONFieldInChain(operand) {
-			if err := con.buildJSONPathForArray(operand); err != nil {
-				return err
-			}
-			// Add intermediate JSON path operator (always -> for arrays)
-			con.str.WriteString("->'")
-			con.str.WriteString(escapeJSONFieldName(field))
-			con.str.WriteString("'")
-			return nil
+			// Add intermediate JSON path operator (always non-final for arrays)
+			return con.dialect.WriteJSONFieldAccess(&con.str, func() error {
+				return con.buildJSONPathForArray(operand)
+			}, field, false)
 		}
 	}
 
@@ -153,13 +149,9 @@ func (con *converter) buildJSONPathForArray(expr *exprpb.Expr) error {
 	}
 
 	// For other cases, visit the operand and add JSON operator
-	if err := con.visit(operand); err != nil {
-		return err
-	}
-	con.str.WriteString("->'")
-	con.str.WriteString(escapeJSONFieldName(field))
-	con.str.WriteString("'")
-	return nil
+	return con.dialect.WriteJSONFieldAccess(&con.str, func() error {
+		return con.visit(operand)
+	}, field, false)
 }
 
 // isJSONObjectFieldAccess determines if this is a JSON object field access in comprehensions
@@ -303,61 +295,34 @@ func (con *converter) buildJSONPathInternal(expr *exprpb.Expr, isFinalField bool
 		// If so, we should NOT apply JSON operators to this level
 		if tableName, columnName, ok := con.getTableAndFieldFromSelectChain(operand); ok {
 			// This is table.column where column is JSON/JSONB
-			// Render as table.column without JSON operators
-			con.str.WriteString(tableName)
-			con.str.WriteString(".")
-			con.str.WriteString(columnName)
-			// Now add JSON operator for the current field
-			if isFinalField {
-				con.str.WriteString("->>'") // Final field: extract as text
-			} else {
-				con.str.WriteString("->'") // Intermediate field: keep as JSON
-			}
-			con.str.WriteString(escapeJSONFieldName(field))
-			con.str.WriteString("'")
-			return nil
+			// Render as table.column without JSON operators, then add JSON operator for the current field
+			return con.dialect.WriteJSONFieldAccess(&con.str, func() error {
+				con.str.WriteString(tableName)
+				con.str.WriteString(".")
+				con.str.WriteString(columnName)
+				return nil
+			}, field, isFinalField)
 		}
 
 		// This is deeper nesting like table.jsonfield.subfield.finalfield
 		// We need to determine if the operand is JSON-related
 		if con.shouldUseJSONPath(operandSelect.GetOperand(), operandSelect.GetField()) {
-			// Recursively build the path for the operand (not final since we have more fields)
-			if err := con.buildJSONPathInternal(operand, false); err != nil {
-				return err
-			}
 			// Add appropriate JSON path operator based on whether this is the final field
-			if isFinalField {
-				con.str.WriteString("->>'") // Final field: extract as text
-			} else {
-				con.str.WriteString("->'") // Intermediate field: keep as JSON
-			}
-			con.str.WriteString(escapeJSONFieldName(field))
-			con.str.WriteString("'")
-			return nil
+			return con.dialect.WriteJSONFieldAccess(&con.str, func() error {
+				// Recursively build the path for the operand (not final since we have more fields)
+				return con.buildJSONPathInternal(operand, false)
+			}, field, isFinalField)
 		}
-	}
-
-	// Visit the base operand (like table.jsonfield)
-	if err := con.visit(operand); err != nil {
-		return err
-	}
-
-	// Add the appropriate JSON path operator based on whether this is the final field
-	operator := "->>"
-	if !isFinalField {
-		operator = "->"
 	}
 
 	con.logger.LogAttrs(context.Background(), slog.LevelDebug,
 		"JSON path operator selection",
 		slog.String("field", field),
-		slog.String("operator", operator),
 		slog.Bool("is_final", isFinalField),
 	)
 
-	con.str.WriteString(operator)
-	con.str.WriteString("'")
-	con.str.WriteString(escapeJSONFieldName(field))
-	con.str.WriteString("'")
-	return nil
+	// Visit the base operand (like table.jsonfield)
+	return con.dialect.WriteJSONFieldAccess(&con.str, func() error {
+		return con.visit(operand)
+	}, field, isFinalField)
 }

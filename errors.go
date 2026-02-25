@@ -58,6 +58,9 @@ var (
 
 	// ErrInvalidByteArrayLength indicates byte array exceeds maximum length
 	ErrInvalidByteArrayLength = errors.New("byte array exceeds maximum length")
+
+	// ErrUnsupportedDialectFeature indicates a feature not supported by the selected dialect
+	ErrUnsupportedDialectFeature = errors.New("unsupported dialect feature")
 )
 
 // ConversionError represents an error that occurred during CEL to SQL conversion.

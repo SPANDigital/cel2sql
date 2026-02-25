@@ -2,6 +2,20 @@
 
 ## [Unreleased]
 
+### Added
+- **Multi-Dialect SQL Support**
+  - Introduced `Dialect` interface for pluggable SQL generation (`dialect/dialect.go`)
+  - PostgreSQL dialect extracted from converter into `dialect/postgres/` (zero behavior change)
+  - MySQL dialect implementation (`dialect/mysql/`)
+  - SQLite dialect implementation (`dialect/sqlite/`)
+  - DuckDB dialect implementation (`dialect/duckdb/`)
+  - BigQuery dialect implementation (`dialect/bigquery/`)
+  - `WithDialect()` option for `Convert()` and `ConvertParameterized()` (defaults to PostgreSQL)
+  - Per-dialect type providers: `mysql/provider.go`, `sqlite/provider.go`, `duckdb/provider.go`, `bigquery/provider.go`
+  - Dialect-agnostic schema types in `schema/` package
+  - Shared test case infrastructure (`testcases/`, `testutil/`) with per-dialect expected SQL
+  - Dialect registry for name-based lookup (`dialect.Register()`, `dialect.Get()`)
+
 ## [3.5.0] - 2026-01-08
 
 ### Changed

@@ -137,16 +137,44 @@ import (
 1. Add the function mapping in `cel2sql.go`
 2. Add comprehensive tests in `cel2sql_test.go`
 3. Update the README with documentation
-4. Ensure PostgreSQL compatibility
+4. Ensure the function works with dialect abstraction
 
-### PostgreSQL Focus
+### Multi-Dialect Architecture
 
-This project targets PostgreSQL. When adding features:
+cel2sql supports PostgreSQL (default), MySQL, SQLite, DuckDB, and BigQuery. When adding features:
 
-- Use PostgreSQL-specific SQL syntax
-- Test with realistic PostgreSQL schemas
-- Use `pgx/v5` driver patterns
-- Avoid BigQuery-specific features
+- Call `con.dialect.*` methods for any SQL that differs between databases
+- Standard SQL (AND, OR, =, !=, etc.) stays inline in the converter
+- Add expected SQL for all dialects in `testcases/*.go`
+- Run `make ci` to verify all dialects pass
+
+### Adding a New Dialect
+
+To add support for a new SQL dialect:
+
+1. **Create the dialect package**: `dialect/<name>/dialect.go`
+   - Implement the `dialect.Dialect` interface (~40 methods)
+   - Register with `dialect.Register()` in `init()`
+
+2. **Create regex conversion** (if applicable): `dialect/<name>/regex.go`
+   - Convert RE2 patterns to the dialect's regex format
+   - Include ReDoS protection (pattern length, nesting limits)
+
+3. **Create validation**: `dialect/<name>/validation.go`
+   - Field name validation, reserved keywords
+
+4. **Create type provider**: `<name>/provider.go`
+   - Map native database types to CEL types
+
+5. **Add env factory**: `testutil/env.go`
+   - Add `<Name>EnvFactory()` function
+   - Update `DialectEnvFactory()` switch
+
+6. **Add test runner**: `testutil/runner_<name>_test.go`
+
+7. **Add expected SQL to all test case files** in `testcases/`
+
+8. **Update `dialect/dialect.go`** to add the dialect name constant
 
 ## Pull Request Process
 
@@ -174,30 +202,36 @@ This project targets PostgreSQL. When adding features:
 
 ```
 cel2sql/
-├── cel2sql.go           # Main conversion engine
-├── cel2sql_test.go      # Main tests
-├── pg/                  # PostgreSQL type provider
-│   ├── provider.go      # Type provider implementation
-│   └── provider_test.go # Type provider tests
-├── sqltypes/           # Custom SQL types
-│   └── types.go        # CEL type definitions
-├── examples/           # Usage examples
-│   ├── basic/          # Basic usage example
-│   │   ├── main.go
-│   │   └── README.md
-│   ├── load_table_schema/ # Dynamic schema loading example
-│   │   ├── main.go
-│   │   └── README.md
-│   └── README.md       # Examples overview
-└── test/               # Test utilities
-    └── testdata.go     # Test schemas
+├── cel2sql.go              # Main conversion engine (uses dialect interface)
+├── cel2sql_test.go         # Main tests
+├── dialect/                # Dialect interface + implementations
+│   ├── dialect.go          # Interface definition + Name type
+│   ├── registry.go         # Name→Dialect lookup
+│   ├── postgres/           # PostgreSQL dialect
+│   ├── mysql/              # MySQL dialect
+│   ├── sqlite/             # SQLite dialect
+│   ├── duckdb/             # DuckDB dialect
+│   └── bigquery/           # BigQuery dialect
+├── pg/                     # PostgreSQL type provider
+├── mysql/                  # MySQL type provider
+├── sqlite/                 # SQLite type provider
+├── duckdb/                 # DuckDB type provider
+├── bigquery/               # BigQuery type provider
+├── schema/                 # Dialect-agnostic schema types
+├── sqltypes/               # Custom SQL types for CEL
+├── testcases/              # Shared test cases with per-dialect expected SQL
+├── testutil/               # Test runner + env factories
+└── examples/               # Usage examples
 ```
 
 ### Key Components
 
-- **cel2sql.go**: Core conversion logic from CEL AST to SQL
-- **pg/provider.go**: PostgreSQL type system integration
+- **cel2sql.go**: Core conversion logic from CEL AST to SQL (calls dialect methods)
+- **dialect/dialect.go**: Dialect interface defining all SQL generation points
+- **dialect/*/dialect.go**: Per-dialect SQL generation implementations
+- **pg/provider.go**, **mysql/provider.go**, etc.: Type system integration per dialect
 - **sqltypes/types.go**: Custom SQL type definitions for CEL
+- **testcases/*.go**: Shared test cases with expected SQL for all dialects
 
 ## Debugging
 

@@ -2,7 +2,6 @@ package cel2sql
 
 import (
 	"fmt"
-	"strconv"
 	"time"
 
 	"github.com/google/cel-go/common/operators"
@@ -55,7 +54,6 @@ func (con *converter) callTimestampOperation(fun string, lhs *exprpb.Expr, rhs *
 		return newConversionError(errMsgInvalidTimestampOp, "timestamp operation requires at least one timestamp operand")
 	}
 
-	// PostgreSQL uses simple + and - operators for date arithmetic
 	var sqlOp string
 	switch fun {
 	case operators.Add:
@@ -66,16 +64,10 @@ func (con *converter) callTimestampOperation(fun string, lhs *exprpb.Expr, rhs *
 		return newConversionError(errMsgInvalidTimestampOp, "unsupported timestamp operation")
 	}
 
-	if err := con.visitMaybeNested(timestamp, timestampParen); err != nil {
-		return err
-	}
-	con.str.WriteString(" ")
-	con.str.WriteString(sqlOp)
-	con.str.WriteString(" ")
-	if err := con.visitMaybeNested(duration, durationParen); err != nil {
-		return err
-	}
-	return nil
+	return con.dialect.WriteTimestampArithmetic(&con.str, sqlOp,
+		func() error { return con.visitMaybeNested(timestamp, timestampParen) },
+		func() error { return con.visitMaybeNested(duration, durationParen) },
+	)
 }
 
 // callDuration converts CEL duration expressions to PostgreSQL INTERVAL
@@ -100,105 +92,96 @@ func (con *converter) callDuration(_ *exprpb.Expr, args []*exprpb.Expr) error {
 	if err != nil {
 		return err
 	}
-	con.str.WriteString("INTERVAL ")
+	var value int64
+	var unit string
 	switch d {
 	case d.Round(time.Hour):
-		con.str.WriteString(strconv.FormatFloat(d.Hours(), 'f', 0, 64))
-		con.str.WriteString(" HOUR")
+		value = int64(d.Hours())
+		unit = "HOUR"
 	case d.Round(time.Minute):
-		con.str.WriteString(strconv.FormatFloat(d.Minutes(), 'f', 0, 64))
-		con.str.WriteString(" MINUTE")
+		value = int64(d.Minutes())
+		unit = "MINUTE"
 	case d.Round(time.Second):
-		con.str.WriteString(strconv.FormatFloat(d.Seconds(), 'f', 0, 64))
-		con.str.WriteString(" SECOND")
+		value = int64(d.Seconds())
+		unit = "SECOND"
 	case d.Round(time.Millisecond):
-		con.str.WriteString(strconv.FormatInt(d.Milliseconds(), 10))
-		con.str.WriteString(" MILLISECOND")
+		value = d.Milliseconds()
+		unit = "MILLISECOND"
 	default:
-		con.str.WriteString(strconv.FormatInt(d.Truncate(time.Microsecond).Microseconds(), 10))
-		con.str.WriteString(" MICROSECOND")
+		value = d.Truncate(time.Microsecond).Microseconds()
+		unit = "MICROSECOND"
 	}
+	con.dialect.WriteDuration(&con.str, value, unit)
 	return nil
 }
 
-// callInterval creates PostgreSQL INTERVAL expressions
+// callInterval creates INTERVAL expressions using the dialect
 func (con *converter) callInterval(_ *exprpb.Expr, args []*exprpb.Expr) error {
-	con.str.WriteString("INTERVAL ")
-	if err := con.visit(args[0]); err != nil {
-		return err
-	}
-	con.str.WriteString(" ")
 	datePart := args[1]
-	con.str.WriteString(datePart.GetIdentExpr().GetName())
-	return nil
+	unit := datePart.GetIdentExpr().GetName()
+	return con.dialect.WriteInterval(&con.str, func() error {
+		return con.visit(args[0])
+	}, unit)
 }
 
 // callExtractFromTimestamp handles timestamp field extraction (YEAR, MONTH, DAY, etc.)
 func (con *converter) callExtractFromTimestamp(function string, target *exprpb.Expr, args []*exprpb.Expr) error {
-	// For getDayOfWeek, we need to wrap the entire EXTRACT in parentheses for modulo operation
-	if function == overloads.TimeGetDayOfWeek {
-		con.str.WriteString("(")
-	}
-	con.str.WriteString("EXTRACT(")
+	var part string
 	switch function {
 	case overloads.TimeGetFullYear:
-		con.str.WriteString("YEAR")
+		part = "YEAR"
 	case overloads.TimeGetMonth:
-		con.str.WriteString("MONTH")
+		part = "MONTH"
 	case overloads.TimeGetDate:
-		con.str.WriteString("DAY")
+		part = "DAY"
 	case overloads.TimeGetHours:
-		con.str.WriteString("HOUR")
+		part = "HOUR"
 	case overloads.TimeGetMinutes:
-		con.str.WriteString("MINUTE")
+		part = "MINUTE"
 	case overloads.TimeGetSeconds:
-		con.str.WriteString("SECOND")
+		part = "SECOND"
 	case overloads.TimeGetMilliseconds:
-		con.str.WriteString("MILLISECONDS")
+		part = "MILLISECONDS"
 	case overloads.TimeGetDayOfYear:
-		con.str.WriteString("DOY")
+		part = "DOY"
 	case overloads.TimeGetDayOfMonth:
-		con.str.WriteString("DAY")
+		part = "DAY"
 	case overloads.TimeGetDayOfWeek:
-		con.str.WriteString("DOW")
+		part = "DOW"
 	}
-	con.str.WriteString(" FROM ")
-	if err := con.visit(target); err != nil {
-		return err
+
+	writeExpr := func() error {
+		return con.visit(target)
 	}
+
+	var writeTZ func() error
 	if isTimestampType(con.getType(target)) && len(args) == 1 {
-		con.str.WriteString(" AT TIME ZONE ")
-		if err := con.visit(args[0]); err != nil {
-			return err
+		writeTZ = func() error {
+			return con.visit(args[0])
 		}
 	}
-	con.str.WriteString(")")
+
+	if err := con.dialect.WriteExtract(&con.str, part, writeExpr, writeTZ); err != nil {
+		return err
+	}
+
+	// Apply CEL-specific adjustments (these are universal, not dialect-specific)
 	switch function {
 	case overloads.TimeGetMonth, overloads.TimeGetDayOfYear, overloads.TimeGetDayOfMonth:
 		con.str.WriteString(" - 1")
-	case overloads.TimeGetDayOfWeek:
-		// PostgreSQL DOW: 0=Sunday, 1=Monday, ..., 6=Saturday
-		// CEL getDayOfWeek: 0=Monday, 1=Tuesday, ..., 6=Sunday (ISO 8601)
-		// Convert: (DOW + 6) % 7
-		con.str.WriteString(" + 6) % 7")
 	}
 	return nil
 }
 
-// callTimestampFromString converts string literals to PostgreSQL timestamps
+// callTimestampFromString converts string literals to timestamps using the dialect
 func (con *converter) callTimestampFromString(_ *exprpb.Expr, args []*exprpb.Expr) error {
 	if len(args) == 1 {
-		// For PostgreSQL, we need to cast the string to a timestamp
-		con.str.WriteString("CAST(")
-		err := con.visit(args[0])
-		if err != nil {
-			return err
-		}
-		con.str.WriteString(" AS TIMESTAMP WITH TIME ZONE)")
-		return nil
+		return con.dialect.WriteTimestampCast(&con.str, func() error {
+			return con.visit(args[0])
+		})
 	} else if len(args) == 2 {
 		// Handle timestamp(datetime, timezone) format
-		// In PostgreSQL, use: datetime AT TIME ZONE timezone
+		// For most dialects: datetime AT TIME ZONE timezone
 		err := con.visit(args[0])
 		if err != nil {
 			return err

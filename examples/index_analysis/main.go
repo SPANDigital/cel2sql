@@ -7,6 +7,12 @@ import (
 
 	"github.com/google/cel-go/cel"
 	"github.com/spandigital/cel2sql/v3"
+	"github.com/spandigital/cel2sql/v3/dialect"
+	dialectbq "github.com/spandigital/cel2sql/v3/dialect/bigquery"
+	dialectduckdb "github.com/spandigital/cel2sql/v3/dialect/duckdb"
+	dialectmysql "github.com/spandigital/cel2sql/v3/dialect/mysql"
+	dialectpg "github.com/spandigital/cel2sql/v3/dialect/postgres"
+	dialectsqlite "github.com/spandigital/cel2sql/v3/dialect/sqlite"
 	"github.com/spandigital/cel2sql/v3/pg"
 )
 
@@ -77,59 +83,114 @@ func main() {
 		},
 	}
 
-	// Analyze each query and display recommendations
+	// Analyze each query and display recommendations (PostgreSQL default)
+	fmt.Println("\n--- PostgreSQL (default) ---")
 	for i, ex := range examples {
-		fmt.Printf("%d. %s\n", i+1, ex.name)
-		fmt.Printf("   Description: %s\n", ex.description)
-		fmt.Printf("   CEL Expression: %s\n\n", ex.expression)
+		analyzeExample(env, provider, i, ex.name, ex.description, ex.expression)
+	}
 
-		// Compile the CEL expression
-		ast, issues := env.Compile(ex.expression)
-		if issues != nil && issues.Err() != nil {
-			log.Printf("   ERROR: Failed to compile: %v\n\n", issues.Err())
-			continue
-		}
+	// Multi-dialect examples
+	fmt.Println("\n===================================")
+	fmt.Println("Multi-Dialect Index Recommendations")
+	fmt.Println("===================================")
 
-		// Analyze the query
-		sql, recommendations, err := cel2sql.AnalyzeQuery(ast,
-			cel2sql.WithSchemas(provider.GetSchemas()))
+	// Use a simple comparison query to show dialect differences
+	comparisonExpr := `users.age > 21 && users.metadata.verified == true`
+
+	dialectExamples := []struct {
+		name    string
+		dialect dialect.Dialect
+	}{
+		{"PostgreSQL", dialectpg.New()},
+		{"MySQL", dialectmysql.New()},
+		{"SQLite", dialectsqlite.New()},
+		{"DuckDB", dialectduckdb.New()},
+		{"BigQuery", dialectbq.New()},
+	}
+
+	ast, issues := env.Compile(comparisonExpr)
+	if issues != nil && issues.Err() != nil {
+		log.Fatalf("Failed to compile expression: %v", issues.Err())
+	}
+
+	for _, de := range dialectExamples {
+		fmt.Printf("\n--- %s ---\n", de.name)
+		fmt.Printf("   CEL Expression: %s\n\n", comparisonExpr)
+
+		_, recommendations, err := cel2sql.AnalyzeQuery(ast,
+			cel2sql.WithSchemas(provider.GetSchemas()),
+			cel2sql.WithDialect(de.dialect))
 		if err != nil {
 			log.Printf("   ERROR: Failed to analyze: %v\n\n", err)
 			continue
 		}
 
-		// Display the generated SQL
-		fmt.Printf("   Generated SQL:\n   %s\n\n", sql)
-
-		// Display index recommendations
 		if len(recommendations) == 0 {
-			fmt.Printf("   No index recommendations (query uses constants or simple conditions)\n\n")
+			fmt.Printf("   No index recommendations\n")
 		} else {
-			fmt.Printf("   Index Recommendations (%d):\n", len(recommendations))
 			for j, rec := range recommendations {
 				fmt.Printf("   [%d] Column: %s\n", j+1, rec.Column)
 				fmt.Printf("       Type: %s\n", rec.IndexType)
 				fmt.Printf("       Reason: %s\n", rec.Reason)
-				fmt.Printf("       SQL: %s\n", rec.Expression)
+				fmt.Printf("       DDL: %s\n", rec.Expression)
 				fmt.Println()
 			}
 		}
-
-		fmt.Println("   " + string(make([]byte, 60)))
-		fmt.Println()
 	}
 
 	// Summary
 	fmt.Println("\nSummary")
 	fmt.Println("=======")
-	fmt.Println("Index recommendations help optimize query performance by:")
-	fmt.Println("  • B-tree indexes: Fast equality and range queries on scalar columns")
-	fmt.Println("  • GIN indexes: Efficient JSON path access and array operations")
-	fmt.Println("  • GIN with pg_trgm: Fast regex pattern matching on text columns")
+	fmt.Println("Index recommendations are dialect-aware:")
+	fmt.Println("  PostgreSQL: B-tree, GIN, GIN with pg_trgm")
+	fmt.Println("  MySQL:      B-tree, FULLTEXT, functional JSON indexes")
+	fmt.Println("  SQLite:     B-tree (limited index types)")
+	fmt.Println("  DuckDB:     ART (Adaptive Radix Tree)")
+	fmt.Println("  BigQuery:   Clustering keys, Search indexes")
 	fmt.Println()
-	fmt.Println("To apply recommendations:")
-	fmt.Println("  1. Review each recommendation and its reason")
-	fmt.Println("  2. Adjust table_name to your actual table name")
-	fmt.Println("  3. Execute the CREATE INDEX statements on your database")
-	fmt.Println("  4. Monitor query performance improvements")
+	fmt.Println("Use WithDialect() to get dialect-specific recommendations:")
+	fmt.Println("  sql, recs, err := cel2sql.AnalyzeQuery(ast,")
+	fmt.Println("      cel2sql.WithDialect(mysql.New()),")
+	fmt.Println("      cel2sql.WithSchemas(schemas))")
+}
+
+func analyzeExample(env *cel.Env, provider pg.TypeProvider, idx int, name, description, expression string) {
+	fmt.Printf("%d. %s\n", idx+1, name)
+	fmt.Printf("   Description: %s\n", description)
+	fmt.Printf("   CEL Expression: %s\n\n", expression)
+
+	// Compile the CEL expression
+	ast, issues := env.Compile(expression)
+	if issues != nil && issues.Err() != nil {
+		log.Printf("   ERROR: Failed to compile: %v\n\n", issues.Err())
+		return
+	}
+
+	// Analyze the query
+	sql, recommendations, err := cel2sql.AnalyzeQuery(ast,
+		cel2sql.WithSchemas(provider.GetSchemas()))
+	if err != nil {
+		log.Printf("   ERROR: Failed to analyze: %v\n\n", err)
+		return
+	}
+
+	// Display the generated SQL
+	fmt.Printf("   Generated SQL:\n   %s\n\n", sql)
+
+	// Display index recommendations
+	if len(recommendations) == 0 {
+		fmt.Printf("   No index recommendations (query uses constants or simple conditions)\n\n")
+	} else {
+		fmt.Printf("   Index Recommendations (%d):\n", len(recommendations))
+		for j, rec := range recommendations {
+			fmt.Printf("   [%d] Column: %s\n", j+1, rec.Column)
+			fmt.Printf("       Type: %s\n", rec.IndexType)
+			fmt.Printf("       Reason: %s\n", rec.Reason)
+			fmt.Printf("       SQL: %s\n", rec.Expression)
+			fmt.Println()
+		}
+	}
+
+	fmt.Println("   " + string(make([]byte, 60)))
+	fmt.Println()
 }

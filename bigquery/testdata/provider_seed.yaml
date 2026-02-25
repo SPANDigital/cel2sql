@@ -1,0 +1,41 @@
+projects:
+  - id: test-project
+    datasets:
+      - id: testdataset
+        tables:
+          - id: test_data
+            columns:
+              - name: id
+                type: INT64
+              - name: text_val
+                type: STRING
+              - name: int_val
+                type: INT64
+              - name: float_val
+                type: FLOAT64
+              - name: bool_val
+                type: BOOL
+              - name: nullable_text
+                type: STRING
+              - name: nullable_int
+                type: INT64
+            data:
+              - id: 1
+                text_val: "hello"
+                int_val: 10
+                float_val: 10.5
+                bool_val: true
+                nullable_text: "present"
+                nullable_int: 100
+              - id: 2
+                text_val: "world"
+                int_val: 20
+                float_val: 20.5
+                bool_val: false
+              - id: 3
+                text_val: "test"
+                int_val: 30
+                float_val: 30.5
+                bool_val: true
+                nullable_text: "here"
+                nullable_int: 200

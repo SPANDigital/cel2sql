@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-cel2sql converts CEL (Common Expression Language) expressions to PostgreSQL SQL conditions. It specifically targets PostgreSQL standard SQL and was recently migrated from BigQuery.
+cel2sql converts CEL (Common Expression Language) expressions to SQL conditions. It supports multiple SQL dialects: PostgreSQL (default), MySQL, SQLite, DuckDB, and BigQuery.
 
 **Module**: `github.com/spandigital/cel2sql/v3`
 **Go Version**: 1.24+
@@ -70,10 +70,31 @@ go test -v -run TestFunctionName ./...
 
 6. **`pg/provider.go`** - PostgreSQL type provider for CEL type system
    - Maps PostgreSQL types to CEL types
-   - Supports dynamic schema loading from live databases
+   - Supports dynamic schema loading from live databases via `LoadTableSchema`
    - Handles composite types and arrays
 
-7. **`sqltypes/types.go`** - Custom SQL type definitions for CEL (DATE, TIME, DATETIME, INTERVAL)
+7. **`mysql/provider.go`** - MySQL type provider
+   - Maps MySQL types to CEL types
+   - `LoadTableSchema` uses `information_schema.columns` with `table_schema = DATABASE()`
+   - Accepts `*sql.DB` (caller owns connection)
+
+8. **`sqlite/provider.go`** - SQLite type provider
+   - Maps SQLite type affinity to CEL types
+   - `LoadTableSchema` uses `PRAGMA table_info` with table name validation
+   - Accepts `*sql.DB` (caller owns connection)
+
+9. **`duckdb/provider.go`** - DuckDB type provider
+   - Maps DuckDB types to CEL types, detects array types from `[]` suffix
+   - `LoadTableSchema` uses `information_schema.columns`
+   - Accepts `*sql.DB` (works with any DuckDB driver)
+
+10. **`bigquery/provider.go`** - BigQuery type provider
+    - Maps BigQuery types to CEL types
+    - `LoadTableSchema` uses BigQuery client API (`Table.Metadata`)
+    - Handles nested RECORD types recursively
+    - Accepts `*bigquery.Client` + dataset ID
+
+11. **`sqltypes/types.go`** - Custom SQL type definitions for CEL (DATE, TIME, DATETIME, INTERVAL)
 
 ### Type System Integration
 
@@ -198,11 +219,14 @@ These validations prevent PostgreSQL syntax errors and ensure predictable behavi
    - Include package comments for main packages
 
 ### Testing Guidelines
-- Use PostgreSQL schemas (`pg.Schema`) in tests, not BigQuery
-- Use `pg.NewTypeProvider()` for schema definitions
+- Use the dialect-specific schema/provider for each dialect's tests
+- Use `pg.NewTypeProvider()` for PostgreSQL, `mysql.NewTypeProvider()` for MySQL, etc.
 - Include tests for nested types, arrays, and JSON fields
-- Verify SQL output matches PostgreSQL syntax (single quotes, proper functions)
-- Use testcontainers for integration tests with real PostgreSQL
+- Verify SQL output matches the target dialect's syntax
+- Use testcontainers for integration tests (PostgreSQL, MySQL, BigQuery)
+- Use in-memory databases for SQLite integration tests (no Docker needed)
+- DuckDB integration tests require CGO; use unit tests for type mapping validation
+- Provider tests live in `{dialect}/provider_test.go`
 
 ### Performance Benchmarks
 
@@ -334,8 +358,12 @@ benchstat bench-old.txt bench-new.txt
 
 ## Common Patterns
 
-### Creating Type Providers
+### Creating Type Providers (Pre-defined Schemas)
+
+All dialects support pre-defined schemas via `NewTypeProvider`:
+
 ```go
+// PostgreSQL
 schema := pg.NewSchema([]pg.FieldSchema{
     {Name: "field_name", Type: "text", Repeated: false},
     {Name: "array_field", Type: "text", Repeated: true},
@@ -343,18 +371,56 @@ schema := pg.NewSchema([]pg.FieldSchema{
     {Name: "composite_field", Type: "composite", Schema: []pg.FieldSchema{...}},
 })
 provider := pg.NewTypeProvider(map[string]pg.Schema{"TableName": schema})
+
+// MySQL (same schema types, dialect-specific type names)
+schema := mysql.NewSchema([]mysql.FieldSchema{
+    {Name: "name", Type: "varchar"},
+    {Name: "metadata", Type: "json", IsJSON: true},
+})
+provider := mysql.NewTypeProvider(map[string]mysql.Schema{"TableName": schema})
+
+// SQLite, DuckDB, BigQuery follow the same pattern with their own type names
 ```
 
 ### Dynamic Schema Loading
+
+All dialects support runtime schema introspection from live databases via `LoadTableSchema`:
+
 ```go
+// PostgreSQL — accepts connection string, manages its own pool
 provider, err := pg.NewTypeProviderWithConnection(ctx, connectionString)
 if err != nil {
     return err
 }
 defer provider.Close()
+err = provider.LoadTableSchema(ctx, "tableName")
 
+// MySQL — accepts *sql.DB, caller owns connection
+db, _ := sql.Open("mysql", "user:pass@tcp(host:3306)/db?parseTime=true")
+provider, err := mysql.NewTypeProviderWithConnection(ctx, db)
+err = provider.LoadTableSchema(ctx, "tableName")
+
+// SQLite — accepts *sql.DB, uses PRAGMA table_info (validates table name)
+db, _ := sql.Open("sqlite", "mydb.sqlite")
+provider, err := sqlite.NewTypeProviderWithConnection(ctx, db)
+err = provider.LoadTableSchema(ctx, "tableName")
+
+// DuckDB — accepts *sql.DB, works with any DuckDB driver
+db, _ := sql.Open("duckdb", "mydb.duckdb")
+provider, err := duckdb.NewTypeProviderWithConnection(ctx, db)
+err = provider.LoadTableSchema(ctx, "tableName")
+
+// BigQuery — accepts *bigquery.Client + dataset ID
+client, _ := bigquery.NewClient(ctx, "project-id")
+provider, err := bqprovider.NewTypeProviderWithClient(ctx, client, "dataset_id")
 err = provider.LoadTableSchema(ctx, "tableName")
 ```
+
+**Key differences per dialect:**
+- **PostgreSQL**: `NewTypeProviderWithConnection(ctx, connString)` — owns its pgxpool, `Close()` releases it
+- **MySQL/SQLite/DuckDB**: `NewTypeProviderWithConnection(ctx, *sql.DB)` — caller owns DB, `Close()` is no-op
+- **BigQuery**: `NewTypeProviderWithClient(ctx, *bigquery.Client, datasetID)` — caller owns client, `Close()` is no-op
+- **SQLite**: Table name validated via regex (`^[a-zA-Z_][a-zA-Z0-9_]*$`) since PRAGMA doesn't support parameterized queries
 
 ### CEL Environment Setup
 ```go
@@ -377,7 +443,18 @@ sqlCondition, err := cel2sql.Convert(ast)
 
 ### Query Analysis and Index Recommendations
 
-cel2sql can analyze CEL expressions and recommend database indexes to optimize performance.
+cel2sql can analyze CEL expressions and recommend **dialect-specific** database indexes to optimize performance.
+
+#### Architecture
+
+Index analysis uses the **IndexAdvisor** interface (`dialect/index_advisor.go`):
+- **Pattern detection** stays centralized in `analysis.go` (walks the CEL AST once)
+- **DDL generation** is delegated to per-dialect `IndexAdvisor` implementations
+- Each built-in dialect implements `IndexAdvisor` on its `*Dialect` struct
+- Use `dialect.GetIndexAdvisor(d)` to type-assert a dialect to `IndexAdvisor`
+- Unsupported patterns return `nil` (silently skipped)
+
+**PatternTypes** detected: `PatternComparison`, `PatternJSONAccess`, `PatternRegexMatch`, `PatternArrayMembership`, `PatternArrayComprehension`, `PatternJSONArrayComprehension`.
 
 #### Using AnalyzeQuery
 
@@ -387,16 +464,18 @@ if issues != nil && issues.Err() != nil {
     return issues.Err()
 }
 
+// PostgreSQL (default)
 sql, recommendations, err := cel2sql.AnalyzeQuery(ast,
     cel2sql.WithSchemas(schemas))
+
+// Or with a specific dialect
+sql, recommendations, err := cel2sql.AnalyzeQuery(ast,
+    cel2sql.WithSchemas(schemas),
+    cel2sql.WithDialect(mysql.New()))
 if err != nil {
     return err
 }
 
-// Use the generated SQL
-rows, err := db.Query("SELECT * FROM people WHERE " + sql)
-
-// Review and apply index recommendations
 for _, rec := range recommendations {
     fmt.Printf("Column: %s, Type: %s\n", rec.Column, rec.IndexType)
     fmt.Printf("Reason: %s\n", rec.Reason)
@@ -404,34 +483,43 @@ for _, rec := range recommendations {
 }
 ```
 
-#### Index Recommendation Types
+#### Per-Dialect Index Types
 
-AnalyzeQuery detects patterns and recommends appropriate index types:
+| Pattern | PostgreSQL | MySQL | SQLite | DuckDB | BigQuery |
+|---------|-----------|-------|--------|--------|----------|
+| Comparison | BTREE | BTREE | BTREE | ART | CLUSTERING |
+| JSON access | GIN | BTREE (functional) | _(nil)_ | ART | SEARCH_INDEX |
+| Regex match | GIN + pg_trgm | FULLTEXT | _(nil)_ | _(nil)_ | _(nil)_ |
+| Array membership | GIN | _(nil)_ | _(nil)_ | ART | _(nil)_ |
+| Array comprehension | GIN | _(nil)_ | _(nil)_ | ART | _(nil)_ |
+| JSON array comprehension | GIN | BTREE (functional) | _(nil)_ | ART | SEARCH_INDEX |
 
-- **B-tree indexes**: Comparison operations (`==, >, <, >=, <=`)
-  - Best for: Equality checks, range queries, sorting
-  - Example: `person.age > 18` → B-tree on `person.age`
-
-- **GIN indexes**: JSON/JSONB path operations, array operations
-  - Best for: JSON field access, array membership, containment
-  - Example: `person.metadata.verified == true` → GIN on `person.metadata`
-  - Example: `"premium" in person.tags` → GIN on `person.tags`
-
-- **GIN indexes with pg_trgm**: Regex pattern matching
-  - Best for: Text search, pattern matching, fuzzy matching
-  - Requires: PostgreSQL pg_trgm extension
-  - Example: `person.email.matches(r"@example\.com$")` → GIN on `person.email`
+**Per-dialect DDL examples:**
+- **PostgreSQL**: `CREATE INDEX idx_col_gin ON table_name USING GIN (col);`
+- **MySQL**: `CREATE INDEX idx_col_btree ON table_name (col);` / `CREATE FULLTEXT INDEX ...`
+- **SQLite**: `CREATE INDEX idx_col ON table_name (col);`
+- **DuckDB**: `CREATE INDEX idx_col ON table_name (col);` (ART by default)
+- **BigQuery**: `ALTER TABLE t SET OPTIONS (clustering_columns=['col']);` / `CREATE SEARCH INDEX ...`
 
 #### IndexRecommendation Structure
 
 ```go
 type IndexRecommendation struct {
     Column     string  // Full column name (e.g., "person.metadata")
-    IndexType  string  // "BTREE", "GIN", or "GIST"
-    Expression string  // Complete CREATE INDEX statement
+    IndexType  string  // Dialect-specific: "BTREE", "GIN", "ART", "CLUSTERING", "SEARCH_INDEX", etc.
+    Expression string  // Complete DDL statement for the target dialect
     Reason     string  // Explanation of why this index is recommended
 }
 ```
+
+#### Implementation Files
+
+- `dialect/index_advisor.go` — `IndexAdvisor` interface, `PatternType`, `IndexPattern`, `GetIndexAdvisor()` helper
+- `dialect/postgres/index_advisor.go` — PostgreSQL: BTREE, GIN, GIN+pg_trgm
+- `dialect/mysql/index_advisor.go` — MySQL: BTREE, FULLTEXT
+- `dialect/sqlite/index_advisor.go` — SQLite: BTREE only
+- `dialect/duckdb/index_advisor.go` — DuckDB: ART
+- `dialect/bigquery/index_advisor.go` — BigQuery: CLUSTERING, SEARCH_INDEX
 
 #### When to Use
 
@@ -439,7 +527,7 @@ type IndexRecommendation struct {
 - **Performance tuning**: Identify missing indexes causing slow queries
 - **Production monitoring**: Analyze user-generated filter expressions
 
-See `examples/index_analysis/` for a complete working example.
+See `examples/index_analysis/` for a complete working example with all 5 dialects.
 
 ### Logging and Observability
 
@@ -731,23 +819,23 @@ For detailed security information, see the security documentation.
 ## Important Notes
 
 ### Migration Context
-This project was migrated from BigQuery to PostgreSQL in v2.0:
-- All `cloud.google.com/go/bigquery` dependencies removed
-- `bq/` package removed entirely
-- PostgreSQL-specific syntax (single quotes, POSITION(), ARRAY_LENGTH(,1), etc.)
-- Comprehensive JSON/JSONB support added
-- Dynamic schema loading added
+This project was originally BigQuery-only, migrated to PostgreSQL in v2.0, and expanded to multi-dialect in v3.0:
+- v2.0: All `cloud.google.com/go/bigquery` dependencies removed, `bq/` package removed
+- v3.0: Multi-dialect support added (PostgreSQL, MySQL, SQLite, DuckDB, BigQuery)
+- Each dialect has its own type provider with `LoadTableSchema` support
+- BigQuery dependency re-added for BigQuery dialect support
 
 ### Things to Avoid
-- Do NOT add BigQuery dependencies back
 - Do NOT remove protobuf dependencies (required by CEL)
 - Do NOT use direct SQL string concatenation (use proper escaping)
 - Do NOT ignore context cancellation in database operations
+- Do NOT use `PRAGMA` with user-controlled table names without validation (SQLite)
+- Do NOT assume a specific dialect — use the dialect interface for dialect-specific behavior
 
 ### When Adding Features
-1. Consider PostgreSQL-specific SQL syntax
-2. Add comprehensive tests with realistic schemas
-3. Update type mappings in `pg/provider.go` if needed
+1. Consider all supported SQL dialects, not just PostgreSQL
+2. Add comprehensive tests with realistic schemas for each affected dialect
+3. Update type mappings in the appropriate `{dialect}/provider.go` if needed
 4. Document new CEL operators/functions in README.md
 5. Ensure backward compatibility
 6. Run `make ci` before committing
@@ -756,18 +844,40 @@ This project was migrated from BigQuery to PostgreSQL in v2.0:
 ```
 cel2sql/
 ├── cel2sql.go              # Main conversion engine
+├── analysis.go             # Query analysis and index recommendations (multi-dialect)
 ├── comprehensions.go       # CEL comprehensions support
 ├── json.go                 # JSON/JSONB handling
 ├── operators.go            # Operator conversion
 ├── timestamps.go           # Timestamp/duration handling
 ├── utils.go                # Utility functions
+├── schema/                 # Dialect-agnostic schema types
+│   └── schema.go           # FieldSchema, Schema with O(1) lookup
 ├── pg/                     # PostgreSQL type provider
-│   └── provider.go
+│   └── provider.go         # LoadTableSchema via information_schema + pgxpool
+├── mysql/                  # MySQL type provider
+│   └── provider.go         # LoadTableSchema via information_schema + *sql.DB
+├── sqlite/                 # SQLite type provider
+│   └── provider.go         # LoadTableSchema via PRAGMA table_info + *sql.DB
+├── duckdb/                 # DuckDB type provider
+│   └── provider.go         # LoadTableSchema via information_schema + *sql.DB
+├── bigquery/               # BigQuery type provider
+│   └── provider.go         # LoadTableSchema via BigQuery client API
+├── dialect/                # Dialect interface and implementations
+│   ├── dialect.go          # Core Dialect interface (~40 methods)
+│   ├── index_advisor.go    # IndexAdvisor interface, PatternType, IndexPattern
+│   ├── postgres/           # PostgreSQL dialect + IndexAdvisor (BTREE, GIN, GIN+trgm)
+│   ├── mysql/              # MySQL dialect + IndexAdvisor (BTREE, FULLTEXT)
+│   ├── sqlite/             # SQLite dialect + IndexAdvisor (BTREE only)
+│   ├── duckdb/             # DuckDB dialect + IndexAdvisor (ART)
+│   └── bigquery/           # BigQuery dialect + IndexAdvisor (CLUSTERING, SEARCH_INDEX)
 ├── sqltypes/               # Custom SQL types for CEL
 │   └── types.go
+├── testcases/              # Shared test cases with per-dialect expected SQL
+├── testutil/               # Multi-dialect test runner + env factories
 └── examples/               # Usage examples
     ├── basic/
     ├── comprehensions/
+    ├── index_analysis/     # Multi-dialect index recommendation demo
     └── load_table_schema/
 ```
 

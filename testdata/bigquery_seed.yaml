@@ -1,0 +1,78 @@
+projects:
+  - id: test-project
+    datasets:
+      - id: testdataset
+        tables:
+          - id: test_data
+            columns:
+              - name: id
+                type: INT64
+              - name: text_val
+                type: STRING
+              - name: int_val
+                type: INT64
+              - name: float_val
+                type: FLOAT64
+              - name: bool_val
+                type: BOOL
+              - name: nullable_text
+                type: STRING
+              - name: nullable_int
+                type: INT64
+            data:
+              - id: 1
+                text_val: "hello"
+                int_val: 10
+                float_val: 10.5
+                bool_val: true
+                nullable_text: "present"
+                nullable_int: 100
+              - id: 2
+                text_val: "world"
+                int_val: 20
+                float_val: 20.5
+                bool_val: false
+              - id: 3
+                text_val: "test"
+                int_val: 30
+                float_val: 30.5
+                bool_val: true
+                nullable_text: "here"
+                nullable_int: 200
+              - id: 4
+                text_val: "hello world"
+                int_val: 5
+                float_val: 5.5
+                bool_val: false
+                nullable_text: "value"
+                nullable_int: 50
+              - id: 5
+                text_val: "testing"
+                int_val: 15
+                float_val: 15.5
+                bool_val: true
+                nullable_text: "test"
+                nullable_int: 150
+          - id: products
+            columns:
+              - name: id
+                type: INT64
+              - name: name
+                type: STRING
+              - name: price
+                type: FLOAT64
+              - name: metadata
+                type: STRING
+            data:
+              - id: 1
+                name: "Widget"
+                price: 19.99
+                metadata: '{"brand": "Acme", "color": "red", "specs": {"weight": 100}}'
+              - id: 2
+                name: "Gadget"
+                price: 29.99
+                metadata: '{"brand": "Beta", "color": "blue", "specs": {"weight": 200}}'
+              - id: 3
+                name: "Doohickey"
+                price: 39.99
+                metadata: '{"brand": "Acme", "color": "green", "specs": {"weight": 150}}'

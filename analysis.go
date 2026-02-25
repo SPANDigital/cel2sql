@@ -4,16 +4,18 @@ package cel2sql
 import (
 	"fmt"
 	"log/slog"
-	"strings"
 	"time"
 
 	"github.com/google/cel-go/cel"
 	"github.com/google/cel-go/common/operators"
 	"github.com/google/cel-go/common/overloads"
 	exprpb "google.golang.org/genproto/googleapis/api/expr/v1alpha1"
+
+	"github.com/spandigital/cel2sql/v3/dialect"
+	"github.com/spandigital/cel2sql/v3/dialect/postgres"
 )
 
-// Index type constants for recommendations
+// Index type constants for recommendations (kept for backward compatibility).
 const (
 	// IndexTypeBTree represents a B-tree index for efficient range queries and equality checks
 	IndexTypeBTree = "BTREE"
@@ -29,10 +31,10 @@ type IndexRecommendation struct {
 	// Column is the database column that should be indexed
 	Column string
 
-	// IndexType specifies the PostgreSQL index type (e.g., "BTREE", "GIN", "GIST")
+	// IndexType specifies the index type (e.g., "BTREE", "GIN", "ART", "CLUSTERING")
 	IndexType string
 
-	// Expression is the complete CREATE INDEX statement that can be executed directly
+	// Expression is the complete DDL statement that can be executed directly
 	Expression string
 
 	// Reason explains why this index is recommended and what query patterns it optimizes
@@ -44,21 +46,25 @@ type analysisConverter struct {
 	*converter
 	recommendations map[string]*IndexRecommendation // Key: column name, Value: recommendation
 	visitedColumns  map[string]bool                 // Track which columns have been accessed
+	advisor         dialect.IndexAdvisor            // Dialect-specific index advisor
 }
 
-// AnalyzeQuery converts a CEL AST to PostgreSQL SQL and provides index recommendations.
+// AnalyzeQuery converts a CEL AST to SQL and provides dialect-specific index recommendations.
 // It analyzes the query patterns to suggest indexes that would optimize performance.
 //
 // The function detects patterns that benefit from specific index types:
-//   - JSON/JSONB path operations (->>, ?) → GIN indexes
-//   - Array operations (UNNEST, comprehensions) → GIN indexes
-//   - Regex matching (matches()) → GIN indexes with pg_trgm extension
-//   - Frequently accessed fields in comparisons → B-tree indexes
+//   - JSON/JSONB path operations → GIN indexes (PostgreSQL), functional indexes (MySQL), search indexes (BigQuery)
+//   - Array operations → GIN indexes (PostgreSQL), ART indexes (DuckDB)
+//   - Regex matching → GIN indexes with pg_trgm (PostgreSQL), FULLTEXT indexes (MySQL)
+//   - Comparison operations → B-tree indexes (PostgreSQL/MySQL/SQLite), ART (DuckDB), clustering (BigQuery)
+//
+// Use WithDialect() to get dialect-specific index recommendations. Defaults to PostgreSQL.
 //
 // Example:
 //
 //	sql, recommendations, err := cel2sql.AnalyzeQuery(ast,
-//	    cel2sql.WithSchemas(schemas))
+//	    cel2sql.WithSchemas(schemas),
+//	    cel2sql.WithDialect(mysql.New()))
 //	if err != nil {
 //	    return err
 //	}
@@ -84,6 +90,19 @@ func AnalyzeQuery(ast *cel.Ast, opts ...ConvertOption) (string, []IndexRecommend
 		opt(options)
 	}
 
+	// Default to PostgreSQL dialect if none specified
+	d := options.dialect
+	if d == nil {
+		d = postgres.New()
+	}
+
+	// Get the IndexAdvisor for the dialect (all built-in dialects implement it)
+	advisor, hasAdvisor := dialect.GetIndexAdvisor(d)
+	if !hasAdvisor {
+		// Fallback: use PostgreSQL advisor for backward compatibility
+		advisor = postgres.New()
+	}
+
 	// Convert AST to CheckedExpr
 	checkedExpr, err := cel.AstToCheckedExpr(ast)
 	if err != nil {
@@ -104,6 +123,7 @@ func AnalyzeQuery(ast *cel.Ast, opts ...ConvertOption) (string, []IndexRecommend
 		converter:       baseConverter,
 		recommendations: make(map[string]*IndexRecommendation),
 		visitedColumns:  make(map[string]bool),
+		advisor:         advisor,
 	}
 
 	// Analyze the expression tree to collect index patterns
@@ -121,6 +141,7 @@ func AnalyzeQuery(ast *cel.Ast, opts ...ConvertOption) (string, []IndexRecommend
 	if options.logger != nil {
 		options.logger.Debug("query analysis completed",
 			"sql", sql,
+			"dialect", d.Name(),
 			"recommendation_count", len(analyzer.recommendations),
 			"duration", duration)
 	}
@@ -225,24 +246,18 @@ func (a *analysisConverter) analyzeCall(expr *exprpb.Expr) error {
 
 	switch fun {
 	case overloads.Matches:
-		// Regex matching benefits from GIN index with pg_trgm extension
-		if err := a.recommendRegexIndex(expr); err != nil {
-			return err
-		}
+		// Regex matching benefits from dialect-specific indexes
+		a.recommendRegexIndex(expr)
 
 	case operators.Equals, operators.NotEquals,
 		operators.Greater, operators.GreaterEquals,
 		operators.Less, operators.LessEquals:
-		// Comparison operations benefit from B-tree indexes
-		if err := a.recommendComparisonIndex(expr); err != nil {
-			return err
-		}
+		// Comparison operations benefit from indexes
+		a.recommendComparisonIndex(expr)
 
 	case operators.In:
-		// IN operations on arrays benefit from GIN indexes
-		if err := a.recommendArrayIndex(expr); err != nil {
-			return err
-		}
+		// IN operations on arrays benefit from indexes
+		a.recommendArrayIndex(expr)
 	}
 
 	return nil
@@ -259,26 +274,13 @@ func (a *analysisConverter) analyzeComprehension(expr *exprpb.Expr) error {
 
 	// Check if this is a JSON array comprehension
 	if a.isJSONArrayField(iterRange) {
-		// Extract the column name from the iter range
 		if column := a.extractColumnName(iterRange); column != "" {
-			a.addRecommendation(column, &IndexRecommendation{
-				Column:    column,
-				IndexType: IndexTypeGIN,
-				Expression: fmt.Sprintf("CREATE INDEX idx_%s_gin ON table_name USING GIN (%s);",
-					sanitizeIndexName(column), column),
-				Reason: fmt.Sprintf("JSONB array comprehension on '%s' benefits from GIN index for efficient array element access", column),
-			})
+			a.recommendForPattern(column, dialect.PatternJSONArrayComprehension)
 		}
 	} else {
 		// Regular array comprehension
 		if column := a.extractColumnName(iterRange); column != "" {
-			a.addRecommendation(column, &IndexRecommendation{
-				Column:    column,
-				IndexType: IndexTypeGIN,
-				Expression: fmt.Sprintf("CREATE INDEX idx_%s_gin ON table_name USING GIN (%s);",
-					sanitizeIndexName(column), column),
-				Reason: fmt.Sprintf("Array comprehension on '%s' benefits from GIN index for efficient array operations", column),
-			})
+			a.recommendForPattern(column, dialect.PatternArrayComprehension)
 		}
 	}
 
@@ -299,13 +301,7 @@ func (a *analysisConverter) analyzeSelect(expr *exprpb.Expr) error {
 			// Check if the parent field is JSON
 			if a.isFieldJSON(tableName, operandField) {
 				column := tableName + "." + operandField
-				a.addRecommendation(column, &IndexRecommendation{
-					Column:    column,
-					IndexType: IndexTypeGIN,
-					Expression: fmt.Sprintf("CREATE INDEX idx_%s_gin ON table_name USING GIN (%s);",
-						sanitizeIndexName(column), column),
-					Reason: fmt.Sprintf("JSON path operations on '%s' benefit from GIN index for efficient nested field access", column),
-				})
+				a.recommendForPattern(column, dialect.PatternJSONAccess)
 			}
 		}
 	}
@@ -315,15 +311,9 @@ func (a *analysisConverter) analyzeSelect(expr *exprpb.Expr) error {
 		tableName := identExpr.GetName()
 		if a.isFieldJSON(tableName, fieldName) {
 			column := tableName + "." + fieldName
-			a.addRecommendation(column, &IndexRecommendation{
-				Column:    column,
-				IndexType: IndexTypeGIN,
-				Expression: fmt.Sprintf("CREATE INDEX idx_%s_gin ON table_name USING GIN (%s);",
-					sanitizeIndexName(column), column),
-				Reason: fmt.Sprintf("JSON field '%s' benefits from GIN index for efficient access", column),
-			})
+			a.recommendForPattern(column, dialect.PatternJSONAccess)
 		}
-		// Track column access for potential B-tree indexes
+		// Track column access for potential indexes
 		fullColumn := tableName + "." + fieldName
 		a.visitedColumns[fullColumn] = true
 	}
@@ -331,8 +321,8 @@ func (a *analysisConverter) analyzeSelect(expr *exprpb.Expr) error {
 	return nil
 }
 
-// recommendRegexIndex recommends a GIN index with pg_trgm for regex operations
-func (a *analysisConverter) recommendRegexIndex(expr *exprpb.Expr) error {
+// recommendRegexIndex recommends an index for regex operations
+func (a *analysisConverter) recommendRegexIndex(expr *exprpb.Expr) {
 	c := expr.GetCallExpr()
 	target := c.GetTarget()
 
@@ -342,54 +332,38 @@ func (a *analysisConverter) recommendRegexIndex(expr *exprpb.Expr) error {
 
 	if target != nil {
 		if column := a.extractColumnName(target); column != "" {
-			a.addRecommendation(column, &IndexRecommendation{
-				Column:    column,
-				IndexType: IndexTypeGIN,
-				Expression: fmt.Sprintf("CREATE INDEX idx_%s_gin_trgm ON table_name USING GIN (%s gin_trgm_ops);",
-					sanitizeIndexName(column), column),
-				Reason: fmt.Sprintf("Regex matching on '%s' benefits from GIN index with pg_trgm extension for pattern matching", column),
-			})
+			a.recommendForPattern(column, dialect.PatternRegexMatch)
 		}
 	}
-
-	return nil
 }
 
-// recommendComparisonIndex recommends a B-tree index for comparison operations
-func (a *analysisConverter) recommendComparisonIndex(expr *exprpb.Expr) error {
+// recommendComparisonIndex recommends an index for comparison operations
+func (a *analysisConverter) recommendComparisonIndex(expr *exprpb.Expr) {
 	c := expr.GetCallExpr()
 	args := c.GetArgs()
 
 	if len(args) < 2 {
-		return nil
+		return
 	}
 
 	lhs := args[0]
 
 	// Extract column from left-hand side
 	if column := a.extractColumnName(lhs); column != "" {
-		// Check if this is a JSON field (skip B-tree recommendation for JSON)
+		// Check if this is a JSON field (skip comparison recommendation for JSON)
 		if !a.isJSONField(lhs) {
-			a.addRecommendation(column, &IndexRecommendation{
-				Column:    column,
-				IndexType: IndexTypeBTree,
-				Expression: fmt.Sprintf("CREATE INDEX idx_%s_btree ON table_name (%s);",
-					sanitizeIndexName(column), column),
-				Reason: fmt.Sprintf("Comparison operations on '%s' benefit from B-tree index for efficient range queries and equality checks", column),
-			})
+			a.recommendForPattern(column, dialect.PatternComparison)
 		}
 	}
-
-	return nil
 }
 
-// recommendArrayIndex recommends a GIN index for array containment operations
-func (a *analysisConverter) recommendArrayIndex(expr *exprpb.Expr) error {
+// recommendArrayIndex recommends an index for array containment operations
+func (a *analysisConverter) recommendArrayIndex(expr *exprpb.Expr) {
 	c := expr.GetCallExpr()
 	args := c.GetArgs()
 
 	if len(args) < 2 {
-		return nil
+		return
 	}
 
 	rhs := args[1]
@@ -397,17 +371,26 @@ func (a *analysisConverter) recommendArrayIndex(expr *exprpb.Expr) error {
 	// Check if the right-hand side is an array field
 	if a.isFieldArray(a.extractTableName(rhs), a.extractFieldName(rhs)) {
 		if column := a.extractColumnName(rhs); column != "" {
-			a.addRecommendation(column, &IndexRecommendation{
-				Column:    column,
-				IndexType: IndexTypeGIN,
-				Expression: fmt.Sprintf("CREATE INDEX idx_%s_gin ON table_name USING GIN (%s);",
-					sanitizeIndexName(column), column),
-				Reason: fmt.Sprintf("Array membership tests on '%s' benefit from GIN index for efficient element lookups", column),
-			})
+			a.recommendForPattern(column, dialect.PatternArrayMembership)
 		}
 	}
+}
 
-	return nil
+// recommendForPattern asks the dialect's IndexAdvisor for a recommendation and stores it.
+func (a *analysisConverter) recommendForPattern(column string, pattern dialect.PatternType) {
+	rec := a.advisor.RecommendIndex(dialect.IndexPattern{
+		Column:  column,
+		Pattern: pattern,
+	})
+	if rec == nil {
+		return
+	}
+	a.addRecommendation(column, &IndexRecommendation{
+		Column:     rec.Column,
+		IndexType:  rec.IndexType,
+		Expression: rec.Expression,
+		Reason:     rec.Reason,
+	})
 }
 
 // extractColumnName extracts the full column name (table.column) from an expression
@@ -458,34 +441,25 @@ func (a *analysisConverter) isJSONField(expr *exprpb.Expr) bool {
 	return false
 }
 
-// addRecommendation adds or updates an index recommendation
+// addRecommendation adds or updates an index recommendation.
+// When a more specialized recommendation exists for a column, it takes priority.
 func (a *analysisConverter) addRecommendation(column string, rec *IndexRecommendation) {
 	// Only add if we don't already have a recommendation for this column
-	// or if the new recommendation is more specific (e.g., GIN over BTREE)
+	// or if the new recommendation is more specific
 	existing, exists := a.recommendations[column]
 	if !exists {
 		a.recommendations[column] = rec
 		return
 	}
 
-	// GIN indexes are more versatile than BTREE for JSON/array operations
-	// If we already have a BTREE recommendation and we're suggesting GIN, upgrade it
-	if existing.IndexType == IndexTypeBTree && rec.IndexType == IndexTypeGIN {
+	// More specialized index types take priority over basic B-tree/comparison indexes
+	if isBasicIndexType(existing.IndexType) && !isBasicIndexType(rec.IndexType) {
 		a.recommendations[column] = rec
 	}
 }
 
-// sanitizeIndexName creates a safe index name from a column name
-func sanitizeIndexName(column string) string {
-	// Replace dots and special characters with underscores
-	sanitized := strings.ReplaceAll(column, ".", "_")
-	sanitized = strings.ReplaceAll(sanitized, " ", "_")
-	sanitized = strings.ReplaceAll(sanitized, "-", "_")
-
-	// PostgreSQL index names are limited to 63 characters
-	if len(sanitized) > 50 {
-		sanitized = sanitized[:50]
-	}
-
-	return sanitized
+// isBasicIndexType returns true if the index type is a basic comparison index
+// that should be upgraded when a more specialized recommendation is available.
+func isBasicIndexType(indexType string) bool {
+	return indexType == IndexTypeBTree || indexType == "ART" || indexType == "CLUSTERING"
 }

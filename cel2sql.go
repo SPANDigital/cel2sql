@@ -1,13 +1,12 @@
-// Package cel2sql converts CEL (Common Expression Language) expressions to PostgreSQL SQL conditions.
+// Package cel2sql converts CEL (Common Expression Language) expressions to SQL conditions.
+// It supports multiple SQL dialects through the dialect interface, with PostgreSQL as the default.
 package cel2sql
 
 import (
 	"context"
-	"encoding/hex"
 	"fmt"
 	"log/slog"
 	"math"
-	"regexp"
 	"slices"
 	"strconv"
 	"strings"
@@ -18,26 +17,16 @@ import (
 	"github.com/google/cel-go/common/overloads"
 	exprpb "google.golang.org/genproto/googleapis/api/expr/v1alpha1"
 
+	"github.com/spandigital/cel2sql/v3/dialect"
+	"github.com/spandigital/cel2sql/v3/dialect/postgres"
 	"github.com/spandigital/cel2sql/v3/schema"
 )
 
 // Implementations based on `google/cel-go`'s unparser
 // https://github.com/google/cel-go/blob/master/parser/unparser.go
 
-// Regex pattern complexity limits to prevent ReDoS attacks (CWE-1333).
+// Resource limit constants.
 const (
-	// maxRegexPatternLength is the maximum allowed length for regex patterns
-	// to prevent processing extremely long patterns that could cause DoS.
-	maxRegexPatternLength = 500
-
-	// maxRegexGroups is the maximum number of capture groups allowed in a pattern
-	// to prevent memory exhaustion and slow matching.
-	maxRegexGroups = 20
-
-	// maxRegexNestingDepth is the maximum nesting depth for groups and quantifiers
-	// to prevent catastrophic backtracking.
-	maxRegexNestingDepth = 10
-
 	// defaultMaxRecursionDepth is the default maximum recursion depth for visit()
 	// to prevent stack overflow from deeply nested expressions (CWE-674: Uncontrolled Recursion).
 	defaultMaxRecursionDepth = 100
@@ -65,8 +54,23 @@ type convertOptions struct {
 	schemas      map[string]schema.Schema
 	ctx          context.Context
 	logger       *slog.Logger
-	maxDepth     int // Maximum recursion depth (0 = use default)
-	maxOutputLen int // Maximum SQL output length (0 = use default)
+	maxDepth     int             // Maximum recursion depth (0 = use default)
+	maxOutputLen int             // Maximum SQL output length (0 = use default)
+	dialect      dialect.Dialect // SQL dialect (nil = PostgreSQL default)
+}
+
+// WithDialect sets the SQL dialect for conversion.
+// If not provided, PostgreSQL is used as the default dialect.
+//
+// Example:
+//
+//	import "github.com/spandigital/cel2sql/v3/dialect/mysql"
+//
+//	sql, err := cel2sql.Convert(ast, cel2sql.WithDialect(mysql.New()))
+func WithDialect(d dialect.Dialect) ConvertOption {
+	return func(o *convertOptions) {
+		o.dialect = d
+	}
 }
 
 // WithSchemas provides schema information for proper JSON/JSONB field handling.
@@ -177,16 +181,20 @@ type Result struct {
 	Parameters []any  // Parameter values in order ($1, $2, etc.)
 }
 
-// Convert converts a CEL AST to a PostgreSQL SQL WHERE clause condition.
-// Options can be provided to configure the conversion behavior.
+// Convert converts a CEL AST to a SQL WHERE clause condition.
+// By default, PostgreSQL SQL is generated. Use WithDialect to select a different dialect.
 //
-// Example without options:
+// Example without options (PostgreSQL):
 //
 //	sql, err := cel2sql.Convert(ast)
 //
 // Example with schema information for JSON/JSONB support:
 //
 //	sql, err := cel2sql.Convert(ast, cel2sql.WithSchemas(schemas))
+//
+// Example with a different dialect:
+//
+//	sql, err := cel2sql.Convert(ast, cel2sql.WithDialect(mysql.New()))
 func Convert(ast *cel.Ast, opts ...ConvertOption) (string, error) {
 	start := time.Now()
 
@@ -197,6 +205,11 @@ func Convert(ast *cel.Ast, opts ...ConvertOption) (string, error) {
 	}
 	for _, opt := range opts {
 		opt(options)
+	}
+
+	// Default to PostgreSQL dialect if none specified
+	if options.dialect == nil {
+		options.dialect = postgres.New()
 	}
 
 	options.logger.Debug("starting CEL to SQL conversion")
@@ -212,6 +225,7 @@ func Convert(ast *cel.Ast, opts ...ConvertOption) (string, error) {
 		schemas:      options.schemas,
 		ctx:          options.ctx,
 		logger:       options.logger,
+		dialect:      options.dialect,
 		maxDepth:     options.maxDepth,
 		maxOutputLen: options.maxOutputLen,
 	}
@@ -227,15 +241,16 @@ func Convert(ast *cel.Ast, opts ...ConvertOption) (string, error) {
 	options.logger.LogAttrs(context.Background(), slog.LevelDebug,
 		"conversion completed",
 		slog.String("sql", result),
+		slog.String("dialect", string(options.dialect.Name())),
 		slog.Duration("duration", duration),
 	)
 
 	return result, nil
 }
 
-// ConvertParameterized converts a CEL AST to a parameterized PostgreSQL SQL WHERE clause.
-// Returns both the SQL string with placeholders ($1, $2, etc.) and the parameter values.
-// This enables query plan caching and provides additional SQL injection protection.
+// ConvertParameterized converts a CEL AST to a parameterized SQL WHERE clause.
+// Returns both the SQL string with placeholders and the parameter values.
+// By default uses PostgreSQL ($1, $2). Use WithDialect for other placeholder styles.
 //
 // Constants that are parameterized:
 //   - String literals: 'John' → $1
@@ -268,6 +283,11 @@ func ConvertParameterized(ast *cel.Ast, opts ...ConvertOption) (*Result, error) 
 		opt(options)
 	}
 
+	// Default to PostgreSQL dialect if none specified
+	if options.dialect == nil {
+		options.dialect = postgres.New()
+	}
+
 	options.logger.Debug("starting parameterized CEL to SQL conversion")
 
 	checkedExpr, err := cel.AstToCheckedExpr(ast)
@@ -281,6 +301,7 @@ func ConvertParameterized(ast *cel.Ast, opts ...ConvertOption) (*Result, error) 
 		schemas:      options.schemas,
 		ctx:          options.ctx,
 		logger:       options.logger,
+		dialect:      options.dialect,
 		maxDepth:     options.maxDepth,
 		maxOutputLen: options.maxOutputLen,
 		parameterize: true, // Enable parameterization
@@ -313,13 +334,14 @@ type converter struct {
 	schemas            map[string]schema.Schema
 	ctx                context.Context
 	logger             *slog.Logger
+	dialect            dialect.Dialect
 	depth              int   // Current recursion depth
 	maxDepth           int   // Maximum allowed recursion depth
 	maxOutputLen       int   // Maximum allowed SQL output length
 	comprehensionDepth int   // Current comprehension nesting depth
 	parameterize       bool  // Enable parameterized output
 	parameters         []any // Collected parameters for parameterized queries
-	paramCount         int   // Parameter counter for placeholders ($1, $2, etc.)
+	paramCount         int   // Parameter counter for placeholders
 }
 
 // checkContext checks if the context has been cancelled or expired.
@@ -599,6 +621,30 @@ func (con *converter) visitCallBinary(expr *exprpb.Expr) error {
 		rhsParen = isSamePrecedence(fun, rhs)
 	}
 
+	// Handle string concatenation via dialect before writing LHS.
+	// This allows MySQL to use CONCAT() instead of ||.
+	if fun == operators.Add &&
+		((lhsType.GetPrimitive() == exprpb.Type_STRING && rhsType.GetPrimitive() == exprpb.Type_STRING) ||
+			(isStringLiteral(lhs) || isStringLiteral(rhs))) {
+		return con.dialect.WriteStringConcat(&con.str,
+			func() error { return con.visitMaybeNested(lhs, lhsParen) },
+			func() error { return con.visitMaybeNested(rhs, rhsParen) },
+		)
+	}
+
+	// Handle array membership (IN operator with list) via dialect before writing LHS.
+	// This allows dialects like SQLite to use a fundamentally different pattern
+	// (e.g., "elem IN (SELECT value FROM json_each(array))") instead of "elem = ANY(array)".
+	if fun == operators.In && isListType(rhsType) {
+		// Non-JSON list membership
+		if !isFieldAccessExpression(rhs) || !con.isJSONArrayField(rhs) {
+			return con.dialect.WriteArrayMembership(&con.str,
+				func() error { return con.visitMaybeNested(lhs, lhsParen) },
+				func() error { return con.visitMaybeNested(rhs, rhsParen) },
+			)
+		}
+	}
+
 	// Check if we need numeric casting for JSON text extraction
 	needsNumericCasting := false
 	if con.isJSONTextExtraction(lhs) && isNumericComparison(fun) && isNumericType(rhsType) {
@@ -611,7 +657,8 @@ func (con *converter) visitCallBinary(expr *exprpb.Expr) error {
 	}
 
 	if needsNumericCasting {
-		con.str.WriteString(")::numeric")
+		con.str.WriteString(")")
+		con.dialect.WriteCastToNumeric(&con.str)
 	}
 	var operator string
 	if fun == operators.Add && (lhsType.GetPrimitive() == exprpb.Type_STRING && rhsType.GetPrimitive() == exprpb.Type_STRING) {
@@ -655,28 +702,25 @@ func (con *converter) visitCallBinary(expr *exprpb.Expr) error {
 	if fun == operators.In && (isListType(rhsType) || isFieldAccessExpression(rhs)) {
 		// Check if we're dealing with a JSON array
 		if isFieldAccessExpression(rhs) && con.isJSONArrayField(rhs) {
-			// For JSON arrays, use jsonb_array_elements with ANY
+			// For JSON arrays, use dialect-specific JSON array membership
 			jsonFunc := con.getJSONArrayFunction(rhs)
-			con.str.WriteString("ANY(ARRAY(SELECT ")
 
 			// For nested JSON access like settings.permissions, we need to handle differently
 			if con.isNestedJSONAccess(rhs) {
-				// Use text extraction for the array elements
-				con.str.WriteString("jsonb_array_elements_text(")
-				// Generate the JSON path with -> instead of ->> to preserve JSONB type
-				if err := con.visitNestedJSONForArray(rhs); err != nil {
+				// Use dialect-specific nested JSON array membership
+				if err := con.dialect.WriteNestedJSONArrayMembership(&con.str, func() error {
+					return con.visitNestedJSONForArray(rhs)
+				}); err != nil {
 					return err
 				}
-				con.str.WriteString(")))")
 				return nil
 			}
 			// For direct JSON array access
-			con.str.WriteString(jsonFunc)
-			con.str.WriteString("(")
-			if err := con.visitMaybeNested(rhs, rhsParen); err != nil {
+			if err := con.dialect.WriteJSONArrayMembership(&con.str, jsonFunc, func() error {
+				return con.visitMaybeNested(rhs, rhsParen)
+			}); err != nil {
 				return err
 			}
-			con.str.WriteString(")))")
 			return nil
 		}
 		con.str.WriteString("ANY(")
@@ -728,27 +772,27 @@ func (con *converter) callContains(target *exprpb.Expr, args []*exprpb.Expr) err
 		return nil
 	}
 
-	// For regular strings, use POSITION
-	con.str.WriteString("POSITION(")
-	for i, arg := range args {
-		err := con.visit(arg)
-		if err != nil {
-			return err
-		}
-		if i < len(args)-1 {
-			con.str.WriteString(" IN ")
-		}
-	}
-	if target != nil {
-		con.str.WriteString(" IN ")
-		nested := isBinaryOrTernaryOperator(target)
-		err := con.visitMaybeNested(target, nested)
-		if err != nil {
-			return err
-		}
-	}
-	con.str.WriteString(") > 0")
-	return nil
+	// For regular strings, use dialect-specific contains
+	return con.dialect.WriteContains(&con.str,
+		func() error {
+			if target != nil {
+				nested := isBinaryOrTernaryOperator(target)
+				return con.visitMaybeNested(target, nested)
+			}
+			return nil
+		},
+		func() error {
+			for i, arg := range args {
+				if err := con.visit(arg); err != nil {
+					return err
+				}
+				if i < len(args)-1 {
+					con.str.WriteString(", ")
+				}
+			}
+			return nil
+		},
+	)
 }
 
 func (con *converter) callStartsWith(target *exprpb.Expr, args []*exprpb.Expr) error {
@@ -780,14 +824,16 @@ func (con *converter) callStartsWith(target *exprpb.Expr, args []*exprpb.Expr) e
 		escaped := escapeLikePattern(prefix)
 		con.str.WriteString("'")
 		con.str.WriteString(escaped)
-		con.str.WriteString("%' ESCAPE E'\\\\'")
+		con.str.WriteString("%'")
+		con.dialect.WriteLikeEscape(&con.str)
 	} else {
 		// For non-literal patterns, escape special characters at runtime and concatenate with %
 		con.str.WriteString("REPLACE(REPLACE(REPLACE(")
 		if err := con.visit(args[0]); err != nil {
 			return err
 		}
-		con.str.WriteString(", '\\\\', '\\\\\\\\'), '%', '\\%'), '_', '\\_') || '%' ESCAPE E'\\\\'")
+		con.str.WriteString(", '\\\\', '\\\\\\\\'), '%', '\\%'), '_', '\\_') || '%'")
+		con.dialect.WriteLikeEscape(&con.str)
 	}
 
 	return nil
@@ -795,8 +841,7 @@ func (con *converter) callStartsWith(target *exprpb.Expr, args []*exprpb.Expr) e
 
 func (con *converter) callEndsWith(target *exprpb.Expr, args []*exprpb.Expr) error {
 	// CEL endsWith function: string.endsWith(suffix)
-	// Convert to PostgreSQL: string LIKE '%suffix'
-	// or for more robust handling: RIGHT(string, LENGTH(suffix)) = suffix
+	// Convert to SQL: string LIKE '%suffix'
 
 	if target == nil || len(args) == 0 {
 		return fmt.Errorf("%w: endsWith function requires both string and suffix arguments", ErrInvalidArguments)
@@ -822,14 +867,16 @@ func (con *converter) callEndsWith(target *exprpb.Expr, args []*exprpb.Expr) err
 		escaped := escapeLikePattern(suffix)
 		con.str.WriteString("'%")
 		con.str.WriteString(escaped)
-		con.str.WriteString("' ESCAPE E'\\\\'")
+		con.str.WriteString("'")
+		con.dialect.WriteLikeEscape(&con.str)
 	} else {
 		// For non-literal patterns, escape special characters at runtime and concatenate with %
 		con.str.WriteString("'%' || REPLACE(REPLACE(REPLACE(")
 		if err := con.visit(args[0]); err != nil {
 			return err
 		}
-		con.str.WriteString(", '\\\\', '\\\\\\\\'), '%', '\\%'), '_', '\\_') ESCAPE E'\\\\'")
+		con.str.WriteString(", '\\\\', '\\\\\\\\'), '%', '\\%'), '_', '\\_')")
+		con.dialect.WriteLikeEscape(&con.str)
 	}
 
 	return nil
@@ -841,40 +888,44 @@ func (con *converter) callCasting(function string, _ *exprpb.Expr, args []*exprp
 	}
 	arg := args[0]
 	if function == overloads.TypeConvertInt && isTimestampType(con.getType(arg)) {
-		con.str.WriteString("EXTRACT(EPOCH FROM ")
-		if err := con.visit(arg); err != nil {
-			return err
-		}
-		con.str.WriteString(")::bigint")
-		return nil
+		return con.dialect.WriteEpochExtract(&con.str, func() error {
+			return con.visit(arg)
+		})
 	}
 	con.str.WriteString("CAST(")
 	if err := con.visit(arg); err != nil {
 		return err
 	}
 	con.str.WriteString(" AS ")
+	// Map CEL type conversion function to dialect-specific type name
+	var celTypeName string
 	switch function {
 	case overloads.TypeConvertBool:
-		con.str.WriteString("BOOLEAN")
+		celTypeName = "bool"
 	case overloads.TypeConvertBytes:
-		con.str.WriteString("BYTEA")
+		celTypeName = "bytes"
 	case overloads.TypeConvertDouble:
-		con.str.WriteString("DOUBLE PRECISION")
+		celTypeName = "double"
 	case overloads.TypeConvertInt:
-		con.str.WriteString("BIGINT")
+		celTypeName = "int"
 	case overloads.TypeConvertString:
-		con.str.WriteString("TEXT")
+		celTypeName = "string"
 	case overloads.TypeConvertUint:
-		con.str.WriteString("BIGINT")
+		celTypeName = "uint"
 	}
+	con.dialect.WriteTypeName(&con.str, celTypeName)
 	con.str.WriteString(")")
 	return nil
 }
 
-// callMatches handles CEL matches() function with RE2 to POSIX regex conversion
+// callMatches handles CEL matches() function with regex conversion
 func (con *converter) callMatches(target *exprpb.Expr, args []*exprpb.Expr) error {
 	// CEL matches function: string.matches(pattern) or matches(string, pattern)
-	// Convert to PostgreSQL: string ~ 'posix_pattern'
+
+	// Check if the dialect supports regex
+	if !con.dialect.SupportsRegex() {
+		return fmt.Errorf("%w: regex matching is not supported by %s dialect", ErrUnsupportedDialectFeature, con.dialect.Name())
+	}
 
 	// Get the string to match against
 	var stringExpr *exprpb.Expr
@@ -896,22 +947,16 @@ func (con *converter) callMatches(target *exprpb.Expr, args []*exprpb.Expr) erro
 		return fmt.Errorf("%w: matches function requires both string and pattern arguments", ErrInvalidArguments)
 	}
 
-	// Visit the string expression
-	if err := con.visit(stringExpr); err != nil {
-		return err
-	}
-
-	// Visit the pattern expression and convert from RE2 to POSIX if it's a string literal
+	// Visit the pattern expression and convert if it's a string literal
 	if constExpr := patternExpr.GetConstExpr(); constExpr != nil && constExpr.GetStringValue() != "" {
-		// Convert RE2 pattern to POSIX
 		re2Pattern := constExpr.GetStringValue()
 		// Reject patterns containing null bytes
 		if strings.Contains(re2Pattern, "\x00") {
 			return fmt.Errorf("%w: regex patterns cannot contain null bytes", ErrInvalidRegexPattern)
 		}
 
-		// Convert RE2 to POSIX with security validation
-		posixPattern, caseInsensitive, err := convertRE2ToPOSIX(re2Pattern)
+		// Convert RE2 to dialect-native format with security validation
+		convertedPattern, caseInsensitive, err := con.dialect.ConvertRegex(re2Pattern)
 		if err != nil {
 			return fmt.Errorf("%w: %w", ErrInvalidRegexPattern, err)
 		}
@@ -919,32 +964,23 @@ func (con *converter) callMatches(target *exprpb.Expr, args []*exprpb.Expr) erro
 		con.logger.LogAttrs(context.Background(), slog.LevelDebug,
 			"regex pattern conversion",
 			slog.String("original_pattern", re2Pattern),
-			slog.String("converted_pattern", posixPattern),
+			slog.String("converted_pattern", convertedPattern),
 			slog.Bool("case_insensitive", caseInsensitive),
+			slog.String("dialect", string(con.dialect.Name())),
 		)
 
-		// Use ~* for case-insensitive matching, ~ for case-sensitive
-		if caseInsensitive {
-			con.str.WriteString(" ~* ")
-		} else {
-			con.str.WriteString(" ~ ")
-		}
-
-		// Write the converted pattern as a string literal
-		escaped := strings.ReplaceAll(posixPattern, "'", "''")
-		con.str.WriteString("'")
-		con.str.WriteString(escaped)
-		con.str.WriteString("'")
-	} else {
-		// For non-literal patterns, we can't convert at compile time
-		// Just use the pattern as-is with case-sensitive operator
-		con.str.WriteString(" ~ ")
-		if err := con.visit(patternExpr); err != nil {
-			return err
-		}
+		// Use dialect-specific regex match writing
+		return con.dialect.WriteRegexMatch(&con.str, func() error {
+			return con.visit(stringExpr)
+		}, convertedPattern, caseInsensitive)
 	}
-
-	return nil
+	// For non-literal patterns, we can't convert at compile time
+	// Visit the string, then write regex operator, then visit the pattern
+	if err := con.visit(stringExpr); err != nil {
+		return err
+	}
+	con.str.WriteString(" ~ ")
+	return con.visit(patternExpr)
 }
 
 // callLowerASCII handles CEL lowerAscii() string function
@@ -1469,53 +1505,36 @@ func (con *converter) callSplit(target *exprpb.Expr, args []*exprpb.Expr) error 
 	}
 
 	// Generate SQL based on limit value
+	writeStr := func() error {
+		nested := isBinaryOrTernaryOperator(stringExpr)
+		return con.visitMaybeNested(stringExpr, nested)
+	}
+	writeDelim := func() error {
+		return con.visit(delimiterExpr)
+	}
+
 	switch {
 	case limit == 0:
 		// Empty array
-		con.str.WriteString("ARRAY[]::text[]")
+		con.dialect.WriteEmptyTypedArray(&con.str, "text")
 		return nil
 
 	case limit == 1:
 		// Return original string as single-element array
-		con.str.WriteString("ARRAY[")
-		nested := isBinaryOrTernaryOperator(stringExpr)
-		if err := con.visitMaybeNested(stringExpr, nested); err != nil {
+		con.dialect.WriteArrayLiteralOpen(&con.str)
+		if err := writeStr(); err != nil {
 			return err
 		}
-		con.str.WriteString("]")
+		con.dialect.WriteArrayLiteralClose(&con.str)
 		return nil
 
 	case limit == -1:
-		// Unlimited splits (default PostgreSQL behavior)
-		con.str.WriteString("STRING_TO_ARRAY(")
-		nested := isBinaryOrTernaryOperator(stringExpr)
-		if err := con.visitMaybeNested(stringExpr, nested); err != nil {
-			return err
-		}
-		con.str.WriteString(", ")
-		if err := con.visit(delimiterExpr); err != nil {
-			return err
-		}
-		con.str.WriteString(")")
-		return nil
+		// Unlimited splits
+		return con.dialect.WriteSplit(&con.str, writeStr, writeDelim)
 
 	case limit > 1:
-		// Arbitrary positive limit - use array slicing with REGEXP_SPLIT_TO_ARRAY
-		// REGEXP_SPLIT_TO_ARRAY is more powerful and allows us to limit splits
-		// Result: (REGEXP_SPLIT_TO_ARRAY(string, delimiter))[1:limit]
-		con.str.WriteString("(STRING_TO_ARRAY(")
-		nested := isBinaryOrTernaryOperator(stringExpr)
-		if err := con.visitMaybeNested(stringExpr, nested); err != nil {
-			return err
-		}
-		con.str.WriteString(", ")
-		if err := con.visit(delimiterExpr); err != nil {
-			return err
-		}
-		con.str.WriteString("))[1:")
-		con.str.WriteString(strconv.FormatInt(limit, 10))
-		con.str.WriteString("]")
-		return nil
+		// Positive limit - use dialect-specific split with limit
+		return con.dialect.WriteSplitWithLimit(&con.str, writeStr, writeDelim, limit)
 
 	default:
 		// Negative limits other than -1 are not supported
@@ -1559,26 +1578,18 @@ func (con *converter) callJoin(target *exprpb.Expr, args []*exprpb.Expr) error {
 		}
 	}
 
-	// Generate SQL
-	con.str.WriteString("ARRAY_TO_STRING(")
-	nested := isBinaryOrTernaryOperator(arrayExpr)
-	if err := con.visitMaybeNested(arrayExpr, nested); err != nil {
-		return err
+	// Generate SQL using dialect-specific join
+	writeArray := func() error {
+		nested := isBinaryOrTernaryOperator(arrayExpr)
+		return con.visitMaybeNested(arrayExpr, nested)
 	}
-	con.str.WriteString(", ")
-
-	// Use provided delimiter or empty string default
+	var writeDelim func() error
 	if delimiterExpr != nil {
-		if err := con.visit(delimiterExpr); err != nil {
-			return err
+		writeDelim = func() error {
+			return con.visit(delimiterExpr)
 		}
-	} else {
-		con.str.WriteString("''")
 	}
-
-	// Third parameter: null_string (use empty string to replace nulls)
-	con.str.WriteString(", '')")
-	return nil
+	return con.dialect.WriteJoin(&con.str, writeArray, writeDelim)
 }
 
 // callFormat handles CEL format() function
@@ -1810,28 +1821,17 @@ func (con *converter) visitCallFunc(expr *exprpb.Expr) error {
 			case isListType(argType):
 				// Check if this is a JSON array field
 				if con.isJSONArrayField(argExpr) {
-					// For JSON arrays, use jsonb_array_length wrapped in COALESCE
-					con.str.WriteString("COALESCE(jsonb_array_length(")
-					err := con.visit(argExpr)
-					if err != nil {
-						return err
-					}
-					con.str.WriteString("), 0)")
-					return nil
+					// For JSON arrays, use dialect-specific JSON array length
+					return con.dialect.WriteJSONArrayLength(&con.str, func() error {
+						return con.visit(argExpr)
+					})
 				}
-				// For PostgreSQL, we need to specify the array dimension
-				// Detect the dimension from schema if available, otherwise default to 1
+				// For native arrays, use dialect-specific array length
 				dimension := con.getArrayDimension(argExpr)
-
-				// Wrap in COALESCE to handle NULL arrays (ARRAY_LENGTH returns NULL for NULL input)
-				con.str.WriteString("COALESCE(ARRAY_LENGTH(")
-				nested := isBinaryOrTernaryOperator(argExpr)
-				err := con.visitMaybeNested(argExpr, nested)
-				if err != nil {
-					return err
-				}
-				fmt.Fprintf(&con.str, ", %d), 0)", dimension)
-				return nil
+				return con.dialect.WriteArrayLength(&con.str, dimension, func() error {
+					nested := isBinaryOrTernaryOperator(argExpr)
+					return con.visitMaybeNested(argExpr, nested)
+				})
 			default:
 				return newConversionErrorf(errMsgUnsupportedType, "size() argument type: %s", argType.String())
 			}
@@ -1900,13 +1900,9 @@ func (con *converter) visitCallListIndex(expr *exprpb.Expr) error {
 		return fmt.Errorf("%w: list index operator requires list and index arguments", ErrInvalidArguments)
 	}
 	l := args[0]
-	nested := isBinaryOrTernaryOperator(l)
-	if err := con.visitMaybeNested(l, nested); err != nil {
-		return err
-	}
-	con.str.WriteString("[")
 	index := args[1]
-	// PostgreSQL arrays are 1-indexed, CEL is 0-indexed, so add 1
+
+	// Check for constant index
 	if constExpr := index.GetConstExpr(); constExpr != nil {
 		idx := constExpr.GetInt64Value()
 		if idx == math.MaxInt64 {
@@ -1915,15 +1911,19 @@ func (con *converter) visitCallListIndex(expr *exprpb.Expr) error {
 		if idx < 0 {
 			return fmt.Errorf("%w: negative array index %d is not supported", ErrInvalidArguments, idx)
 		}
-		con.str.WriteString(strconv.FormatInt(idx+1, 10))
-	} else {
-		if err := con.visit(index); err != nil {
-			return err
-		}
-		con.str.WriteString(" + 1")
+		return con.dialect.WriteListIndexConst(&con.str, func() error {
+			nested := isBinaryOrTernaryOperator(l)
+			return con.visitMaybeNested(l, nested)
+		}, idx)
 	}
-	con.str.WriteString("]")
-	return nil
+
+	// Dynamic index
+	return con.dialect.WriteListIndex(&con.str, func() error {
+		nested := isBinaryOrTernaryOperator(l)
+		return con.visitMaybeNested(l, nested)
+	}, func() error {
+		return con.visit(index)
+	})
 }
 
 func (con *converter) visitCallUnary(expr *exprpb.Expr) error {
@@ -1992,36 +1992,17 @@ func (con *converter) visitComprehension(expr *exprpb.Expr) error {
 // Comprehension visit functions - Phase 1 placeholder implementations
 
 func (con *converter) visitAllComprehension(expr *exprpb.Expr, info *ComprehensionInfo) error {
-	// Generate SQL for ALL comprehension: all elements must satisfy the predicate
-	// Pattern: NOT EXISTS (SELECT 1 FROM UNNEST(array) AS item WHERE NOT predicate)
-	// For JSON arrays: NOT EXISTS (SELECT 1 FROM jsonb_array_elements(json_field) AS item WHERE NOT predicate)
-
 	comprehension := expr.GetComprehensionExpr()
 	if comprehension == nil {
 		return newConversionError(errMsgUnsupportedComprehension, "expression is not a comprehension (ALL)")
 	}
 
 	iterRange := comprehension.GetIterRange()
-	isJSONArray := con.isJSONArrayField(iterRange)
 
 	con.str.WriteString("NOT EXISTS (SELECT 1 FROM ")
-
-	if isJSONArray {
-		jsonFunc := con.getJSONArrayFunction(iterRange)
-		con.str.WriteString(jsonFunc)
-		con.str.WriteString("(")
-		if err := con.visit(iterRange); err != nil {
-			return wrapConversionError(err, "visiting iter range in ALL comprehension")
-		}
-		con.str.WriteString(")")
-	} else {
-		con.str.WriteString("UNNEST(")
-		if err := con.visit(iterRange); err != nil {
-			return wrapConversionError(err, "visiting iter range in ALL comprehension")
-		}
-		con.str.WriteString(")")
+	if err := con.writeComprehensionSource(iterRange); err != nil {
+		return wrapConversionError(err, "visiting iter range in ALL comprehension")
 	}
-
 	con.str.WriteString(" AS ")
 	con.str.WriteString(info.IterVar)
 
@@ -2038,36 +2019,17 @@ func (con *converter) visitAllComprehension(expr *exprpb.Expr, info *Comprehensi
 }
 
 func (con *converter) visitExistsComprehension(expr *exprpb.Expr, info *ComprehensionInfo) error {
-	// Generate SQL for EXISTS comprehension: at least one element satisfies the predicate
-	// Pattern: EXISTS (SELECT 1 FROM UNNEST(array) AS item WHERE predicate)
-	// For JSON arrays: EXISTS (SELECT 1 FROM jsonb_array_elements(json_field) AS item WHERE predicate)
-
 	comprehension := expr.GetComprehensionExpr()
 	if comprehension == nil {
 		return newConversionError(errMsgUnsupportedComprehension, "expression is not a comprehension (EXISTS)")
 	}
 
 	iterRange := comprehension.GetIterRange()
-	isJSONArray := con.isJSONArrayField(iterRange)
 
 	con.str.WriteString("EXISTS (SELECT 1 FROM ")
-
-	if isJSONArray {
-		jsonFunc := con.getJSONArrayFunction(iterRange)
-		con.str.WriteString(jsonFunc)
-		con.str.WriteString("(")
-		if err := con.visit(iterRange); err != nil {
-			return wrapConversionError(err, "visiting iter range in EXISTS comprehension")
-		}
-		con.str.WriteString(")")
-	} else {
-		con.str.WriteString("UNNEST(")
-		if err := con.visit(iterRange); err != nil {
-			return wrapConversionError(err, "visiting iter range in EXISTS comprehension")
-		}
-		con.str.WriteString(")")
+	if err := con.writeComprehensionSource(iterRange); err != nil {
+		return wrapConversionError(err, "visiting iter range in EXISTS comprehension")
 	}
-
 	con.str.WriteString(" AS ")
 	con.str.WriteString(info.IterVar)
 
@@ -2083,36 +2045,17 @@ func (con *converter) visitExistsComprehension(expr *exprpb.Expr, info *Comprehe
 }
 
 func (con *converter) visitExistsOneComprehension(expr *exprpb.Expr, info *ComprehensionInfo) error {
-	// Generate SQL for EXISTS_ONE comprehension: exactly one element satisfies the predicate
-	// Pattern: (SELECT COUNT(*) FROM UNNEST(array) AS item WHERE predicate) = 1
-	// For JSON arrays: (SELECT COUNT(*) FROM jsonb_array_elements(json_field) AS item WHERE predicate) = 1
-
 	comprehension := expr.GetComprehensionExpr()
 	if comprehension == nil {
 		return newConversionError(errMsgUnsupportedComprehension, "expression is not a comprehension (EXISTS_ONE)")
 	}
 
 	iterRange := comprehension.GetIterRange()
-	isJSONArray := con.isJSONArrayField(iterRange)
 
 	con.str.WriteString("(SELECT COUNT(*) FROM ")
-
-	if isJSONArray {
-		jsonFunc := con.getJSONArrayFunction(iterRange)
-		con.str.WriteString(jsonFunc)
-		con.str.WriteString("(")
-		if err := con.visit(iterRange); err != nil {
-			return wrapConversionError(err, "visiting iter range in EXISTS_ONE comprehension")
-		}
-		con.str.WriteString(")")
-	} else {
-		con.str.WriteString("UNNEST(")
-		if err := con.visit(iterRange); err != nil {
-			return wrapConversionError(err, "visiting iter range in EXISTS_ONE comprehension")
-		}
-		con.str.WriteString(")")
+	if err := con.writeComprehensionSource(iterRange); err != nil {
+		return wrapConversionError(err, "visiting iter range in EXISTS_ONE comprehension")
 	}
-
 	con.str.WriteString(" AS ")
 	con.str.WriteString(info.IterVar)
 
@@ -2128,52 +2071,29 @@ func (con *converter) visitExistsOneComprehension(expr *exprpb.Expr, info *Compr
 }
 
 func (con *converter) visitMapComprehension(expr *exprpb.Expr, info *ComprehensionInfo) error {
-	// Generate SQL for MAP comprehension: transform elements using the transform expression
-	// Pattern: ARRAY(SELECT transform FROM UNNEST(array) AS item [WHERE filter])
-	// For JSON arrays: ARRAY(SELECT transform FROM jsonb_array_elements(json_field) AS item [WHERE filter])
-
 	comprehension := expr.GetComprehensionExpr()
 	if comprehension == nil {
 		return newConversionError(errMsgUnsupportedComprehension, "expression is not a comprehension (MAP)")
 	}
 
 	iterRange := comprehension.GetIterRange()
-	isJSONArray := con.isJSONArrayField(iterRange)
 
-	con.str.WriteString("ARRAY(SELECT ")
-
-	// Visit the transform expression
+	con.dialect.WriteArraySubqueryOpen(&con.str)
 	if info.Transform != nil {
 		if err := con.visit(info.Transform); err != nil {
 			return wrapConversionError(err, "visiting transform in MAP comprehension")
 		}
 	} else {
-		// If no transform, just return the variable itself
 		con.str.WriteString(info.IterVar)
 	}
-
+	con.dialect.WriteArraySubqueryExprClose(&con.str)
 	con.str.WriteString(" FROM ")
-
-	if isJSONArray {
-		jsonFunc := con.getJSONArrayFunction(iterRange)
-		con.str.WriteString(jsonFunc)
-		con.str.WriteString("(")
-		if err := con.visit(iterRange); err != nil {
-			return wrapConversionError(err, "visiting iter range in MAP comprehension")
-		}
-		con.str.WriteString(")")
-	} else {
-		con.str.WriteString("UNNEST(")
-		if err := con.visit(iterRange); err != nil {
-			return wrapConversionError(err, "visiting iter range in MAP comprehension")
-		}
-		con.str.WriteString(")")
+	if err := con.writeComprehensionSource(iterRange); err != nil {
+		return wrapConversionError(err, "visiting iter range in MAP comprehension")
 	}
-
 	con.str.WriteString(" AS ")
 	con.str.WriteString(info.IterVar)
 
-	// Add filter condition if present (for map with filter)
 	if info.Filter != nil {
 		con.str.WriteString(" WHERE ")
 		if err := con.visit(info.Filter); err != nil {
@@ -2186,38 +2106,20 @@ func (con *converter) visitMapComprehension(expr *exprpb.Expr, info *Comprehensi
 }
 
 func (con *converter) visitFilterComprehension(expr *exprpb.Expr, info *ComprehensionInfo) error {
-	// Generate SQL for FILTER comprehension: return elements that satisfy the predicate
-	// Pattern: ARRAY(SELECT item FROM UNNEST(array) AS item WHERE predicate)
-	// For JSON arrays: ARRAY(SELECT item FROM jsonb_array_elements(json_field) AS item WHERE predicate)
-
 	comprehension := expr.GetComprehensionExpr()
 	if comprehension == nil {
 		return newConversionError(errMsgUnsupportedComprehension, "expression is not a comprehension (FILTER)")
 	}
 
 	iterRange := comprehension.GetIterRange()
-	isJSONArray := con.isJSONArrayField(iterRange)
 
-	con.str.WriteString("ARRAY(SELECT ")
+	con.dialect.WriteArraySubqueryOpen(&con.str)
 	con.str.WriteString(info.IterVar)
+	con.dialect.WriteArraySubqueryExprClose(&con.str)
 	con.str.WriteString(" FROM ")
-
-	if isJSONArray {
-		jsonFunc := con.getJSONArrayFunction(iterRange)
-		con.str.WriteString(jsonFunc)
-		con.str.WriteString("(")
-		if err := con.visit(iterRange); err != nil {
-			return wrapConversionError(err, "visiting iter range in FILTER comprehension")
-		}
-		con.str.WriteString(")")
-	} else {
-		con.str.WriteString("UNNEST(")
-		if err := con.visit(iterRange); err != nil {
-			return wrapConversionError(err, "visiting iter range in FILTER comprehension")
-		}
-		con.str.WriteString(")")
+	if err := con.writeComprehensionSource(iterRange); err != nil {
+		return wrapConversionError(err, "visiting iter range in FILTER comprehension")
 	}
-
 	con.str.WriteString(" AS ")
 	con.str.WriteString(info.IterVar)
 
@@ -2233,37 +2135,27 @@ func (con *converter) visitFilterComprehension(expr *exprpb.Expr, info *Comprehe
 }
 
 func (con *converter) visitTransformListComprehension(expr *exprpb.Expr, info *ComprehensionInfo) error {
-	// Generate SQL for TRANSFORM_LIST comprehension: similar to MAP but may have different semantics
-	// Pattern: ARRAY(SELECT transform FROM UNNEST(array) AS item [WHERE filter])
-
 	comprehension := expr.GetComprehensionExpr()
 	if comprehension == nil {
 		return newConversionError(errMsgUnsupportedComprehension, "expression is not a comprehension (TRANSFORM_LIST)")
 	}
 
-	con.str.WriteString("ARRAY(SELECT ")
-
-	// Visit the transform expression
+	con.dialect.WriteArraySubqueryOpen(&con.str)
 	if info.Transform != nil {
 		if err := con.visit(info.Transform); err != nil {
 			return wrapConversionError(err, "visiting transform in TRANSFORM_LIST comprehension")
 		}
 	} else {
-		// If no transform, just return the variable itself
 		con.str.WriteString(info.IterVar)
 	}
-
-	con.str.WriteString(" FROM UNNEST(")
-
-	// Visit the iterable range (the array/list being comprehended over)
-	if err := con.visit(comprehension.GetIterRange()); err != nil {
+	con.dialect.WriteArraySubqueryExprClose(&con.str)
+	con.str.WriteString(" FROM ")
+	if err := con.writeComprehensionSource(comprehension.GetIterRange()); err != nil {
 		return wrapConversionError(err, "visiting iter range in TRANSFORM_LIST comprehension")
 	}
-
-	con.str.WriteString(") AS ")
+	con.str.WriteString(" AS ")
 	con.str.WriteString(info.IterVar)
 
-	// Add filter condition if present
 	if info.Filter != nil {
 		con.str.WriteString(" WHERE ")
 		if err := con.visit(info.Filter); err != nil {
@@ -2305,7 +2197,7 @@ func (con *converter) visitConst(expr *exprpb.Expr) error {
 	case *exprpb.Constant_Int64Value:
 		if con.parameterize {
 			con.paramCount++
-			fmt.Fprintf(&con.str, "$%d", con.paramCount)
+			con.dialect.WriteParamPlaceholder(&con.str, con.paramCount)
 			con.parameters = append(con.parameters, c.GetInt64Value())
 		} else {
 			i := strconv.FormatInt(c.GetInt64Value(), 10)
@@ -2314,7 +2206,7 @@ func (con *converter) visitConst(expr *exprpb.Expr) error {
 	case *exprpb.Constant_Uint64Value:
 		if con.parameterize {
 			con.paramCount++
-			fmt.Fprintf(&con.str, "$%d", con.paramCount)
+			con.dialect.WriteParamPlaceholder(&con.str, con.paramCount)
 			con.parameters = append(con.parameters, c.GetUint64Value())
 		} else {
 			ui := strconv.FormatUint(c.GetUint64Value(), 10)
@@ -2323,7 +2215,7 @@ func (con *converter) visitConst(expr *exprpb.Expr) error {
 	case *exprpb.Constant_DoubleValue:
 		if con.parameterize {
 			con.paramCount++
-			fmt.Fprintf(&con.str, "$%d", con.paramCount)
+			con.dialect.WriteParamPlaceholder(&con.str, con.paramCount)
 			con.parameters = append(con.parameters, c.GetDoubleValue())
 		} else {
 			d := strconv.FormatFloat(c.GetDoubleValue(), 'g', -1, 64)
@@ -2338,31 +2230,26 @@ func (con *converter) visitConst(expr *exprpb.Expr) error {
 
 		if con.parameterize {
 			con.paramCount++
-			fmt.Fprintf(&con.str, "$%d", con.paramCount)
+			con.dialect.WriteParamPlaceholder(&con.str, con.paramCount)
 			con.parameters = append(con.parameters, str)
 		} else {
-			// Use single quotes for PostgreSQL string literals
-			// Escape single quotes by doubling them
-			escaped := strings.ReplaceAll(str, "'", "''")
-			con.str.WriteString("'")
-			con.str.WriteString(escaped)
-			con.str.WriteString("'")
+			con.dialect.WriteStringLiteral(&con.str, str)
 		}
 	case *exprpb.Constant_BytesValue:
 		b := c.GetBytesValue()
 
 		if con.parameterize {
 			con.paramCount++
-			fmt.Fprintf(&con.str, "$%d", con.paramCount)
+			con.dialect.WriteParamPlaceholder(&con.str, con.paramCount)
 			con.parameters = append(con.parameters, b)
 		} else {
 			// Validate byte array length to prevent resource exhaustion (CWE-400)
 			if len(b) > maxByteArrayLength {
 				return fmt.Errorf("%w: %d bytes exceeds limit of %d bytes", ErrInvalidByteArrayLength, len(b), maxByteArrayLength)
 			}
-			con.str.WriteString("'\\x")
-			con.str.WriteString(hex.EncodeToString(b))
-			con.str.WriteString("'")
+			if err := con.dialect.WriteBytesLiteral(&con.str, b); err != nil {
+				return err
+			}
 		}
 	default:
 		return newConversionErrorf(errMsgUnsupportedExpression, "constant type: %T", c.ConstantKind)
@@ -2374,7 +2261,7 @@ func (con *converter) visitIdent(expr *exprpb.Expr) error {
 	identName := expr.GetIdentExpr().GetName()
 
 	// Validate identifier name for security (prevent SQL injection)
-	if err := validateFieldName(identName); err != nil {
+	if err := con.dialect.ValidateFieldName(identName); err != nil {
 		return fmt.Errorf("%w: %w", ErrInvalidFieldName, err)
 	}
 
@@ -2382,7 +2269,8 @@ func (con *converter) visitIdent(expr *exprpb.Expr) error {
 	if con.needsNumericCasting(identName) {
 		con.str.WriteString("(")
 		con.str.WriteString(identName)
-		con.str.WriteString(")::numeric")
+		con.str.WriteString(")")
+		con.dialect.WriteCastToNumeric(&con.str)
 	} else {
 		con.str.WriteString(identName)
 	}
@@ -2392,7 +2280,7 @@ func (con *converter) visitIdent(expr *exprpb.Expr) error {
 func (con *converter) visitList(expr *exprpb.Expr) error {
 	l := expr.GetListExpr()
 	elems := l.GetElements()
-	con.str.WriteString("ARRAY[")
+	con.dialect.WriteArrayLiteralOpen(&con.str)
 	for i, elem := range elems {
 		err := con.visit(elem)
 		if err != nil {
@@ -2402,7 +2290,7 @@ func (con *converter) visitList(expr *exprpb.Expr) error {
 			con.str.WriteString(", ")
 		}
 	}
-	con.str.WriteString("]")
+	con.dialect.WriteArrayLiteralClose(&con.str)
 	return nil
 }
 
@@ -2411,7 +2299,7 @@ func (con *converter) visitSelect(expr *exprpb.Expr) error {
 
 	// Validate field name for security (prevent SQL injection)
 	fieldName := sel.GetField()
-	if err := validateFieldName(fieldName); err != nil {
+	if err := con.dialect.ValidateFieldName(fieldName); err != nil {
 		return fmt.Errorf("%w: %w", ErrInvalidFieldName, err)
 	}
 
@@ -2433,34 +2321,35 @@ func (con *converter) visitSelect(expr *exprpb.Expr) error {
 
 	nested := !sel.GetTestOnly() && isBinaryOrTernaryOperator(sel.GetOperand())
 
-	if useJSONObjectAccess && con.isNumericJSONField(fieldName) {
-		// For numeric JSON fields, wrap in parentheses for casting
-		con.str.WriteString("(")
-	}
-
-	err := con.visitMaybeNested(sel.GetOperand(), nested)
-	if err != nil {
-		return err
+	writeBase := func() error {
+		return con.visitMaybeNested(sel.GetOperand(), nested)
 	}
 
 	switch {
 	case useJSONPath:
-		// Use ->> for text extraction
-		con.str.WriteString("->>")
-		con.str.WriteString("'")
-		con.str.WriteString(escapeJSONFieldName(fieldName))
-		con.str.WriteString("'")
+		// Use dialect-specific JSON field access (text extraction)
+		if err := con.dialect.WriteJSONFieldAccess(&con.str, writeBase, fieldName, true); err != nil {
+			return err
+		}
 	case useJSONObjectAccess:
-		// Use -> for JSON object field access in comprehensions
-		con.str.WriteString("->>'")
-		con.str.WriteString(escapeJSONFieldName(fieldName))
-		con.str.WriteString("'")
-		if con.isNumericJSONField(fieldName) {
+		// Use dialect-specific JSON object field access in comprehensions
+		isNumeric := con.isNumericJSONField(fieldName)
+		if isNumeric {
+			con.str.WriteString("(")
+		}
+		if err := con.dialect.WriteJSONFieldAccess(&con.str, writeBase, fieldName, true); err != nil {
+			return err
+		}
+		if isNumeric {
 			// Close parentheses and add numeric cast
-			con.str.WriteString(")::numeric")
+			con.str.WriteString(")")
+			con.dialect.WriteCastToNumeric(&con.str)
 		}
 	default:
 		// Regular field selection
+		if err := writeBase(); err != nil {
+			return err
+		}
 		con.str.WriteString(".")
 		con.str.WriteString(fieldName)
 	}
@@ -2476,25 +2365,10 @@ func (con *converter) visitHasFunction(expr *exprpb.Expr) error {
 
 	// Check if this is a direct JSON field access (e.g., table.json_column.key)
 	if con.isDirectJSONFieldAccess(operand, field) {
-		// For direct JSON field access, use the appropriate existence operator
-		err := con.visitMaybeNested(operand, isBinaryOrTernaryOperator(operand))
-		if err != nil {
-			return err
-		}
-
-		// Check if this is a JSONB field
-		if con.isJSONBField(operand) {
-			// Use JSONB's ? operator for existence check
-			con.str.WriteString(" ? '")
-			con.str.WriteString(escapeJSONFieldName(field))
-			con.str.WriteString("'")
-		} else {
-			// For JSON fields, check if the field is not null
-			con.str.WriteString("->'")
-			con.str.WriteString(escapeJSONFieldName(field))
-			con.str.WriteString("' IS NOT NULL")
-		}
-		return nil
+		isJSONB := con.isJSONBField(operand)
+		return con.dialect.WriteJSONExistence(&con.str, isJSONB, field, func() error {
+			return con.visitMaybeNested(operand, isBinaryOrTernaryOperator(operand))
+		})
 	}
 
 	// Check if this is a nested JSON path (e.g., table.json_column.key.subkey)
@@ -2532,27 +2406,12 @@ func (con *converter) isDirectJSONFieldAccess(operand *exprpb.Expr, _ string) bo
 
 // visitNestedJSONHas handles has() for deeply nested JSON paths
 func (con *converter) visitNestedJSONHas(expr *exprpb.Expr) error {
-	// For nested JSON paths, we use jsonb_extract_path_text and check for NOT NULL
-	// This is more reliable than trying to use ? operator on nested paths
-	con.str.WriteString("jsonb_extract_path_text(")
-
 	// Get the root JSON column and remaining path segments
 	rootColumn, pathSegments := con.getJSONRootAndPath(expr)
 
-	// Visit the root column without adding JSON access operators
-	if err := con.visitJSONColumnReference(rootColumn); err != nil {
-		return err
-	}
-
-	// Add path segments as arguments
-	for _, segment := range pathSegments {
-		con.str.WriteString(", '")
-		con.str.WriteString(escapeJSONFieldName(segment))
-		con.str.WriteString("'")
-	}
-
-	con.str.WriteString(") IS NOT NULL")
-	return nil
+	return con.dialect.WriteJSONExtractPath(&con.str, pathSegments, func() error {
+		return con.visitJSONColumnReference(rootColumn)
+	})
 }
 
 // visitJSONColumnReference visits a JSON column reference without adding JSON access operators
@@ -2676,7 +2535,7 @@ func (con *converter) visitStructMsg(expr *exprpb.Expr) error {
 func (con *converter) visitStructMap(expr *exprpb.Expr) error {
 	m := expr.GetStructExpr()
 	entries := m.GetEntries()
-	con.str.WriteString("ROW(")
+	con.dialect.WriteStructOpen(&con.str)
 	for i, entry := range entries {
 		v := entry.GetValue()
 		if err := con.visit(v); err != nil {
@@ -2686,8 +2545,25 @@ func (con *converter) visitStructMap(expr *exprpb.Expr) error {
 			con.str.WriteString(", ")
 		}
 	}
-	con.str.WriteString(")")
+	con.dialect.WriteStructClose(&con.str)
 	return nil
+}
+
+// writeComprehensionSource writes the source expression for a comprehension (UNNEST or JSON function).
+func (con *converter) writeComprehensionSource(iterRange *exprpb.Expr) error {
+	isJSONArray := con.isJSONArrayField(iterRange)
+	if isJSONArray {
+		jsonFunc := con.getJSONArrayFunction(iterRange)
+		isJSONB := con.isJSONBField(iterRange)
+		// Determine if we need text extraction or object extraction
+		asText := strings.HasSuffix(jsonFunc, "_text")
+		return con.dialect.WriteJSONArrayElements(&con.str, isJSONB, asText, func() error {
+			return con.visit(iterRange)
+		})
+	}
+	return con.dialect.WriteUnnest(&con.str, func() error {
+		return con.visit(iterRange)
+	})
 }
 
 func (con *converter) visitMaybeNested(expr *exprpb.Expr, nested bool) error {
@@ -2766,182 +2642,4 @@ func isBinaryOrTernaryOperator(expr *exprpb.Expr) bool {
 	}
 	_, isBinaryOp := operators.FindReverseBinaryOperator(expr.GetCallExpr().GetFunction())
 	return isBinaryOp || isSamePrecedence(operators.Conditional, expr)
-}
-
-// convertRE2ToPOSIX converts an RE2 regex pattern to POSIX ERE format for PostgreSQL.
-// It performs security validation to prevent ReDoS attacks (CWE-1333).
-// Returns: (posixPattern, caseInsensitive, error)
-// Note: This is a basic conversion for common patterns. Full RE2 to POSIX conversion is complex.
-func convertRE2ToPOSIX(re2Pattern string) (string, bool, error) {
-	// 1. Check pattern length to prevent processing extremely long patterns
-	if len(re2Pattern) > maxRegexPatternLength {
-		return "", false, fmt.Errorf("%w: pattern length %d exceeds limit of %d characters", ErrInvalidRegexPattern, len(re2Pattern), maxRegexPatternLength)
-	}
-
-	// 2. Extract case-insensitive flag if present
-	caseInsensitive := false
-	if strings.HasPrefix(re2Pattern, "(?i)") {
-		caseInsensitive = true
-		re2Pattern = strings.TrimPrefix(re2Pattern, "(?i)")
-	}
-
-	// 3. Detect unsupported RE2 features and return errors
-	// Lookahead assertions
-	if strings.Contains(re2Pattern, "(?=") || strings.Contains(re2Pattern, "(?!") {
-		return "", false, fmt.Errorf("%w: lookahead assertions (?=...), (?!...) are not supported in PostgreSQL POSIX regex", ErrInvalidRegexPattern)
-	}
-	// Lookbehind assertions
-	if strings.Contains(re2Pattern, "(?<=") || strings.Contains(re2Pattern, "(?<!") {
-		return "", false, fmt.Errorf("%w: lookbehind assertions (?<=...), (?<!...) are not supported in PostgreSQL POSIX regex", ErrInvalidRegexPattern)
-	}
-	// Named capture groups
-	if strings.Contains(re2Pattern, "(?P<") {
-		return "", false, fmt.Errorf("%w: named capture groups (?P<name>...) are not supported in PostgreSQL POSIX regex", ErrInvalidRegexPattern)
-	}
-	// Other inline flags (after we've already handled (?i))
-	if strings.Contains(re2Pattern, "(?m") || strings.Contains(re2Pattern, "(?s") || strings.Contains(re2Pattern, "(?-") {
-		return "", false, fmt.Errorf("%w: inline flags other than (?i) are not supported in PostgreSQL POSIX regex", ErrInvalidRegexPattern)
-	}
-
-	// 4. Detect catastrophic nested quantifiers that cause exponential backtracking
-	// Patterns like (a+)+, (a*)*,  (x+x+)+, ((a)+b)+, etc. are extremely dangerous
-
-	// Check for doubled quantifiers
-	if matched, _ := regexp.MatchString(`[*+][*+]`, re2Pattern); matched {
-		return "", false, fmt.Errorf("%w: regex contains catastrophic nested quantifiers that could cause ReDoS", ErrInvalidRegexPattern)
-	}
-
-	// Check for groups that contain quantifiers and are themselves quantified
-	// This catches patterns like (a+)+, ((a)+b)+, (a*b*)*, etc.
-	// We need to check if any opening paren eventually leads to a closing paren followed by a quantifier,
-	// and if there are quantifiers between those parens.
-	depth := 0
-	groupHasQuantifier := make([]bool, 0)
-
-	for i := 0; i < len(re2Pattern); i++ {
-		char := re2Pattern[i]
-
-		// Skip escaped characters
-		if i > 0 && re2Pattern[i-1] == '\\' {
-			continue
-		}
-
-		switch char {
-		case '(':
-			depth++
-			groupHasQuantifier = append(groupHasQuantifier, false)
-		case ')':
-			if depth > 0 {
-				depth--
-				// Check if the closing paren is followed by a quantifier
-				if i+1 < len(re2Pattern) {
-					nextChar := re2Pattern[i+1]
-					if nextChar == '*' || nextChar == '+' || nextChar == '?' || nextChar == '{' {
-						// This group is quantified. Check if it contains quantifiers
-						if len(groupHasQuantifier) > 0 && groupHasQuantifier[len(groupHasQuantifier)-1] {
-							return "", false, fmt.Errorf("%w: regex contains catastrophic nested quantifiers that could cause ReDoS", ErrInvalidRegexPattern)
-						}
-					}
-				}
-				if len(groupHasQuantifier) > 0 {
-					// Pop the last group
-					if len(groupHasQuantifier) > 1 {
-						// If inner group had quantifier, mark outer group as having quantifier too
-						if groupHasQuantifier[len(groupHasQuantifier)-1] {
-							groupHasQuantifier[len(groupHasQuantifier)-2] = true
-						}
-					}
-					groupHasQuantifier = groupHasQuantifier[:len(groupHasQuantifier)-1]
-				}
-			}
-		case '*', '+', '?':
-			// Mark that current group contains a quantifier
-			if len(groupHasQuantifier) > 0 {
-				groupHasQuantifier[len(groupHasQuantifier)-1] = true
-			}
-		case '{':
-			// Brace quantifier {n,m}
-			if len(groupHasQuantifier) > 0 {
-				groupHasQuantifier[len(groupHasQuantifier)-1] = true
-			}
-		}
-	}
-
-	// 5. Count and limit capture groups to prevent memory exhaustion
-	groupCount := strings.Count(re2Pattern, "(") - strings.Count(re2Pattern, `\(`)
-	if groupCount > maxRegexGroups {
-		return "", false, fmt.Errorf("%w: regex contains %d capture groups, exceeds limit of %d", ErrInvalidRegexPattern, groupCount, maxRegexGroups)
-	}
-
-	// 6. Detect exponential alternation patterns like (a|a)*b or (a|ab)*
-	alternationPattern := regexp.MustCompile(`\([^)]*\|[^)]*\)[*+]`)
-	if alternationPattern.MatchString(re2Pattern) {
-		// Check if alternation has overlapping branches (more dangerous)
-		// This is a simple heuristic - full analysis would be more complex
-		return "", false, fmt.Errorf("%w: regex contains quantified alternation that could cause ReDoS", ErrInvalidRegexPattern)
-	}
-
-	// 7. Check nesting depth to prevent deeply nested patterns
-	maxDepth := 0
-	currentDepth := 0
-	for _, char := range re2Pattern {
-		if char == '(' && !strings.HasSuffix(re2Pattern[:strings.LastIndex(re2Pattern, string(char))], `\`) {
-			currentDepth++
-			if currentDepth > maxDepth {
-				maxDepth = currentDepth
-			}
-		} else if char == ')' && !strings.HasSuffix(re2Pattern[:strings.LastIndex(re2Pattern, string(char))], `\`) {
-			currentDepth--
-		}
-	}
-	if maxDepth > maxRegexNestingDepth {
-		return "", false, fmt.Errorf("%w: nesting depth %d exceeds limit of %d", ErrInvalidRegexPattern, maxDepth, maxRegexNestingDepth)
-	}
-
-	// Passed all security checks - proceed with conversion
-	posixPattern := re2Pattern
-
-	// Basic conversions for common differences between RE2 and POSIX:
-
-	// 1. Word boundaries: \b -> [[:<:]] and [[:<:]] (PostgreSQL extension)
-	//    Note: PostgreSQL supports \y for word boundaries in some contexts
-	posixPattern = strings.ReplaceAll(posixPattern, `\b`, `\y`)
-
-	// 2. Non-word boundaries: \B -> [^[:alnum:]_] (approximate)
-	//    This is a simplification; exact conversion is complex
-	posixPattern = strings.ReplaceAll(posixPattern, `\B`, `[^[:alnum:]_]`)
-
-	// 3. Digit shortcuts: \d -> [[:digit:]] or [0-9]
-	posixPattern = strings.ReplaceAll(posixPattern, `\d`, `[[:digit:]]`)
-
-	// 4. Non-digit shortcuts: \D -> [^[:digit:]] or [^0-9]
-	posixPattern = strings.ReplaceAll(posixPattern, `\D`, `[^[:digit:]]`)
-
-	// 5. Word character shortcuts: \w -> [[:alnum:]_]
-	posixPattern = strings.ReplaceAll(posixPattern, `\w`, `[[:alnum:]_]`)
-
-	// 6. Non-word character shortcuts: \W -> [^[:alnum:]_]
-	posixPattern = strings.ReplaceAll(posixPattern, `\W`, `[^[:alnum:]_]`)
-
-	// 7. Whitespace shortcuts: \s -> [[:space:]]
-	posixPattern = strings.ReplaceAll(posixPattern, `\s`, `[[:space:]]`)
-
-	// 8. Non-whitespace shortcuts: \S -> [^[:space:]]
-	posixPattern = strings.ReplaceAll(posixPattern, `\S`, `[^[:space:]]`)
-
-	// 9. Non-capturing groups: (?:...) -> (...)
-	//    POSIX ERE doesn't have non-capturing groups, so convert to regular groups
-	posixPattern = strings.ReplaceAll(posixPattern, `(?:`, `(`)
-
-	// Note: Unsupported RE2 features that are now validated and return errors:
-	// - Lookahead/lookbehind assertions (?=...), (?!...), (?<=...), (?<!...) - ERROR
-	// - Named groups (?P<name>...) - ERROR
-	// - Case-insensitive flag (?i) - CONVERTED (returned as separate boolean)
-	// - Other inline flags (?m), (?s) - ERROR
-	//
-	// Converted features:
-	// - Non-capturing groups (?:...) - Converted to regular groups (...)
-	// - Character class shortcuts (\d, \w, \s, etc.) - Converted to POSIX equivalents
-
-	return posixPattern, caseInsensitive, nil
 }

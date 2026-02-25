@@ -6,7 +6,19 @@ import (
 	"testing"
 
 	"github.com/google/cel-go/cel"
+	"github.com/spandigital/cel2sql/v3/dialect"
+	dialectbq "github.com/spandigital/cel2sql/v3/dialect/bigquery"
+	dialectduckdb "github.com/spandigital/cel2sql/v3/dialect/duckdb"
+	dialectmysql "github.com/spandigital/cel2sql/v3/dialect/mysql"
+	dialectpg "github.com/spandigital/cel2sql/v3/dialect/postgres"
+	dialectsqlite "github.com/spandigital/cel2sql/v3/dialect/sqlite"
 	"github.com/spandigital/cel2sql/v3/pg"
+)
+
+// Test column name constants to avoid repetition.
+const (
+	colPersonEmail    = "person.email"
+	colPersonMetadata = "person.metadata"
 )
 
 func TestAnalyzeQuery_JSONPathOperations(t *testing.T) {
@@ -34,14 +46,14 @@ func TestAnalyzeQuery_JSONPathOperations(t *testing.T) {
 		{
 			name:           "simple JSON path access",
 			expression:     `person.metadata.name == "John"`,
-			expectedColumn: "person.metadata",
+			expectedColumn: colPersonMetadata,
 			expectedType:   "GIN",
 			expectReason:   "JSON path operations",
 		},
 		{
 			name:           "nested JSON path access",
 			expression:     `person.metadata.profile.age > 18`,
-			expectedColumn: "person.metadata",
+			expectedColumn: colPersonMetadata,
 			expectedType:   "GIN",
 			expectReason:   "JSON path operations",
 		},
@@ -120,7 +132,7 @@ func TestAnalyzeQuery_RegexOperations(t *testing.T) {
 	// Check that we got a GIN index recommendation with pg_trgm
 	found := false
 	for _, rec := range recommendations {
-		if rec.Column == "person.email" && rec.IndexType == IndexTypeGIN {
+		if rec.Column == colPersonEmail && rec.IndexType == IndexTypeGIN {
 			found = true
 			if !strings.Contains(rec.Reason, "Regex matching") {
 				t.Errorf("expected reason to mention regex matching, got %q", rec.Reason)
@@ -370,9 +382,9 @@ func TestAnalyzeQuery_MultipleRecommendations(t *testing.T) {
 		switch rec.Column {
 		case "person.age":
 			foundAge = rec.IndexType == IndexTypeBTree
-		case "person.email":
+		case colPersonEmail:
 			foundEmail = rec.IndexType == IndexTypeGIN
-		case "person.metadata":
+		case colPersonMetadata:
 			foundMetadata = rec.IndexType == IndexTypeGIN
 		}
 	}
@@ -494,10 +506,330 @@ func TestAnalyzeQuery_IndexRecommendationPriority(t *testing.T) {
 
 	// We should get a GIN recommendation for metadata, not BTREE
 	for _, rec := range recommendations {
-		if rec.Column == "person.metadata" {
+		if rec.Column == colPersonMetadata {
 			if rec.IndexType != IndexTypeGIN {
 				t.Errorf("expected GIN index for JSON field, got %s", rec.IndexType)
 			}
 		}
+	}
+}
+
+func TestAnalyzeQuery_WithDialect(t *testing.T) {
+	// Test that each dialect produces its own appropriate index types and DDL
+	schema := pg.NewSchema([]pg.FieldSchema{
+		{Name: "id", Type: "bigint"},
+		{Name: "age", Type: "integer"},
+		{Name: "email", Type: "text"},
+		{Name: "tags", Type: "text", Repeated: true},
+		{Name: "metadata", Type: "jsonb", IsJSON: true, IsJSONB: true},
+	})
+	provider := pg.NewTypeProvider(map[string]pg.Schema{"person": schema})
+
+	env, err := cel.NewEnv(
+		cel.CustomTypeProvider(provider),
+		cel.Variable("person", cel.ObjectType("person")),
+	)
+	if err != nil {
+		t.Fatalf("failed to create CEL environment: %v", err)
+	}
+
+	type dialectTestCase struct {
+		name    string
+		dialect dialect.Dialect
+		// Per-pattern expected results
+		comparisonType    string // Expected IndexType for comparisons
+		comparisonContain string // Substring expected in Expression
+		jsonType          string // Expected IndexType for JSON access
+		jsonContain       string // Substring expected in Expression
+	}
+
+	dialects := []dialectTestCase{
+		{
+			name:              "PostgreSQL",
+			dialect:           dialectpg.New(),
+			comparisonType:    "BTREE",
+			comparisonContain: "CREATE INDEX",
+			jsonType:          "GIN",
+			jsonContain:       "USING GIN",
+		},
+		{
+			name:              "MySQL",
+			dialect:           dialectmysql.New(),
+			comparisonType:    "BTREE",
+			comparisonContain: "CREATE INDEX",
+			jsonType:          "BTREE",
+			jsonContain:       "CAST",
+		},
+		{
+			name:              "SQLite",
+			dialect:           dialectsqlite.New(),
+			comparisonType:    "BTREE",
+			comparisonContain: "CREATE INDEX",
+			jsonType:          "", // SQLite doesn't support JSON indexes
+			jsonContain:       "",
+		},
+		{
+			name:              "DuckDB",
+			dialect:           dialectduckdb.New(),
+			comparisonType:    "ART",
+			comparisonContain: "CREATE INDEX",
+			jsonType:          "ART",
+			jsonContain:       "CREATE INDEX",
+		},
+		{
+			name:              "BigQuery",
+			dialect:           dialectbq.New(),
+			comparisonType:    "CLUSTERING",
+			comparisonContain: "clustering_columns",
+			jsonType:          "SEARCH_INDEX",
+			jsonContain:       "SEARCH INDEX",
+		},
+	}
+
+	for _, dt := range dialects {
+		t.Run(dt.name+"_comparison", func(t *testing.T) {
+			ast, issues := env.Compile(`person.age > 18`)
+			if issues != nil && issues.Err() != nil {
+				t.Fatalf("failed to compile expression: %v", issues.Err())
+			}
+
+			_, recommendations, err := AnalyzeQuery(ast,
+				WithSchemas(provider.GetSchemas()),
+				WithDialect(dt.dialect))
+			if err != nil {
+				t.Fatalf("AnalyzeQuery failed: %v", err)
+			}
+
+			found := false
+			for _, rec := range recommendations {
+				if rec.Column == "person.age" {
+					found = true
+					if rec.IndexType != dt.comparisonType {
+						t.Errorf("expected index type %q, got %q", dt.comparisonType, rec.IndexType)
+					}
+					if !strings.Contains(rec.Expression, dt.comparisonContain) {
+						t.Errorf("expected expression to contain %q, got %q", dt.comparisonContain, rec.Expression)
+					}
+				}
+			}
+			if !found {
+				t.Errorf("expected recommendation for person.age, got: %+v", recommendations)
+			}
+		})
+
+		t.Run(dt.name+"_json", func(t *testing.T) {
+			ast, issues := env.Compile(`person.metadata.verified == true`)
+			if issues != nil && issues.Err() != nil {
+				t.Fatalf("failed to compile expression: %v", issues.Err())
+			}
+
+			_, recommendations, err := AnalyzeQuery(ast,
+				WithSchemas(provider.GetSchemas()),
+				WithDialect(dt.dialect))
+			if err != nil {
+				t.Fatalf("AnalyzeQuery failed: %v", err)
+			}
+
+			if dt.jsonType == "" {
+				// This dialect doesn't recommend JSON indexes; verify none present for metadata
+				for _, rec := range recommendations {
+					if rec.Column == colPersonMetadata {
+						t.Errorf("expected no recommendation for JSON on %s, got: %+v", dt.name, rec)
+					}
+				}
+				return
+			}
+
+			found := false
+			for _, rec := range recommendations {
+				if rec.Column == colPersonMetadata {
+					found = true
+					if rec.IndexType != dt.jsonType {
+						t.Errorf("expected index type %q, got %q", dt.jsonType, rec.IndexType)
+					}
+					if !strings.Contains(rec.Expression, dt.jsonContain) {
+						t.Errorf("expected expression to contain %q, got %q", dt.jsonContain, rec.Expression)
+					}
+				}
+			}
+			if !found {
+				t.Errorf("expected JSON recommendation for person.metadata on %s, got: %+v", dt.name, recommendations)
+			}
+		})
+	}
+}
+
+func TestAnalyzeQuery_UnsupportedPatternReturnsNil(t *testing.T) {
+	// SQLite should not produce recommendations for regex patterns
+	schema := pg.NewSchema([]pg.FieldSchema{
+		{Name: "id", Type: "text"},
+		{Name: "email", Type: "text"},
+	})
+	provider := pg.NewTypeProvider(map[string]pg.Schema{"person": schema})
+
+	env, err := cel.NewEnv(
+		cel.CustomTypeProvider(provider),
+		cel.Variable("person", cel.ObjectType("person")),
+	)
+	if err != nil {
+		t.Fatalf("failed to create CEL environment: %v", err)
+	}
+
+	// Note: We use person.email == "test" rather than matches() because SQLite
+	// doesn't support regex in SQL generation. We test the advisor directly instead.
+	advisor := dialectsqlite.New()
+	rec := advisor.RecommendIndex(dialect.IndexPattern{
+		Column:  colPersonEmail,
+		Pattern: dialect.PatternRegexMatch,
+	})
+	if rec != nil {
+		t.Errorf("expected nil recommendation for regex on SQLite, got: %+v", rec)
+	}
+
+	// Also verify SQLite returns nil for array patterns
+	rec = advisor.RecommendIndex(dialect.IndexPattern{
+		Column:  "person.tags",
+		Pattern: dialect.PatternArrayMembership,
+	})
+	if rec != nil {
+		t.Errorf("expected nil recommendation for array membership on SQLite, got: %+v", rec)
+	}
+
+	// But comparisons should still work
+	ast, issues := env.Compile(`person.email == "test@example.com"`)
+	if issues != nil && issues.Err() != nil {
+		t.Fatalf("failed to compile expression: %v", issues.Err())
+	}
+
+	_, recommendations, err := AnalyzeQuery(ast,
+		WithSchemas(provider.GetSchemas()),
+		WithDialect(dialectsqlite.New()))
+	if err != nil {
+		t.Fatalf("AnalyzeQuery failed: %v", err)
+	}
+
+	found := false
+	for _, rec := range recommendations {
+		if rec.Column == colPersonEmail && rec.IndexType == "BTREE" {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("expected BTREE recommendation for person.email on SQLite, got: %+v", recommendations)
+	}
+}
+
+func TestAnalyzeQuery_AllDialectsSupportsIndexAnalysis(t *testing.T) {
+	// Verify that all built-in dialects report SupportsIndexAnalysis() = true
+	dialects := []dialect.Dialect{
+		dialectpg.New(),
+		dialectmysql.New(),
+		dialectsqlite.New(),
+		dialectduckdb.New(),
+		dialectbq.New(),
+	}
+
+	for _, d := range dialects {
+		t.Run(string(d.Name()), func(t *testing.T) {
+			if !d.SupportsIndexAnalysis() {
+				t.Errorf("%s should support index analysis", d.Name())
+			}
+
+			// Also verify the dialect implements IndexAdvisor
+			advisor, ok := dialect.GetIndexAdvisor(d)
+			if !ok {
+				t.Fatalf("%s does not implement IndexAdvisor", d.Name())
+			}
+
+			patterns := advisor.SupportedPatterns()
+			if len(patterns) == 0 {
+				t.Errorf("%s reports no supported patterns", d.Name())
+			}
+		})
+	}
+}
+
+func TestAnalyzeQuery_IndexAdvisorSupportedPatterns(t *testing.T) {
+	tests := []struct {
+		name             string
+		dialect          dialect.Dialect
+		expectedPatterns []dialect.PatternType
+	}{
+		{
+			name:    "PostgreSQL supports all patterns",
+			dialect: dialectpg.New(),
+			expectedPatterns: []dialect.PatternType{
+				dialect.PatternComparison,
+				dialect.PatternJSONAccess,
+				dialect.PatternRegexMatch,
+				dialect.PatternArrayMembership,
+				dialect.PatternArrayComprehension,
+				dialect.PatternJSONArrayComprehension,
+			},
+		},
+		{
+			name:    "MySQL supports comparison, JSON, regex, JSON array",
+			dialect: dialectmysql.New(),
+			expectedPatterns: []dialect.PatternType{
+				dialect.PatternComparison,
+				dialect.PatternJSONAccess,
+				dialect.PatternRegexMatch,
+				dialect.PatternJSONArrayComprehension,
+			},
+		},
+		{
+			name:    "SQLite supports only comparison",
+			dialect: dialectsqlite.New(),
+			expectedPatterns: []dialect.PatternType{
+				dialect.PatternComparison,
+			},
+		},
+		{
+			name:    "DuckDB supports comparison, JSON, arrays",
+			dialect: dialectduckdb.New(),
+			expectedPatterns: []dialect.PatternType{
+				dialect.PatternComparison,
+				dialect.PatternJSONAccess,
+				dialect.PatternArrayMembership,
+				dialect.PatternArrayComprehension,
+				dialect.PatternJSONArrayComprehension,
+			},
+		},
+		{
+			name:    "BigQuery supports comparison, JSON, JSON array",
+			dialect: dialectbq.New(),
+			expectedPatterns: []dialect.PatternType{
+				dialect.PatternComparison,
+				dialect.PatternJSONAccess,
+				dialect.PatternJSONArrayComprehension,
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			advisor, ok := dialect.GetIndexAdvisor(tt.dialect)
+			if !ok {
+				t.Fatalf("dialect does not implement IndexAdvisor")
+			}
+
+			patterns := advisor.SupportedPatterns()
+			if len(patterns) != len(tt.expectedPatterns) {
+				t.Errorf("expected %d patterns, got %d: %v", len(tt.expectedPatterns), len(patterns), patterns)
+			}
+
+			for _, expected := range tt.expectedPatterns {
+				found := false
+				for _, actual := range patterns {
+					if actual == expected {
+						found = true
+						break
+					}
+				}
+				if !found {
+					t.Errorf("expected pattern %d not found in supported patterns", expected)
+				}
+			}
+		})
 	}
 }
