@@ -3,7 +3,7 @@ module github.com/spandigital/cel2sql/v3
 go 1.25.7
 
 require (
-	cloud.google.com/go/bigquery v1.73.1
+	cloud.google.com/go/bigquery v1.74.0
 	github.com/go-sql-driver/mysql v1.9.3
 	github.com/google/cel-go v0.27.0
 	github.com/jackc/pgx/v5 v5.8.0
@@ -14,7 +14,7 @@ require (
 	github.com/testcontainers/testcontainers-go/modules/mysql v0.40.0
 	github.com/testcontainers/testcontainers-go/modules/postgres v0.40.0
 	google.golang.org/api v0.269.0
-	google.golang.org/genproto/googleapis/api v0.0.0-20260128011058-8636f8732409
+	google.golang.org/genproto/googleapis/api v0.0.0-20260203192932-546029d2fa20
 	google.golang.org/grpc v1.79.1
 	modernc.org/sqlite v1.46.1
 )
