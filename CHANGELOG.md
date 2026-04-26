@@ -3,6 +3,18 @@
 ## [Unreleased]
 
 ### Added
+- **WithJSONVariables option** — declare CEL variable names that map to flat JSONB
+  columns so `context.host == "x"` produces `context->>'host' = 'x'` without a parent
+  table struct. Both dot notation (`tags.color`) and bracket notation (`tags["color"]`)
+  are supported. Backported from observeinc/cel2sql fork.
+- **WithColumnAliases option** — map CEL variable names to different SQL column names
+  (e.g., `name` → `usr_name`). Combines with `WithJSONVariables` for aliased JSONB
+  columns. Alias values are validated via the dialect's field name validator.
+  Backported from observeinc/cel2sql fork.
+- **WithParamStartIndex option** — for `ConvertParameterized`, set the first
+  placeholder index (e.g., `WithParamStartIndex(5)` produces `$5, $6, ...`). Useful
+  when embedding the CEL fragment in a larger parameterized query. Values less than 1
+  clamp to 1. Backported from observeinc/cel2sql fork PR #2.
 - **Multi-Dialect SQL Support**
   - Introduced `Dialect` interface for pluggable SQL generation (`dialect/dialect.go`)
   - PostgreSQL dialect extracted from converter into `dialect/postgres/` (zero behavior change)
@@ -15,6 +27,15 @@
   - Dialect-agnostic schema types in `schema/` package
   - Shared test case infrastructure (`testcases/`, `testutil/`) with per-dialect expected SQL
   - Dialect registry for name-based lookup (`dialect.Register()`, `dialect.Get()`)
+
+### Changed
+- **BREAKING: Removed name-based numeric-cast heuristic in `visitIdent`** —
+  identifiers named `score`, `value`, `num`, `amount`, `count`, or `level` are no
+  longer auto-cast to `::numeric`. The heuristic was a footgun that incorrectly cast
+  plain (non-JSON) variables that happened to share these names. Numeric casting is
+  now driven solely by JSON text-extraction context (handled in `visitCall`). Callers
+  that relied on the implicit cast should add an explicit cast in CEL or use the
+  JSON comprehension paths. Backported from observeinc/cel2sql fork PR #1.
 
 ## [3.5.0] - 2026-01-08
 
