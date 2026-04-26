@@ -17,9 +17,17 @@ const (
 	jsonbArrayElementsText = "jsonb_array_elements_text"
 )
 
-// shouldUseJSONPath determines if we should use JSON path operators for field access
-// This function checks if the operand represents a JSON/JSONB field using schema information
+// shouldUseJSONPath determines if we should use JSON path operators for field access.
+// This function checks if the operand represents a JSON/JSONB field using schema
+// information or the WithJSONVariables option for flat JSONB variables.
 func (con *converter) shouldUseJSONPath(operand *exprpb.Expr, _ string) bool {
+	// Check if the operand is a flat variable declared as JSONB via WithJSONVariables
+	if identExpr := operand.GetIdentExpr(); identExpr != nil {
+		if con.isJSONVariable(identExpr.GetName()) {
+			return true
+		}
+	}
+
 	// Check if the operand is a direct table.column access where column is JSON
 	if selectExpr := operand.GetSelectExpr(); selectExpr != nil {
 		// For obj.metadata, check if metadata is a JSON column in obj table
@@ -43,6 +51,11 @@ func (con *converter) shouldUseJSONPath(operand *exprpb.Expr, _ string) bool {
 	}
 
 	return false
+}
+
+// isJSONVariable checks if a variable name was declared as JSONB via WithJSONVariables.
+func (con *converter) isJSONVariable(name string) bool {
+	return con.jsonVars != nil && con.jsonVars[name]
 }
 
 // hasJSONFieldInChain checks if there's a JSON field anywhere in the select expression chain

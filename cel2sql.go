@@ -52,6 +52,7 @@ type ConvertOption func(*convertOptions)
 // convertOptions holds configuration options for the Convert function.
 type convertOptions struct {
 	schemas      map[string]schema.Schema
+	jsonVars     map[string]bool // Variable names that are JSONB columns
 	ctx          context.Context
 	logger       *slog.Logger
 	maxDepth     int             // Maximum recursion depth (0 = use default)
@@ -83,6 +84,28 @@ func WithDialect(d dialect.Dialect) ConvertOption {
 func WithSchemas(schemas map[string]schema.Schema) ConvertOption {
 	return func(o *convertOptions) {
 		o.schemas = schemas
+	}
+}
+
+// WithJSONVariables declares CEL variable names that correspond to JSONB columns.
+// When a variable is marked as JSONB, field access via dot notation (context.host)
+// and bracket notation (context["host"]) will produce PostgreSQL JSONB operators
+// (e.g., context->>'host') instead of plain dot notation (context.host).
+//
+// Example:
+//
+//	result, err := cel2sql.ConvertParameterized(ast,
+//	    cel2sql.WithJSONVariables("context"))
+//	// CEL: context.host == "web-1"
+//	// SQL: context->>'host' = $1
+func WithJSONVariables(vars ...string) ConvertOption {
+	return func(o *convertOptions) {
+		if o.jsonVars == nil {
+			o.jsonVars = make(map[string]bool, len(vars))
+		}
+		for _, v := range vars {
+			o.jsonVars[v] = true
+		}
 	}
 }
 
@@ -223,6 +246,7 @@ func Convert(ast *cel.Ast, opts ...ConvertOption) (string, error) {
 	un := &converter{
 		typeMap:      checkedExpr.TypeMap,
 		schemas:      options.schemas,
+		jsonVars:     options.jsonVars,
 		ctx:          options.ctx,
 		logger:       options.logger,
 		dialect:      options.dialect,
@@ -299,6 +323,7 @@ func ConvertParameterized(ast *cel.Ast, opts ...ConvertOption) (*Result, error) 
 	un := &converter{
 		typeMap:      checkedExpr.TypeMap,
 		schemas:      options.schemas,
+		jsonVars:     options.jsonVars,
 		ctx:          options.ctx,
 		logger:       options.logger,
 		dialect:      options.dialect,
@@ -332,6 +357,7 @@ type converter struct {
 	str                strings.Builder
 	typeMap            map[int64]*exprpb.Type
 	schemas            map[string]schema.Schema
+	jsonVars           map[string]bool // Variable names that are JSONB columns
 	ctx                context.Context
 	logger             *slog.Logger
 	dialect            dialect.Dialect
@@ -1880,12 +1906,18 @@ func (con *converter) visitCallMapIndex(expr *exprpb.Expr) error {
 		return fmt.Errorf("%w: map index operator requires map and key arguments", ErrInvalidArguments)
 	}
 	m := args[0]
-	nested := isBinaryOrTernaryOperator(m)
-	if err := con.visitMaybeNested(m, nested); err != nil {
-		return err
-	}
 	fieldName, err := extractFieldName(args[1])
 	if err != nil {
+		return err
+	}
+	if identExpr := m.GetIdentExpr(); identExpr != nil && con.isJSONVariable(identExpr.GetName()) {
+		if err := con.visit(m); err != nil {
+			return err
+		}
+		return con.dialect.WriteJSONFieldAccess(&con.str, func() error { return nil }, fieldName, true)
+	}
+	nested := isBinaryOrTernaryOperator(m)
+	if err := con.visitMaybeNested(m, nested); err != nil {
 		return err
 	}
 	con.str.WriteString(".")
