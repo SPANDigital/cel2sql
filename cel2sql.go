@@ -386,13 +386,14 @@ type converter struct {
 	ctx                context.Context
 	logger             *slog.Logger
 	dialect            dialect.Dialect
-	depth              int   // Current recursion depth
-	maxDepth           int   // Maximum allowed recursion depth
-	maxOutputLen       int   // Maximum allowed SQL output length
-	comprehensionDepth int   // Current comprehension nesting depth
-	parameterize       bool  // Enable parameterized output
-	parameters         []any // Collected parameters for parameterized queries
-	paramCount         int   // Parameter counter for placeholders
+	depth              int             // Current recursion depth
+	maxDepth           int             // Maximum allowed recursion depth
+	maxOutputLen       int             // Maximum allowed SQL output length
+	comprehensionDepth int             // Current comprehension nesting depth
+	jsonIterVars       map[string]bool // Iteration variables from JSON array comprehensions
+	parameterize       bool            // Enable parameterized output
+	parameters         []any           // Collected parameters for parameterized queries
+	paramCount         int             // Parameter counter for placeholders
 }
 
 // checkContext checks if the context has been cancelled or expired.
