@@ -52,7 +52,8 @@ type ConvertOption func(*convertOptions)
 // convertOptions holds configuration options for the Convert function.
 type convertOptions struct {
 	schemas      map[string]schema.Schema
-	jsonVars     map[string]bool // Variable names that are JSONB columns
+	jsonVars     map[string]bool   // Variable names that are JSONB columns
+	columnAlias  map[string]string // CEL variable name → SQL column name
 	ctx          context.Context
 	logger       *slog.Logger
 	maxDepth     int             // Maximum recursion depth (0 = use default)
@@ -106,6 +107,27 @@ func WithJSONVariables(vars ...string) ConvertOption {
 		for _, v := range vars {
 			o.jsonVars[v] = true
 		}
+	}
+}
+
+// WithColumnAliases maps CEL variable names to SQL column names.
+// When a CEL identifier matches a key in the alias map, the SQL output
+// uses the mapped column name instead. This is useful when the database
+// column names differ from the user-facing CEL variable names (e.g.,
+// prefixed column names in views or tables).
+//
+// Example:
+//
+//	result, err := cel2sql.ConvertParameterized(ast,
+//	    cel2sql.WithColumnAliases(map[string]string{
+//	        "name":   "usr_name",
+//	        "active": "usr_active",
+//	    }))
+//	// CEL: name == "Alice"
+//	// SQL: usr_name = $1
+func WithColumnAliases(aliases map[string]string) ConvertOption {
+	return func(o *convertOptions) {
+		o.columnAlias = aliases
 	}
 }
 
@@ -247,6 +269,7 @@ func Convert(ast *cel.Ast, opts ...ConvertOption) (string, error) {
 		typeMap:      checkedExpr.TypeMap,
 		schemas:      options.schemas,
 		jsonVars:     options.jsonVars,
+		columnAlias:  options.columnAlias,
 		ctx:          options.ctx,
 		logger:       options.logger,
 		dialect:      options.dialect,
@@ -324,6 +347,7 @@ func ConvertParameterized(ast *cel.Ast, opts ...ConvertOption) (*Result, error) 
 		typeMap:      checkedExpr.TypeMap,
 		schemas:      options.schemas,
 		jsonVars:     options.jsonVars,
+		columnAlias:  options.columnAlias,
 		ctx:          options.ctx,
 		logger:       options.logger,
 		dialect:      options.dialect,
@@ -357,7 +381,8 @@ type converter struct {
 	str                strings.Builder
 	typeMap            map[int64]*exprpb.Type
 	schemas            map[string]schema.Schema
-	jsonVars           map[string]bool // Variable names that are JSONB columns
+	jsonVars           map[string]bool   // Variable names that are JSONB columns
+	columnAlias        map[string]string // CEL variable name → SQL column name
 	ctx                context.Context
 	logger             *slog.Logger
 	dialect            dialect.Dialect
@@ -2297,14 +2322,23 @@ func (con *converter) visitIdent(expr *exprpb.Expr) error {
 		return fmt.Errorf("%w: %w", ErrInvalidFieldName, err)
 	}
 
+	// Apply column alias if configured
+	sqlName := identName
+	if alias, ok := con.columnAlias[identName]; ok {
+		if err := con.dialect.ValidateFieldName(alias); err != nil {
+			return fmt.Errorf("%w: %w", ErrInvalidFieldName, err)
+		}
+		sqlName = alias
+	}
+
 	// Check if this identifier needs numeric casting for JSON comprehensions
 	if con.needsNumericCasting(identName) {
 		con.str.WriteString("(")
-		con.str.WriteString(identName)
+		con.str.WriteString(sqlName)
 		con.str.WriteString(")")
 		con.dialect.WriteCastToNumeric(&con.str)
 	} else {
-		con.str.WriteString(identName)
+		con.str.WriteString(sqlName)
 	}
 	return nil
 }

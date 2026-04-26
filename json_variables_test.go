@@ -195,3 +195,103 @@ func TestWithJSONVariables_OnlyDeclaredVarsAffected(t *testing.T) {
 	assert.Equal(t, `tags->>'color' = $1 AND other.key = $2`, result.SQL,
 		"only 'tags' should use JSONB operators; 'other' should use dot notation")
 }
+
+func TestWithColumnAliases(t *testing.T) {
+	env, err := cel.NewEnv(
+		cel.CustomTypeAdapter(types.DefaultTypeAdapter),
+		cel.Variable("name", cel.StringType),
+		cel.Variable("active", cel.BoolType),
+	)
+	require.NoError(t, err)
+
+	aliases := map[string]string{
+		"name":   "tbl_name",
+		"active": "tbl_active",
+	}
+
+	tests := []struct {
+		name     string
+		expr     string
+		wantSQL  string
+		wantArgs []any
+	}{
+		{
+			name:     "simple equality",
+			expr:     `name == "Alice"`,
+			wantSQL:  `tbl_name = $1`,
+			wantArgs: []any{"Alice"},
+		},
+		{
+			name:    "boolean",
+			expr:    `active == true`,
+			wantSQL: `tbl_active IS TRUE`,
+		},
+		{
+			name:     "string contains",
+			expr:     `name.contains("li")`,
+			wantSQL:  `POSITION($1 IN tbl_name) > 0`,
+			wantArgs: []any{"li"},
+		},
+		{
+			name:     "combined",
+			expr:     `name == "Alice" && active == true`,
+			wantSQL:  `tbl_name = $1 AND tbl_active IS TRUE`,
+			wantArgs: []any{"Alice"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ast, issues := env.Compile(tt.expr)
+			require.NoError(t, issues.Err())
+
+			result, err := cel2sql.ConvertParameterized(ast, cel2sql.WithColumnAliases(aliases))
+			require.NoError(t, err)
+
+			assert.Equal(t, tt.wantSQL, result.SQL)
+			if tt.wantArgs != nil {
+				assert.Equal(t, tt.wantArgs, result.Parameters)
+			}
+		})
+	}
+}
+
+func TestWithColumnAliases_CombinedWithJSONVariables(t *testing.T) {
+	env, err := cel.NewEnv(
+		cel.CustomTypeAdapter(types.DefaultTypeAdapter),
+		cel.Variable("status", cel.StringType),
+		cel.Variable("tags", cel.MapType(cel.StringType, cel.StringType)),
+	)
+	require.NoError(t, err)
+
+	ast, issues := env.Compile(`status == "ok" && tags.color == "blue"`)
+	require.NoError(t, issues.Err())
+
+	result, err := cel2sql.ConvertParameterized(ast,
+		cel2sql.WithColumnAliases(map[string]string{
+			"status": "tbl_status",
+			"tags":   "tbl_tags",
+		}),
+		cel2sql.WithJSONVariables("tags"),
+	)
+	require.NoError(t, err)
+
+	assert.Equal(t, `tbl_status = $1 AND tbl_tags->>'color' = $2`, result.SQL)
+	assert.Equal(t, []any{"ok", "blue"}, result.Parameters)
+}
+
+func TestWithColumnAliases_BackwardCompatible(t *testing.T) {
+	env, err := cel.NewEnv(
+		cel.CustomTypeAdapter(types.DefaultTypeAdapter),
+		cel.Variable("name", cel.StringType),
+	)
+	require.NoError(t, err)
+
+	ast, issues := env.Compile(`name == "Alice"`)
+	require.NoError(t, issues.Err())
+
+	result, err := cel2sql.ConvertParameterized(ast)
+	require.NoError(t, err)
+
+	assert.Equal(t, `name = $1`, result.SQL, "without WithColumnAliases, should use original name")
+}
