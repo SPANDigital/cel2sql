@@ -15,6 +15,7 @@ func StringTests() []ConvertTestCase {
 				dialect.SQLite:     "name LIKE 'a%' ESCAPE '\\'",
 				dialect.DuckDB:     "name LIKE 'a%' ESCAPE '\\\\'",
 				dialect.BigQuery:   "name LIKE 'a%'",
+				dialect.Spark:      "name LIKE 'a%' ESCAPE '\\\\'",
 			},
 		},
 		{
@@ -27,6 +28,7 @@ func StringTests() []ConvertTestCase {
 				dialect.SQLite:     "name LIKE '%z' ESCAPE '\\'",
 				dialect.DuckDB:     "name LIKE '%z' ESCAPE '\\\\'",
 				dialect.BigQuery:   "name LIKE '%z'",
+				dialect.Spark:      "name LIKE '%z' ESCAPE '\\\\'",
 			},
 		},
 		{
@@ -39,6 +41,7 @@ func StringTests() []ConvertTestCase {
 				dialect.SQLite:     "INSTR(name, 'abc') > 0",
 				dialect.DuckDB:     "CONTAINS(name, 'abc')",
 				dialect.BigQuery:   "STRPOS(name, 'abc') > 0",
+				dialect.Spark:      "LOCATE('abc', name) > 0",
 			},
 		},
 		{
@@ -51,6 +54,7 @@ func StringTests() []ConvertTestCase {
 				dialect.SQLite:     "LENGTH('test')",
 				dialect.DuckDB:     "LENGTH('test')",
 				dialect.BigQuery:   "LENGTH('test')",
+				dialect.Spark:      "LENGTH('test')",
 			},
 		},
 		{
@@ -63,6 +67,7 @@ func StringTests() []ConvertTestCase {
 				dialect.SQLite:     "name LIKE 'a%' ESCAPE '\\' AND name LIKE '%z' ESCAPE '\\'",
 				dialect.DuckDB:     "name LIKE 'a%' ESCAPE '\\\\' AND name LIKE '%z' ESCAPE '\\\\'",
 				dialect.BigQuery:   "name LIKE 'a%' AND name LIKE '%z'",
+				dialect.Spark:      "name LIKE 'a%' ESCAPE '\\\\' AND name LIKE '%z' ESCAPE '\\\\'",
 			},
 		},
 	}

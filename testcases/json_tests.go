@@ -17,6 +17,7 @@ func JSONTests() []ConvertTestCase {
 				dialect.SQLite:     "json_extract(product.metadata, '$.brand') = 'Acme'",
 				dialect.DuckDB:     "product.metadata->>'brand' = 'Acme'",
 				dialect.BigQuery:   "JSON_VALUE(product.metadata, '$.brand') = 'Acme'",
+				dialect.Spark:      "get_json_object(product.metadata, '$.brand') = 'Acme'",
 			},
 		},
 		{
@@ -30,6 +31,7 @@ func JSONTests() []ConvertTestCase {
 				dialect.SQLite:     "json_extract(json_extract(product.metadata, '$.specs'), '$.color') = 'red'",
 				dialect.DuckDB:     "product.metadata->'specs'->>'color' = 'red'",
 				dialect.BigQuery:   "JSON_VALUE(JSON_QUERY(product.metadata, '$.specs'), '$.color') = 'red'",
+				dialect.Spark:      "get_json_object(get_json_object(product.metadata, '$.specs'), '$.color') = 'red'",
 			},
 		},
 		{
@@ -43,6 +45,7 @@ func JSONTests() []ConvertTestCase {
 				dialect.SQLite:     "json_type(product.metadata, '$.brand') IS NOT NULL",
 				dialect.DuckDB:     "json_exists(product.metadata, '$.brand')",
 				dialect.BigQuery:   "JSON_VALUE(product.metadata, '$.brand') IS NOT NULL",
+				dialect.Spark:      "get_json_object(product.metadata, '$.brand') IS NOT NULL",
 			},
 		},
 	}

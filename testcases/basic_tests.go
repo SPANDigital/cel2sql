@@ -15,6 +15,7 @@ func BasicTests() []ConvertTestCase {
 				dialect.SQLite:     "name = 'a'",
 				dialect.DuckDB:     "name = 'a'",
 				dialect.BigQuery:   "name = 'a'",
+				dialect.Spark:      "name = 'a'",
 			},
 		},
 		{
@@ -27,6 +28,7 @@ func BasicTests() []ConvertTestCase {
 				dialect.SQLite:     "age != 20",
 				dialect.DuckDB:     "age != 20",
 				dialect.BigQuery:   "age != 20",
+				dialect.Spark:      "age != 20",
 			},
 		},
 		{
@@ -39,6 +41,7 @@ func BasicTests() []ConvertTestCase {
 				dialect.SQLite:     "age < 20",
 				dialect.DuckDB:     "age < 20",
 				dialect.BigQuery:   "age < 20",
+				dialect.Spark:      "age < 20",
 			},
 		},
 		{
@@ -51,6 +54,7 @@ func BasicTests() []ConvertTestCase {
 				dialect.SQLite:     "height >= 1.6180339887",
 				dialect.DuckDB:     "height >= 1.6180339887",
 				dialect.BigQuery:   "height >= 1.6180339887",
+				dialect.Spark:      "height >= 1.6180339887",
 			},
 		},
 		{
@@ -63,6 +67,7 @@ func BasicTests() []ConvertTestCase {
 				dialect.SQLite:     "null_var IS NULL",
 				dialect.DuckDB:     "null_var IS NULL",
 				dialect.BigQuery:   "null_var IS NULL",
+				dialect.Spark:      "null_var IS NULL",
 			},
 		},
 		{
@@ -75,6 +80,7 @@ func BasicTests() []ConvertTestCase {
 				dialect.SQLite:     "adult IS NOT TRUE",
 				dialect.DuckDB:     "adult IS NOT TRUE",
 				dialect.BigQuery:   "adult IS NOT TRUE",
+				dialect.Spark:      "adult IS NOT TRUE",
 			},
 		},
 		{
@@ -87,6 +93,7 @@ func BasicTests() []ConvertTestCase {
 				dialect.SQLite:     "NOT adult",
 				dialect.DuckDB:     "NOT adult",
 				dialect.BigQuery:   "NOT adult",
+				dialect.Spark:      "NOT adult",
 			},
 		},
 		{
@@ -99,6 +106,7 @@ func BasicTests() []ConvertTestCase {
 				dialect.SQLite:     "-1",
 				dialect.DuckDB:     "-1",
 				dialect.BigQuery:   "-1",
+				dialect.Spark:      "-1",
 			},
 		},
 		{
@@ -111,6 +119,7 @@ func BasicTests() []ConvertTestCase {
 				dialect.SQLite:     "CASE WHEN name = 'a' THEN 'a' ELSE 'b' END",
 				dialect.DuckDB:     "CASE WHEN name = 'a' THEN 'a' ELSE 'b' END",
 				dialect.BigQuery:   "CASE WHEN name = 'a' THEN 'a' ELSE 'b' END",
+				dialect.Spark:      "CASE WHEN name = 'a' THEN 'a' ELSE 'b' END",
 			},
 		},
 		{
@@ -123,6 +132,7 @@ func BasicTests() []ConvertTestCase {
 				dialect.SQLite:     "page.title = 'test'",
 				dialect.DuckDB:     "page.title = 'test'",
 				dialect.BigQuery:   "page.title = 'test'",
+				dialect.Spark:      "page.title = 'test'",
 			},
 		},
 		{
@@ -135,6 +145,7 @@ func BasicTests() []ConvertTestCase {
 				dialect.SQLite:     "name IN (SELECT value FROM json_each(json_array('a', 'b', 'c')))",
 				dialect.DuckDB:     "name = ANY(['a', 'b', 'c'])",
 				dialect.BigQuery:   "name IN UNNEST(['a', 'b', 'c'])",
+				dialect.Spark:      "array_contains(array('a', 'b', 'c'), name)",
 			},
 		},
 	}

@@ -14,6 +14,7 @@ func RegexTests() []ConvertTestCase {
 				dialect.MySQL:      "name REGEXP 'a+'",
 				dialect.DuckDB:     "name ~ 'a+'",
 				dialect.BigQuery:   "REGEXP_CONTAINS(name, 'a+')",
+				dialect.Spark:      "name RLIKE 'a+'",
 			},
 			SkipDialect: map[dialect.Name]string{
 				dialect.SQLite: "SQLite does not support regex",
@@ -28,6 +29,7 @@ func RegexTests() []ConvertTestCase {
 				dialect.MySQL:      "name REGEXP '^[0-9]+$'",
 				dialect.DuckDB:     "name ~ '^[0-9]+$'",
 				dialect.BigQuery:   "REGEXP_CONTAINS(name, '^[0-9]+$')",
+				dialect.Spark:      "name RLIKE '^[0-9]+$'",
 			},
 			SkipDialect: map[dialect.Name]string{
 				dialect.SQLite: "SQLite does not support regex",
@@ -42,6 +44,7 @@ func RegexTests() []ConvertTestCase {
 				dialect.MySQL:      "name REGEXP '\\btest\\b'",
 				dialect.DuckDB:     "name ~ '\\btest\\b'",
 				dialect.BigQuery:   "REGEXP_CONTAINS(name, '\\btest\\b')",
+				dialect.Spark:      "name RLIKE '\\btest\\b'",
 			},
 			SkipDialect: map[dialect.Name]string{
 				dialect.SQLite: "SQLite does not support regex",
@@ -56,6 +59,7 @@ func RegexTests() []ConvertTestCase {
 				dialect.MySQL:      "name REGEXP '\\d{3}-\\d{4}'",
 				dialect.DuckDB:     "name ~ '\\d{3}-\\d{4}'",
 				dialect.BigQuery:   "REGEXP_CONTAINS(name, '\\d{3}-\\d{4}')",
+				dialect.Spark:      "name RLIKE '\\d{3}-\\d{4}'",
 			},
 			SkipDialect: map[dialect.Name]string{
 				dialect.SQLite: "SQLite does not support regex",
@@ -70,6 +74,7 @@ func RegexTests() []ConvertTestCase {
 				dialect.MySQL:      "name REGEXP '\\w+@\\w+\\.\\w+'",
 				dialect.DuckDB:     "name ~ '\\w+@\\w+\\.\\w+'",
 				dialect.BigQuery:   "REGEXP_CONTAINS(name, '\\w+@\\w+\\.\\w+')",
+				dialect.Spark:      "name RLIKE '\\w+@\\w+\\.\\w+'",
 			},
 			SkipDialect: map[dialect.Name]string{
 				dialect.SQLite: "SQLite does not support regex",
@@ -84,6 +89,7 @@ func RegexTests() []ConvertTestCase {
 				dialect.MySQL:      "name REGEXP '.*pattern.*'",
 				dialect.DuckDB:     "name ~ '.*pattern.*'",
 				dialect.BigQuery:   "REGEXP_CONTAINS(name, '.*pattern.*')",
+				dialect.Spark:      "name RLIKE '.*pattern.*'",
 			},
 			SkipDialect: map[dialect.Name]string{
 				dialect.SQLite: "SQLite does not support regex",

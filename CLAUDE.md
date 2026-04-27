@@ -4,11 +4,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-cel2sql converts CEL (Common Expression Language) expressions to SQL conditions. It supports multiple SQL dialects: PostgreSQL (default), MySQL, SQLite, DuckDB, and BigQuery.
+cel2sql converts CEL (Common Expression Language) expressions to SQL conditions. It supports six SQL dialects: PostgreSQL (default), MySQL, SQLite, DuckDB, BigQuery, and Apache Spark SQL.
 
 **Module**: `github.com/spandigital/cel2sql/v3`
-**Go Version**: 1.24+
-**Current Version**: v3.0.0
+**Go Version**: 1.25+
+**Current Version**: v3.7.1
 
 ## Common Development Commands
 
@@ -94,7 +94,13 @@ go test -v -run TestFunctionName ./...
     - Handles nested RECORD types recursively
     - Accepts `*bigquery.Client` + dataset ID
 
-11. **`sqltypes/types.go`** - Custom SQL type definitions for CEL (DATE, TIME, DATETIME, INTERVAL)
+11. **`spark/provider.go`** - Apache Spark SQL type provider
+    - Maps Spark types (incl. `array<T>` and `struct<...>`) to CEL types
+    - `LoadTableSchema` uses `DESCRIBE TABLE` (table name validated against an identifier regex)
+    - Accepts `*sql.DB` (caller owns connection); works with any database/sql driver such as gohive
+    - Skips trailing partition-info rows from `DESCRIBE TABLE` output
+
+12. **`sqltypes/types.go`** - Custom SQL type definitions for CEL (DATE, TIME, DATETIME, INTERVAL)
 
 ### Type System Integration
 
@@ -220,7 +226,7 @@ These validations prevent PostgreSQL syntax errors and ensure predictable behavi
 
 ### Testing Guidelines
 - Use the dialect-specific schema/provider for each dialect's tests
-- Use `pg.NewTypeProvider()` for PostgreSQL, `mysql.NewTypeProvider()` for MySQL, etc.
+- Use `pg.NewTypeProvider()` for PostgreSQL, `mysql.NewTypeProvider()` for MySQL, `spark.NewTypeProvider()` for Spark, etc.
 - Include tests for nested types, arrays, and JSON fields
 - Verify SQL output matches the target dialect's syntax
 - Use testcontainers for integration tests (PostgreSQL, MySQL, BigQuery)
@@ -380,6 +386,13 @@ schema := mysql.NewSchema([]mysql.FieldSchema{
 provider := mysql.NewTypeProvider(map[string]mysql.Schema{"TableName": schema})
 
 // SQLite, DuckDB, BigQuery follow the same pattern with their own type names
+
+// Spark SQL (struct/array/map nesting via type names)
+schema := spark.NewSchema([]spark.FieldSchema{
+    {Name: "id", Type: "bigint"},
+    {Name: "tags", Type: "string", Repeated: true, ElementType: "string"},
+})
+provider := spark.NewTypeProvider(map[string]spark.Schema{"TableName": schema})
 ```
 
 ### Dynamic Schema Loading
@@ -414,13 +427,19 @@ err = provider.LoadTableSchema(ctx, "tableName")
 client, _ := bigquery.NewClient(ctx, "project-id")
 provider, err := bqprovider.NewTypeProviderWithClient(ctx, client, "dataset_id")
 err = provider.LoadTableSchema(ctx, "tableName")
+
+// Spark SQL — accepts *sql.DB, uses DESCRIBE TABLE (validates table name)
+// Works with any database/sql driver, e.g. github.com/beltran/gohive for Hive/Spark Thrift.
+db, _ := sql.Open("hive", "user@host:10000/default")
+provider, err := spark.NewTypeProviderWithConnection(ctx, db)
+err = provider.LoadTableSchema(ctx, "catalog.schema.tablename")
 ```
 
 **Key differences per dialect:**
 - **PostgreSQL**: `NewTypeProviderWithConnection(ctx, connString)` — owns its pgxpool, `Close()` releases it
-- **MySQL/SQLite/DuckDB**: `NewTypeProviderWithConnection(ctx, *sql.DB)` — caller owns DB, `Close()` is no-op
+- **MySQL/SQLite/DuckDB/Spark**: `NewTypeProviderWithConnection(ctx, *sql.DB)` — caller owns DB, `Close()` is no-op
 - **BigQuery**: `NewTypeProviderWithClient(ctx, *bigquery.Client, datasetID)` — caller owns client, `Close()` is no-op
-- **SQLite**: Table name validated via regex (`^[a-zA-Z_][a-zA-Z0-9_]*$`) since PRAGMA doesn't support parameterized queries
+- **SQLite/Spark**: Table name validated via regex (Spark allows dots for `catalog.schema.table`) since `PRAGMA`/`DESCRIBE TABLE` don't accept parameterized queries
 
 ### CEL Environment Setup
 ```go
@@ -911,14 +930,17 @@ cel2sql/
 │   └── provider.go         # LoadTableSchema via information_schema + *sql.DB
 ├── bigquery/               # BigQuery type provider
 │   └── provider.go         # LoadTableSchema via BigQuery client API
+├── spark/                  # Apache Spark SQL type provider
+│   └── provider.go         # LoadTableSchema via DESCRIBE TABLE + *sql.DB
 ├── dialect/                # Dialect interface and implementations
-│   ├── dialect.go          # Core Dialect interface (~40 methods)
+│   ├── dialect.go          # Core Dialect interface (~47 methods)
 │   ├── index_advisor.go    # IndexAdvisor interface, PatternType, IndexPattern
 │   ├── postgres/           # PostgreSQL dialect + IndexAdvisor (BTREE, GIN, GIN+trgm)
 │   ├── mysql/              # MySQL dialect + IndexAdvisor (BTREE, FULLTEXT)
 │   ├── sqlite/             # SQLite dialect + IndexAdvisor (BTREE only)
 │   ├── duckdb/             # DuckDB dialect + IndexAdvisor (ART)
-│   └── bigquery/           # BigQuery dialect + IndexAdvisor (CLUSTERING, SEARCH_INDEX)
+│   ├── bigquery/           # BigQuery dialect + IndexAdvisor (CLUSTERING, SEARCH_INDEX)
+│   └── spark/              # Spark SQL dialect (no IndexAdvisor in v1)
 ├── sqltypes/               # Custom SQL types for CEL
 │   └── types.go
 ├── testcases/              # Shared test cases with per-dialect expected SQL
