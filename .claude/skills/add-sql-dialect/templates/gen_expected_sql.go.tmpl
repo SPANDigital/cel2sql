@@ -1,0 +1,83 @@
+// Build-tag-gated generator that prints actual SQL output for every shared test
+// case under the {{DIALECT}} dialect. Copy this file to testutil/gen_{{DIALECT}}_test.go,
+// run `go test -tags={{DIALECT}}gen -v -run TestGen{{Dialect}}Expected ./testutil/`,
+// transcribe the output into testcases/*.go WantSQL maps, then DELETE this file.
+//
+// Replacements before use:
+//   {{DIALECT}}  → lowercase dialect name (e.g. "spark")
+//   {{Dialect}}  → PascalCase dialect name (e.g. "Spark")
+//   The factory call below assumes testutil.{{Dialect}}EnvFactory() exists; add
+//   it to testutil/env.go before running.
+
+//go:build {{DIALECT}}gen
+
+package testutil_test
+
+import (
+	"fmt"
+	"testing"
+
+	"github.com/spandigital/cel2sql/v3"
+	"github.com/spandigital/cel2sql/v3/testcases"
+	"github.com/spandigital/cel2sql/v3/testutil"
+)
+
+func TestGen{{Dialect}}Expected(t *testing.T) {
+	factory := testutil.{{Dialect}}EnvFactory()
+
+	groups := []struct {
+		name  string
+		cases []testcases.ConvertTestCase
+	}{
+		{"basic", testcases.BasicTests()},
+		{"operators", testcases.OperatorTests()},
+		{"strings", testcases.StringTests()},
+		{"regex", testcases.RegexTests()},
+		{"casts", testcases.CastTests()},
+		{"arrays", testcases.ArrayTests()},
+		{"timestamps", testcases.TimestampTests()},
+		{"comprehensions", testcases.ComprehensionTests()},
+		{"json", testcases.JSONTests()},
+	}
+	for _, g := range groups {
+		fmt.Printf("\n===== %s =====\n", g.name)
+		for _, tc := range g.cases {
+			r, err := factory(tc.EnvSetup)
+			if err != nil {
+				fmt.Printf("%s: ENV ERROR: %v\n", tc.Name, err)
+				continue
+			}
+			ast, issues := r.Env.Compile(tc.CELExpr)
+			if issues != nil && issues.Err() != nil {
+				fmt.Printf("%s: COMPILE ERROR: %v\n", tc.Name, issues.Err())
+				continue
+			}
+			sql, err := cel2sql.Convert(ast, r.Opts...)
+			if err != nil {
+				fmt.Printf("%s | %s | ERROR: %v\n", tc.Name, tc.CELExpr, err)
+				continue
+			}
+			fmt.Printf("%s | %s | %s\n", tc.Name, tc.CELExpr, sql)
+		}
+	}
+
+	fmt.Printf("\n===== parameterized =====\n")
+	for _, tc := range testcases.ParameterizedTests() {
+		r, err := factory(tc.EnvSetup)
+		if err != nil {
+			fmt.Printf("%s: ENV ERROR: %v\n", tc.Name, err)
+			continue
+		}
+		ast, issues := r.Env.Compile(tc.CELExpr)
+		if issues != nil && issues.Err() != nil {
+			fmt.Printf("%s: COMPILE ERROR: %v\n", tc.Name, issues.Err())
+			continue
+		}
+		result, err := cel2sql.ConvertParameterized(ast, r.Opts...)
+		if err != nil {
+			fmt.Printf("%s | %s | ERROR: %v\n", tc.Name, tc.CELExpr, err)
+			continue
+		}
+		fmt.Printf("%s | %s | %s | %v\n", tc.Name, tc.CELExpr, result.SQL, result.Parameters)
+	}
+}
