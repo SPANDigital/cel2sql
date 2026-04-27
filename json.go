@@ -40,7 +40,14 @@ func (con *converter) shouldUseJSONPath(operand *exprpb.Expr, _ string) bool {
 				slog.String("field", fieldName),
 				slog.Bool("is_json", isJSON),
 			)
-			return isJSON
+			if isJSON {
+				return true
+			}
+			// If the root identifier is a JSONB variable (WithJSONVariables),
+			// the whole chain should use JSON operators.
+			if con.isJSONVariable(tableName) {
+				return true
+			}
 		}
 
 		// Check if there's a JSON field somewhere in the operand chain
@@ -70,6 +77,11 @@ func (con *converter) hasJSONFieldInChain(expr *exprpb.Expr) bool {
 			if con.isFieldJSON(tableName, field) {
 				return true
 			}
+			// Check if the root identifier was declared as a JSON variable
+			// via WithJSONVariables (e.g., tags.corpus.section).
+			if con.isJSONVariable(tableName) {
+				return true
+			}
 		}
 
 		// Recursively check the operand
@@ -92,14 +104,6 @@ func (con *converter) isJSONTextExtraction(expr *exprpb.Expr) bool {
 	}
 
 	return false
-}
-
-// needsNumericCasting checks if an identifier is an iteration variable from a
-// JSON array comprehension that requires numeric casting. Returns true only for
-// variables explicitly registered in jsonIterVars during comprehension processing,
-// not based on variable name heuristics.
-func (con *converter) needsNumericCasting(identName string) bool {
-	return con.jsonIterVars != nil && con.jsonIterVars[identName]
 }
 
 // isNumericJSONField checks if a JSON field name typically contains numeric values
@@ -305,8 +309,10 @@ func (con *converter) buildJSONPathInternal(expr *exprpb.Expr, isFinalField bool
 	// Check if the operand is also a select expression (nested access)
 	if operandSelect := operand.GetSelectExpr(); operandSelect != nil {
 		// Check if this is a direct table.column access (e.g., obj.metadata)
-		// If so, we should NOT apply JSON operators to this level
-		if tableName, columnName, ok := con.getTableAndFieldFromSelectChain(operand); ok {
+		// If so, we should NOT apply JSON operators to this level.
+		// Skip this shortcut when the root is a flat JSONB variable (WithJSONVariables);
+		// those should produce JSON operators all the way down (tags->'corpus'->>'section').
+		if tableName, columnName, ok := con.getTableAndFieldFromSelectChain(operand); ok && !con.isJSONVariable(tableName) {
 			// This is table.column where column is JSON/JSONB
 			// Render as table.column without JSON operators, then add JSON operator for the current field
 			return con.dialect.WriteJSONFieldAccess(&con.str, func() error {

@@ -78,7 +78,9 @@ func TestWithJSONVariables_DotNotation(t *testing.T) {
 			require.NoError(t, err)
 
 			assert.Equal(t, tt.wantSQL, result.SQL)
-			if tt.wantArgs != nil {
+			if tt.wantArgs == nil {
+				assert.Empty(t, result.Parameters, "expected no parameters")
+			} else {
 				assert.Equal(t, tt.wantArgs, result.Parameters)
 			}
 		})
@@ -121,7 +123,9 @@ func TestWithJSONVariables_BracketNotation(t *testing.T) {
 			require.NoError(t, err)
 
 			assert.Equal(t, tt.wantSQL, result.SQL)
-			if tt.wantArgs != nil {
+			if tt.wantArgs == nil {
+				assert.Empty(t, result.Parameters, "expected no parameters")
+			} else {
 				assert.Equal(t, tt.wantArgs, result.Parameters)
 			}
 		})
@@ -176,6 +180,47 @@ func TestWithJSONVariables_NonParameterized(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.Equal(t, `props->>'key' = 'value'`, sql)
+}
+
+func TestWithJSONVariables_NestedDotNotation(t *testing.T) {
+	env, err := cel.NewEnv(
+		cel.CustomTypeAdapter(types.DefaultTypeAdapter),
+		cel.Variable("tags", cel.MapType(cel.StringType, cel.DynType)),
+	)
+	require.NoError(t, err)
+
+	tests := []struct {
+		name     string
+		expr     string
+		wantSQL  string
+		wantArgs []any
+	}{
+		{
+			name:     "two levels",
+			expr:     `tags.corpus.section == "intro"`,
+			wantSQL:  `tags->'corpus'->>'section' = $1`,
+			wantArgs: []any{"intro"},
+		},
+		{
+			name:     "three levels",
+			expr:     `tags.corpus.section.subsection == "x"`,
+			wantSQL:  `tags->'corpus'->'section'->>'subsection' = $1`,
+			wantArgs: []any{"x"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ast, issues := env.Compile(tt.expr)
+			require.NoError(t, issues.Err())
+
+			result, err := cel2sql.ConvertParameterized(ast, cel2sql.WithJSONVariables("tags"))
+			require.NoError(t, err)
+
+			assert.Equal(t, tt.wantSQL, result.SQL)
+			assert.Equal(t, tt.wantArgs, result.Parameters)
+		})
+	}
 }
 
 func TestWithJSONVariables_OnlyDeclaredVarsAffected(t *testing.T) {
@@ -249,7 +294,9 @@ func TestWithColumnAliases(t *testing.T) {
 			require.NoError(t, err)
 
 			assert.Equal(t, tt.wantSQL, result.SQL)
-			if tt.wantArgs != nil {
+			if tt.wantArgs == nil {
+				assert.Empty(t, result.Parameters, "expected no parameters")
+			} else {
 				assert.Equal(t, tt.wantArgs, result.Parameters)
 			}
 		})

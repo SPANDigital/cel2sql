@@ -405,14 +405,13 @@ type converter struct {
 	ctx                context.Context
 	logger             *slog.Logger
 	dialect            dialect.Dialect
-	depth              int             // Current recursion depth
-	maxDepth           int             // Maximum allowed recursion depth
-	maxOutputLen       int             // Maximum allowed SQL output length
-	comprehensionDepth int             // Current comprehension nesting depth
-	jsonIterVars       map[string]bool // Iteration variables from JSON array comprehensions
-	parameterize       bool            // Enable parameterized output
-	parameters         []any           // Collected parameters for parameterized queries
-	paramCount         int             // Parameter counter for placeholders
+	depth              int   // Current recursion depth
+	maxDepth           int   // Maximum allowed recursion depth
+	maxOutputLen       int   // Maximum allowed SQL output length
+	comprehensionDepth int   // Current comprehension nesting depth
+	parameterize       bool  // Enable parameterized output
+	parameters         []any // Collected parameters for parameterized queries
+	paramCount         int   // Parameter counter for placeholders
 }
 
 // checkContext checks if the context has been cancelled or expired.
@@ -1956,10 +1955,7 @@ func (con *converter) visitCallMapIndex(expr *exprpb.Expr) error {
 		return err
 	}
 	if identExpr := m.GetIdentExpr(); identExpr != nil && con.isJSONVariable(identExpr.GetName()) {
-		if err := con.visit(m); err != nil {
-			return err
-		}
-		return con.dialect.WriteJSONFieldAccess(&con.str, func() error { return nil }, fieldName, true)
+		return con.dialect.WriteJSONFieldAccess(&con.str, func() error { return con.visit(m) }, fieldName, true)
 	}
 	nested := isBinaryOrTernaryOperator(m)
 	if err := con.visitMaybeNested(m, nested); err != nil {
@@ -2351,15 +2347,7 @@ func (con *converter) visitIdent(expr *exprpb.Expr) error {
 		sqlName = alias
 	}
 
-	// Check if this identifier needs numeric casting for JSON comprehensions
-	if con.needsNumericCasting(identName) {
-		con.str.WriteString("(")
-		con.str.WriteString(sqlName)
-		con.str.WriteString(")")
-		con.dialect.WriteCastToNumeric(&con.str)
-	} else {
-		con.str.WriteString(sqlName)
-	}
+	con.str.WriteString(sqlName)
 	return nil
 }
 
