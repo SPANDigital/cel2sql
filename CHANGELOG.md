@@ -2,6 +2,20 @@
 
 ## [Unreleased]
 
+## [3.7.1] - 2026-04-27
+
+### Fixed
+- **Spurious `##[error]` annotations on green CI runs** (#115) — `t.Log` output in
+  `TestEscapeJSONFieldNameFunction` matched the Go problem matcher's
+  `<file>:<line>:<col>` pattern and produced false error annotations
+  (most visibly on the v3.7.0 Release run). Replaced the colon after each
+  filename with an em-dash; behavior unchanged.
+
+### Changed
+- **Dependencies**
+  - `google.golang.org/api` 0.269.0 → 0.276.0 (#112)
+  - `google.golang.org/grpc` 1.79.3 → 1.80.0 (#108)
+
 ## [3.7.0] - 2026-04-27
 
 ### Added
