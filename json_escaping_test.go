@@ -129,11 +129,11 @@ func TestEscapeJSONFieldNameFunction(t *testing.T) {
 	t.Log("Example: \"user's name\" -> \"user''s name\"")
 	t.Log("This prevents SQL injection when field names contain single quotes")
 	t.Log("The function is used in:")
-	t.Log("  - cel2sql.go: visitSelect() for -> and ->> operators")
-	t.Log("  - cel2sql.go: visitHasFunction() for ? and -> operators")
-	t.Log("  - cel2sql.go: visitNestedJSONHas() for jsonb_extract_path_text()")
-	t.Log("  - json.go: buildJSONPathForArray() for nested JSON paths")
-	t.Log("  - json.go: buildJSONPathInternal() for all JSON path construction")
+	t.Log("  - cel2sql.go — visitSelect() for -> and ->> operators")
+	t.Log("  - cel2sql.go — visitHasFunction() for ? and -> operators")
+	t.Log("  - cel2sql.go — visitNestedJSONHas() for jsonb_extract_path_text()")
+	t.Log("  - json.go — buildJSONPathForArray() for nested JSON paths")
+	t.Log("  - json.go — buildJSONPathInternal() for all JSON path construction")
 }
 
 // TestJSONFieldNameEscaping_SecurityImplications tests security aspects
