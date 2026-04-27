@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1777276262294,
+  "lastUpdate": 1777276729972,
   "repoUrl": "https://github.com/SPANDigital/cel2sql",
   "entries": {
     "Benchmark": [
@@ -123880,6 +123880,1734 @@ window.BENCHMARK_DATA = {
             "value": 2,
             "unit": "allocs/op",
             "extra": "155115 times\n4 procs"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "49699333+dependabot[bot]@users.noreply.github.com",
+            "name": "dependabot[bot]",
+            "username": "dependabot[bot]"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "b589c11c1ef3ad13e62bbebd8dac67b1144abdb0",
+          "message": "chore(deps): bump filippo.io/edwards25519 from 1.1.0 to 1.1.1 (#107)\n\nBumps [filippo.io/edwards25519](https://github.com/FiloSottile/edwards25519) from 1.1.0 to 1.1.1.\n- [Commits](https://github.com/FiloSottile/edwards25519/compare/v1.1.0...v1.1.1)\n\n---\nupdated-dependencies:\n- dependency-name: filippo.io/edwards25519\n  dependency-version: 1.1.1\n  dependency-type: indirect\n...\n\nSigned-off-by: dependabot[bot] <support@github.com>\nCo-authored-by: dependabot[bot] <49699333+dependabot[bot]@users.noreply.github.com>",
+          "timestamp": "2026-04-27T09:55:44+02:00",
+          "tree_id": "b9ec41182143e9fadd96109f398808c19e4f785b",
+          "url": "https://github.com/SPANDigital/cel2sql/commit/b589c11c1ef3ad13e62bbebd8dac67b1144abdb0"
+        },
+        "date": 1777276728218,
+        "tool": "go",
+        "benches": [
+          {
+            "name": "BenchmarkByteArrayConversion (github.com/spandigital/cel2sql/v3)",
+            "value": 8101,
+            "unit": "ns/op\t   14929 B/op\t      31 allocs/op",
+            "extra": "151483 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkByteArrayConversion (github.com/spandigital/cel2sql/v3) - ns/op",
+            "value": 8101,
+            "unit": "ns/op",
+            "extra": "151483 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkByteArrayConversion (github.com/spandigital/cel2sql/v3) - B/op",
+            "value": 14929,
+            "unit": "B/op",
+            "extra": "151483 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkByteArrayConversion (github.com/spandigital/cel2sql/v3) - allocs/op",
+            "value": 31,
+            "unit": "allocs/op",
+            "extra": "151483 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkConvertSimple/equality (github.com/spandigital/cel2sql/v3)",
+            "value": 2123,
+            "unit": "ns/op\t    1816 B/op\t      26 allocs/op",
+            "extra": "539378 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkConvertSimple/equality (github.com/spandigital/cel2sql/v3) - ns/op",
+            "value": 2123,
+            "unit": "ns/op",
+            "extra": "539378 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkConvertSimple/equality (github.com/spandigital/cel2sql/v3) - B/op",
+            "value": 1816,
+            "unit": "B/op",
+            "extra": "539378 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkConvertSimple/equality (github.com/spandigital/cel2sql/v3) - allocs/op",
+            "value": 26,
+            "unit": "allocs/op",
+            "extra": "539378 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkConvertSimple/greater_than (github.com/spandigital/cel2sql/v3)",
+            "value": 2165,
+            "unit": "ns/op\t    1816 B/op\t      26 allocs/op",
+            "extra": "519639 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkConvertSimple/greater_than (github.com/spandigital/cel2sql/v3) - ns/op",
+            "value": 2165,
+            "unit": "ns/op",
+            "extra": "519639 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkConvertSimple/greater_than (github.com/spandigital/cel2sql/v3) - B/op",
+            "value": 1816,
+            "unit": "B/op",
+            "extra": "519639 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkConvertSimple/greater_than (github.com/spandigital/cel2sql/v3) - allocs/op",
+            "value": 26,
+            "unit": "allocs/op",
+            "extra": "519639 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkConvertSimple/string_equality (github.com/spandigital/cel2sql/v3)",
+            "value": 2257,
+            "unit": "ns/op\t    1856 B/op\t      28 allocs/op",
+            "extra": "504109 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkConvertSimple/string_equality (github.com/spandigital/cel2sql/v3) - ns/op",
+            "value": 2257,
+            "unit": "ns/op",
+            "extra": "504109 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkConvertSimple/string_equality (github.com/spandigital/cel2sql/v3) - B/op",
+            "value": 1856,
+            "unit": "B/op",
+            "extra": "504109 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkConvertSimple/string_equality (github.com/spandigital/cel2sql/v3) - allocs/op",
+            "value": 28,
+            "unit": "allocs/op",
+            "extra": "504109 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkConvertSimple/boolean_check (github.com/spandigital/cel2sql/v3)",
+            "value": 1526,
+            "unit": "ns/op\t    1392 B/op\t      17 allocs/op",
+            "extra": "725816 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkConvertSimple/boolean_check (github.com/spandigital/cel2sql/v3) - ns/op",
+            "value": 1526,
+            "unit": "ns/op",
+            "extra": "725816 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkConvertSimple/boolean_check (github.com/spandigital/cel2sql/v3) - B/op",
+            "value": 1392,
+            "unit": "B/op",
+            "extra": "725816 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkConvertSimple/boolean_check (github.com/spandigital/cel2sql/v3) - allocs/op",
+            "value": 17,
+            "unit": "allocs/op",
+            "extra": "725816 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkConvertOperators/logical_and (github.com/spandigital/cel2sql/v3)",
+            "value": 3172,
+            "unit": "ns/op\t    2376 B/op\t      37 allocs/op",
+            "extra": "343234 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkConvertOperators/logical_and (github.com/spandigital/cel2sql/v3) - ns/op",
+            "value": 3172,
+            "unit": "ns/op",
+            "extra": "343234 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkConvertOperators/logical_and (github.com/spandigital/cel2sql/v3) - B/op",
+            "value": 2376,
+            "unit": "B/op",
+            "extra": "343234 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkConvertOperators/logical_and (github.com/spandigital/cel2sql/v3) - allocs/op",
+            "value": 37,
+            "unit": "allocs/op",
+            "extra": "343234 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkConvertOperators/logical_or (github.com/spandigital/cel2sql/v3)",
+            "value": 3860,
+            "unit": "ns/op\t    2800 B/op\t      46 allocs/op",
+            "extra": "301506 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkConvertOperators/logical_or (github.com/spandigital/cel2sql/v3) - ns/op",
+            "value": 3860,
+            "unit": "ns/op",
+            "extra": "301506 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkConvertOperators/logical_or (github.com/spandigital/cel2sql/v3) - B/op",
+            "value": 2800,
+            "unit": "B/op",
+            "extra": "301506 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkConvertOperators/logical_or (github.com/spandigital/cel2sql/v3) - allocs/op",
+            "value": 46,
+            "unit": "allocs/op",
+            "extra": "301506 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkConvertOperators/arithmetic_add (github.com/spandigital/cel2sql/v3)",
+            "value": 2965,
+            "unit": "ns/op\t    2256 B/op\t      36 allocs/op",
+            "extra": "422582 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkConvertOperators/arithmetic_add (github.com/spandigital/cel2sql/v3) - ns/op",
+            "value": 2965,
+            "unit": "ns/op",
+            "extra": "422582 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkConvertOperators/arithmetic_add (github.com/spandigital/cel2sql/v3) - B/op",
+            "value": 2256,
+            "unit": "B/op",
+            "extra": "422582 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkConvertOperators/arithmetic_add (github.com/spandigital/cel2sql/v3) - allocs/op",
+            "value": 36,
+            "unit": "allocs/op",
+            "extra": "422582 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkConvertOperators/arithmetic_sub (github.com/spandigital/cel2sql/v3)",
+            "value": 3565,
+            "unit": "ns/op\t    2256 B/op\t      36 allocs/op",
+            "extra": "338713 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkConvertOperators/arithmetic_sub (github.com/spandigital/cel2sql/v3) - ns/op",
+            "value": 3565,
+            "unit": "ns/op",
+            "extra": "338713 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkConvertOperators/arithmetic_sub (github.com/spandigital/cel2sql/v3) - B/op",
+            "value": 2256,
+            "unit": "B/op",
+            "extra": "338713 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkConvertOperators/arithmetic_sub (github.com/spandigital/cel2sql/v3) - allocs/op",
+            "value": 36,
+            "unit": "allocs/op",
+            "extra": "338713 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkConvertOperators/arithmetic_mul (github.com/spandigital/cel2sql/v3)",
+            "value": 3168,
+            "unit": "ns/op\t    2272 B/op\t      38 allocs/op",
+            "extra": "371776 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkConvertOperators/arithmetic_mul (github.com/spandigital/cel2sql/v3) - ns/op",
+            "value": 3168,
+            "unit": "ns/op",
+            "extra": "371776 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkConvertOperators/arithmetic_mul (github.com/spandigital/cel2sql/v3) - B/op",
+            "value": 2272,
+            "unit": "B/op",
+            "extra": "371776 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkConvertOperators/arithmetic_mul (github.com/spandigital/cel2sql/v3) - allocs/op",
+            "value": 38,
+            "unit": "allocs/op",
+            "extra": "371776 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkConvertOperators/arithmetic_div (github.com/spandigital/cel2sql/v3)",
+            "value": 3202,
+            "unit": "ns/op\t    2272 B/op\t      38 allocs/op",
+            "extra": "365402 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkConvertOperators/arithmetic_div (github.com/spandigital/cel2sql/v3) - ns/op",
+            "value": 3202,
+            "unit": "ns/op",
+            "extra": "365402 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkConvertOperators/arithmetic_div (github.com/spandigital/cel2sql/v3) - B/op",
+            "value": 2272,
+            "unit": "B/op",
+            "extra": "365402 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkConvertOperators/arithmetic_div (github.com/spandigital/cel2sql/v3) - allocs/op",
+            "value": 38,
+            "unit": "allocs/op",
+            "extra": "365402 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkConvertOperators/modulo (github.com/spandigital/cel2sql/v3)",
+            "value": 2868,
+            "unit": "ns/op\t    2256 B/op\t      36 allocs/op",
+            "extra": "412288 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkConvertOperators/modulo (github.com/spandigital/cel2sql/v3) - ns/op",
+            "value": 2868,
+            "unit": "ns/op",
+            "extra": "412288 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkConvertOperators/modulo (github.com/spandigital/cel2sql/v3) - B/op",
+            "value": 2256,
+            "unit": "B/op",
+            "extra": "412288 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkConvertOperators/modulo (github.com/spandigital/cel2sql/v3) - allocs/op",
+            "value": 36,
+            "unit": "allocs/op",
+            "extra": "412288 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkConvertOperators/string_concat (github.com/spandigital/cel2sql/v3)",
+            "value": 3347,
+            "unit": "ns/op\t    2528 B/op\t      42 allocs/op",
+            "extra": "334113 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkConvertOperators/string_concat (github.com/spandigital/cel2sql/v3) - ns/op",
+            "value": 3347,
+            "unit": "ns/op",
+            "extra": "334113 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkConvertOperators/string_concat (github.com/spandigital/cel2sql/v3) - B/op",
+            "value": 2528,
+            "unit": "B/op",
+            "extra": "334113 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkConvertOperators/string_concat (github.com/spandigital/cel2sql/v3) - allocs/op",
+            "value": 42,
+            "unit": "allocs/op",
+            "extra": "334113 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkConvertOperators/complex_expression (github.com/spandigital/cel2sql/v3)",
+            "value": 7251,
+            "unit": "ns/op\t    5016 B/op\t      83 allocs/op",
+            "extra": "158661 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkConvertOperators/complex_expression (github.com/spandigital/cel2sql/v3) - ns/op",
+            "value": 7251,
+            "unit": "ns/op",
+            "extra": "158661 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkConvertOperators/complex_expression (github.com/spandigital/cel2sql/v3) - B/op",
+            "value": 5016,
+            "unit": "B/op",
+            "extra": "158661 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkConvertOperators/complex_expression (github.com/spandigital/cel2sql/v3) - allocs/op",
+            "value": 83,
+            "unit": "allocs/op",
+            "extra": "158661 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkConvertComprehensions/all_simple (github.com/spandigital/cel2sql/v3)",
+            "value": 5236,
+            "unit": "ns/op\t    4336 B/op\t      69 allocs/op",
+            "extra": "227030 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkConvertComprehensions/all_simple (github.com/spandigital/cel2sql/v3) - ns/op",
+            "value": 5236,
+            "unit": "ns/op",
+            "extra": "227030 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkConvertComprehensions/all_simple (github.com/spandigital/cel2sql/v3) - B/op",
+            "value": 4336,
+            "unit": "B/op",
+            "extra": "227030 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkConvertComprehensions/all_simple (github.com/spandigital/cel2sql/v3) - allocs/op",
+            "value": 69,
+            "unit": "allocs/op",
+            "extra": "227030 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkConvertComprehensions/all_complex (github.com/spandigital/cel2sql/v3)",
+            "value": 7382,
+            "unit": "ns/op\t    6160 B/op\t      91 allocs/op",
+            "extra": "156291 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkConvertComprehensions/all_complex (github.com/spandigital/cel2sql/v3) - ns/op",
+            "value": 7382,
+            "unit": "ns/op",
+            "extra": "156291 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkConvertComprehensions/all_complex (github.com/spandigital/cel2sql/v3) - B/op",
+            "value": 6160,
+            "unit": "B/op",
+            "extra": "156291 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkConvertComprehensions/all_complex (github.com/spandigital/cel2sql/v3) - allocs/op",
+            "value": 91,
+            "unit": "allocs/op",
+            "extra": "156291 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkConvertComprehensions/exists_simple (github.com/spandigital/cel2sql/v3)",
+            "value": 5676,
+            "unit": "ns/op\t    4881 B/op\t      78 allocs/op",
+            "extra": "210740 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkConvertComprehensions/exists_simple (github.com/spandigital/cel2sql/v3) - ns/op",
+            "value": 5676,
+            "unit": "ns/op",
+            "extra": "210740 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkConvertComprehensions/exists_simple (github.com/spandigital/cel2sql/v3) - B/op",
+            "value": 4881,
+            "unit": "B/op",
+            "extra": "210740 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkConvertComprehensions/exists_simple (github.com/spandigital/cel2sql/v3) - allocs/op",
+            "value": 78,
+            "unit": "allocs/op",
+            "extra": "210740 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkConvertComprehensions/exists_complex (github.com/spandigital/cel2sql/v3)",
+            "value": 7523,
+            "unit": "ns/op\t    6593 B/op\t      98 allocs/op",
+            "extra": "154156 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkConvertComprehensions/exists_complex (github.com/spandigital/cel2sql/v3) - ns/op",
+            "value": 7523,
+            "unit": "ns/op",
+            "extra": "154156 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkConvertComprehensions/exists_complex (github.com/spandigital/cel2sql/v3) - B/op",
+            "value": 6593,
+            "unit": "B/op",
+            "extra": "154156 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkConvertComprehensions/exists_complex (github.com/spandigital/cel2sql/v3) - allocs/op",
+            "value": 98,
+            "unit": "allocs/op",
+            "extra": "154156 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkConvertComprehensions/exists_one (github.com/spandigital/cel2sql/v3)",
+            "value": 6562,
+            "unit": "ns/op\t    5920 B/op\t      90 allocs/op",
+            "extra": "167144 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkConvertComprehensions/exists_one (github.com/spandigital/cel2sql/v3) - ns/op",
+            "value": 6562,
+            "unit": "ns/op",
+            "extra": "167144 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkConvertComprehensions/exists_one (github.com/spandigital/cel2sql/v3) - B/op",
+            "value": 5920,
+            "unit": "B/op",
+            "extra": "167144 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkConvertComprehensions/exists_one (github.com/spandigital/cel2sql/v3) - allocs/op",
+            "value": 90,
+            "unit": "allocs/op",
+            "extra": "167144 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkConvertComprehensions/filter (github.com/spandigital/cel2sql/v3)",
+            "value": 7062,
+            "unit": "ns/op\t    6088 B/op\t     107 allocs/op",
+            "extra": "178147 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkConvertComprehensions/filter (github.com/spandigital/cel2sql/v3) - ns/op",
+            "value": 7062,
+            "unit": "ns/op",
+            "extra": "178147 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkConvertComprehensions/filter (github.com/spandigital/cel2sql/v3) - B/op",
+            "value": 6088,
+            "unit": "B/op",
+            "extra": "178147 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkConvertComprehensions/filter (github.com/spandigital/cel2sql/v3) - allocs/op",
+            "value": 107,
+            "unit": "allocs/op",
+            "extra": "178147 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkConvertComprehensions/map (github.com/spandigital/cel2sql/v3)",
+            "value": 5817,
+            "unit": "ns/op\t    4912 B/op\t      86 allocs/op",
+            "extra": "192388 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkConvertComprehensions/map (github.com/spandigital/cel2sql/v3) - ns/op",
+            "value": 5817,
+            "unit": "ns/op",
+            "extra": "192388 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkConvertComprehensions/map (github.com/spandigital/cel2sql/v3) - B/op",
+            "value": 4912,
+            "unit": "B/op",
+            "extra": "192388 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkConvertComprehensions/map (github.com/spandigital/cel2sql/v3) - allocs/op",
+            "value": 86,
+            "unit": "allocs/op",
+            "extra": "192388 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkConvertJSONPath/simple_access (github.com/spandigital/cel2sql/v3)",
+            "value": 3663,
+            "unit": "ns/op\t    2312 B/op\t      38 allocs/op",
+            "extra": "327051 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkConvertJSONPath/simple_access (github.com/spandigital/cel2sql/v3) - ns/op",
+            "value": 3663,
+            "unit": "ns/op",
+            "extra": "327051 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkConvertJSONPath/simple_access (github.com/spandigital/cel2sql/v3) - B/op",
+            "value": 2312,
+            "unit": "B/op",
+            "extra": "327051 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkConvertJSONPath/simple_access (github.com/spandigital/cel2sql/v3) - allocs/op",
+            "value": 38,
+            "unit": "allocs/op",
+            "extra": "327051 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkConvertJSONPath/nested_access (github.com/spandigital/cel2sql/v3)",
+            "value": 4300,
+            "unit": "ns/op\t    2584 B/op\t      44 allocs/op",
+            "extra": "283755 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkConvertJSONPath/nested_access (github.com/spandigital/cel2sql/v3) - ns/op",
+            "value": 4300,
+            "unit": "ns/op",
+            "extra": "283755 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkConvertJSONPath/nested_access (github.com/spandigital/cel2sql/v3) - B/op",
+            "value": 2584,
+            "unit": "B/op",
+            "extra": "283755 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkConvertJSONPath/nested_access (github.com/spandigital/cel2sql/v3) - allocs/op",
+            "value": 44,
+            "unit": "allocs/op",
+            "extra": "283755 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkConvertJSONPath/json_has (github.com/spandigital/cel2sql/v3)",
+            "value": 2892,
+            "unit": "ns/op\t    1944 B/op\t      30 allocs/op",
+            "extra": "403585 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkConvertJSONPath/json_has (github.com/spandigital/cel2sql/v3) - ns/op",
+            "value": 2892,
+            "unit": "ns/op",
+            "extra": "403585 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkConvertJSONPath/json_has (github.com/spandigital/cel2sql/v3) - B/op",
+            "value": 1944,
+            "unit": "B/op",
+            "extra": "403585 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkConvertJSONPath/json_has (github.com/spandigital/cel2sql/v3) - allocs/op",
+            "value": 30,
+            "unit": "allocs/op",
+            "extra": "403585 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkConvertJSONPath/nested_json_has (github.com/spandigital/cel2sql/v3)",
+            "value": 3412,
+            "unit": "ns/op\t    2104 B/op\t      33 allocs/op",
+            "extra": "335845 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkConvertJSONPath/nested_json_has (github.com/spandigital/cel2sql/v3) - ns/op",
+            "value": 3412,
+            "unit": "ns/op",
+            "extra": "335845 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkConvertJSONPath/nested_json_has (github.com/spandigital/cel2sql/v3) - B/op",
+            "value": 2104,
+            "unit": "B/op",
+            "extra": "335845 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkConvertJSONPath/nested_json_has (github.com/spandigital/cel2sql/v3) - allocs/op",
+            "value": 33,
+            "unit": "allocs/op",
+            "extra": "335845 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkConvertJSONPath/json_comparison (github.com/spandigital/cel2sql/v3)",
+            "value": 3627,
+            "unit": "ns/op\t    2312 B/op\t      38 allocs/op",
+            "extra": "323318 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkConvertJSONPath/json_comparison (github.com/spandigital/cel2sql/v3) - ns/op",
+            "value": 3627,
+            "unit": "ns/op",
+            "extra": "323318 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkConvertJSONPath/json_comparison (github.com/spandigital/cel2sql/v3) - B/op",
+            "value": 2312,
+            "unit": "B/op",
+            "extra": "323318 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkConvertJSONPath/json_comparison (github.com/spandigital/cel2sql/v3) - allocs/op",
+            "value": 38,
+            "unit": "allocs/op",
+            "extra": "323318 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkConvertJSONPath/complex_json (github.com/spandigital/cel2sql/v3)",
+            "value": 7529,
+            "unit": "ns/op\t    4200 B/op\t      71 allocs/op",
+            "extra": "160195 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkConvertJSONPath/complex_json (github.com/spandigital/cel2sql/v3) - ns/op",
+            "value": 7529,
+            "unit": "ns/op",
+            "extra": "160195 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkConvertJSONPath/complex_json (github.com/spandigital/cel2sql/v3) - B/op",
+            "value": 4200,
+            "unit": "B/op",
+            "extra": "160195 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkConvertJSONPath/complex_json (github.com/spandigital/cel2sql/v3) - allocs/op",
+            "value": 71,
+            "unit": "allocs/op",
+            "extra": "160195 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkConvertRegex/simple_pattern (github.com/spandigital/cel2sql/v3)",
+            "value": 7956,
+            "unit": "ns/op\t    6180 B/op\t      78 allocs/op",
+            "extra": "151688 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkConvertRegex/simple_pattern (github.com/spandigital/cel2sql/v3) - ns/op",
+            "value": 7956,
+            "unit": "ns/op",
+            "extra": "151688 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkConvertRegex/simple_pattern (github.com/spandigital/cel2sql/v3) - B/op",
+            "value": 6180,
+            "unit": "B/op",
+            "extra": "151688 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkConvertRegex/simple_pattern (github.com/spandigital/cel2sql/v3) - allocs/op",
+            "value": 78,
+            "unit": "allocs/op",
+            "extra": "151688 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkConvertRegex/case_insensitive (github.com/spandigital/cel2sql/v3)",
+            "value": 7616,
+            "unit": "ns/op\t    6181 B/op\t      78 allocs/op",
+            "extra": "161271 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkConvertRegex/case_insensitive (github.com/spandigital/cel2sql/v3) - ns/op",
+            "value": 7616,
+            "unit": "ns/op",
+            "extra": "161271 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkConvertRegex/case_insensitive (github.com/spandigital/cel2sql/v3) - B/op",
+            "value": 6181,
+            "unit": "B/op",
+            "extra": "161271 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkConvertRegex/case_insensitive (github.com/spandigital/cel2sql/v3) - allocs/op",
+            "value": 78,
+            "unit": "allocs/op",
+            "extra": "161271 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkConvertRegex/complex_pattern (github.com/spandigital/cel2sql/v3)",
+            "value": 8114,
+            "unit": "ns/op\t    6197 B/op\t      78 allocs/op",
+            "extra": "146145 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkConvertRegex/complex_pattern (github.com/spandigital/cel2sql/v3) - ns/op",
+            "value": 8114,
+            "unit": "ns/op",
+            "extra": "146145 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkConvertRegex/complex_pattern (github.com/spandigital/cel2sql/v3) - B/op",
+            "value": 6197,
+            "unit": "B/op",
+            "extra": "146145 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkConvertRegex/complex_pattern (github.com/spandigital/cel2sql/v3) - allocs/op",
+            "value": 78,
+            "unit": "allocs/op",
+            "extra": "146145 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkConvertRegex/with_digit_class (github.com/spandigital/cel2sql/v3)",
+            "value": 7725,
+            "unit": "ns/op\t    6195 B/op\t      79 allocs/op",
+            "extra": "151178 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkConvertRegex/with_digit_class (github.com/spandigital/cel2sql/v3) - ns/op",
+            "value": 7725,
+            "unit": "ns/op",
+            "extra": "151178 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkConvertRegex/with_digit_class (github.com/spandigital/cel2sql/v3) - B/op",
+            "value": 6195,
+            "unit": "B/op",
+            "extra": "151178 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkConvertRegex/with_digit_class (github.com/spandigital/cel2sql/v3) - allocs/op",
+            "value": 79,
+            "unit": "allocs/op",
+            "extra": "151178 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkConvertRegex/with_word_class (github.com/spandigital/cel2sql/v3)",
+            "value": 7608,
+            "unit": "ns/op\t    6195 B/op\t      79 allocs/op",
+            "extra": "161958 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkConvertRegex/with_word_class (github.com/spandigital/cel2sql/v3) - ns/op",
+            "value": 7608,
+            "unit": "ns/op",
+            "extra": "161958 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkConvertRegex/with_word_class (github.com/spandigital/cel2sql/v3) - B/op",
+            "value": 6195,
+            "unit": "B/op",
+            "extra": "161958 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkConvertRegex/with_word_class (github.com/spandigital/cel2sql/v3) - allocs/op",
+            "value": 79,
+            "unit": "allocs/op",
+            "extra": "161958 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkConvertRegex/with_word_boundary (github.com/spandigital/cel2sql/v3)",
+            "value": 7831,
+            "unit": "ns/op\t    6188 B/op\t      79 allocs/op",
+            "extra": "154068 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkConvertRegex/with_word_boundary (github.com/spandigital/cel2sql/v3) - ns/op",
+            "value": 7831,
+            "unit": "ns/op",
+            "extra": "154068 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkConvertRegex/with_word_boundary (github.com/spandigital/cel2sql/v3) - B/op",
+            "value": 6188,
+            "unit": "B/op",
+            "extra": "154068 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkConvertRegex/with_word_boundary (github.com/spandigital/cel2sql/v3) - allocs/op",
+            "value": 79,
+            "unit": "allocs/op",
+            "extra": "154068 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkConvertDeeplyNested/nested_and_5 (github.com/spandigital/cel2sql/v3)",
+            "value": 9602,
+            "unit": "ns/op\t    6800 B/op\t     107 allocs/op",
+            "extra": "125096 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkConvertDeeplyNested/nested_and_5 (github.com/spandigital/cel2sql/v3) - ns/op",
+            "value": 9602,
+            "unit": "ns/op",
+            "extra": "125096 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkConvertDeeplyNested/nested_and_5 (github.com/spandigital/cel2sql/v3) - B/op",
+            "value": 6800,
+            "unit": "B/op",
+            "extra": "125096 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkConvertDeeplyNested/nested_and_5 (github.com/spandigital/cel2sql/v3) - allocs/op",
+            "value": 107,
+            "unit": "allocs/op",
+            "extra": "125096 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkConvertDeeplyNested/nested_and_10 (github.com/spandigital/cel2sql/v3)",
+            "value": 18146,
+            "unit": "ns/op\t   13625 B/op\t     198 allocs/op",
+            "extra": "66012 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkConvertDeeplyNested/nested_and_10 (github.com/spandigital/cel2sql/v3) - ns/op",
+            "value": 18146,
+            "unit": "ns/op",
+            "extra": "66012 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkConvertDeeplyNested/nested_and_10 (github.com/spandigital/cel2sql/v3) - B/op",
+            "value": 13625,
+            "unit": "B/op",
+            "extra": "66012 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkConvertDeeplyNested/nested_and_10 (github.com/spandigital/cel2sql/v3) - allocs/op",
+            "value": 198,
+            "unit": "allocs/op",
+            "extra": "66012 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkConvertDeeplyNested/nested_parentheses_5 (github.com/spandigital/cel2sql/v3)",
+            "value": 2131,
+            "unit": "ns/op\t    1816 B/op\t      26 allocs/op",
+            "extra": "518649 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkConvertDeeplyNested/nested_parentheses_5 (github.com/spandigital/cel2sql/v3) - ns/op",
+            "value": 2131,
+            "unit": "ns/op",
+            "extra": "518649 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkConvertDeeplyNested/nested_parentheses_5 (github.com/spandigital/cel2sql/v3) - B/op",
+            "value": 1816,
+            "unit": "B/op",
+            "extra": "518649 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkConvertDeeplyNested/nested_parentheses_5 (github.com/spandigital/cel2sql/v3) - allocs/op",
+            "value": 26,
+            "unit": "allocs/op",
+            "extra": "518649 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkConvertDeeplyNested/nested_ternary (github.com/spandigital/cel2sql/v3)",
+            "value": 8026,
+            "unit": "ns/op\t    6040 B/op\t      98 allocs/op",
+            "extra": "153866 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkConvertDeeplyNested/nested_ternary (github.com/spandigital/cel2sql/v3) - ns/op",
+            "value": 8026,
+            "unit": "ns/op",
+            "extra": "153866 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkConvertDeeplyNested/nested_ternary (github.com/spandigital/cel2sql/v3) - B/op",
+            "value": 6040,
+            "unit": "B/op",
+            "extra": "153866 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkConvertDeeplyNested/nested_ternary (github.com/spandigital/cel2sql/v3) - allocs/op",
+            "value": 98,
+            "unit": "allocs/op",
+            "extra": "153866 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkConvertDeeplyNested/nested_arithmetic (github.com/spandigital/cel2sql/v3)",
+            "value": 5610,
+            "unit": "ns/op\t    3928 B/op\t      68 allocs/op",
+            "extra": "217222 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkConvertDeeplyNested/nested_arithmetic (github.com/spandigital/cel2sql/v3) - ns/op",
+            "value": 5610,
+            "unit": "ns/op",
+            "extra": "217222 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkConvertDeeplyNested/nested_arithmetic (github.com/spandigital/cel2sql/v3) - B/op",
+            "value": 3928,
+            "unit": "B/op",
+            "extra": "217222 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkConvertDeeplyNested/nested_arithmetic (github.com/spandigital/cel2sql/v3) - allocs/op",
+            "value": 68,
+            "unit": "allocs/op",
+            "extra": "217222 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkConvertLargeExpression/mixed_conditions_20 (github.com/spandigital/cel2sql/v3)",
+            "value": 39422,
+            "unit": "ns/op\t   29324 B/op\t     424 allocs/op",
+            "extra": "30291 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkConvertLargeExpression/mixed_conditions_20 (github.com/spandigital/cel2sql/v3) - ns/op",
+            "value": 39422,
+            "unit": "ns/op",
+            "extra": "30291 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkConvertLargeExpression/mixed_conditions_20 (github.com/spandigital/cel2sql/v3) - B/op",
+            "value": 29324,
+            "unit": "B/op",
+            "extra": "30291 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkConvertLargeExpression/mixed_conditions_20 (github.com/spandigital/cel2sql/v3) - allocs/op",
+            "value": 424,
+            "unit": "allocs/op",
+            "extra": "30291 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkConvertLargeExpression/large_and_chain (github.com/spandigital/cel2sql/v3)",
+            "value": 37019,
+            "unit": "ns/op\t   27667 B/op\t     399 allocs/op",
+            "extra": "32958 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkConvertLargeExpression/large_and_chain (github.com/spandigital/cel2sql/v3) - ns/op",
+            "value": 37019,
+            "unit": "ns/op",
+            "extra": "32958 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkConvertLargeExpression/large_and_chain (github.com/spandigital/cel2sql/v3) - B/op",
+            "value": 27667,
+            "unit": "B/op",
+            "extra": "32958 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkConvertLargeExpression/large_and_chain (github.com/spandigital/cel2sql/v3) - allocs/op",
+            "value": 399,
+            "unit": "allocs/op",
+            "extra": "32958 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkConvertTimestamps/timestamp_comparison (github.com/spandigital/cel2sql/v3)",
+            "value": 3684,
+            "unit": "ns/op\t    2752 B/op\t      47 allocs/op",
+            "extra": "302686 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkConvertTimestamps/timestamp_comparison (github.com/spandigital/cel2sql/v3) - ns/op",
+            "value": 3684,
+            "unit": "ns/op",
+            "extra": "302686 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkConvertTimestamps/timestamp_comparison (github.com/spandigital/cel2sql/v3) - B/op",
+            "value": 2752,
+            "unit": "B/op",
+            "extra": "302686 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkConvertTimestamps/timestamp_comparison (github.com/spandigital/cel2sql/v3) - allocs/op",
+            "value": 47,
+            "unit": "allocs/op",
+            "extra": "302686 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkConvertTimestamps/date_function (github.com/spandigital/cel2sql/v3)",
+            "value": 1848,
+            "unit": "ns/op\t    1736 B/op\t      28 allocs/op",
+            "extra": "615338 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkConvertTimestamps/date_function (github.com/spandigital/cel2sql/v3) - ns/op",
+            "value": 1848,
+            "unit": "ns/op",
+            "extra": "615338 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkConvertTimestamps/date_function (github.com/spandigital/cel2sql/v3) - B/op",
+            "value": 1736,
+            "unit": "B/op",
+            "extra": "615338 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkConvertTimestamps/date_function (github.com/spandigital/cel2sql/v3) - allocs/op",
+            "value": 28,
+            "unit": "allocs/op",
+            "extra": "615338 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkConvertTimestamps/datetime_function (github.com/spandigital/cel2sql/v3)",
+            "value": 1850,
+            "unit": "ns/op\t    1736 B/op\t      28 allocs/op",
+            "extra": "618902 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkConvertTimestamps/datetime_function (github.com/spandigital/cel2sql/v3) - ns/op",
+            "value": 1850,
+            "unit": "ns/op",
+            "extra": "618902 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkConvertTimestamps/datetime_function (github.com/spandigital/cel2sql/v3) - B/op",
+            "value": 1736,
+            "unit": "B/op",
+            "extra": "618902 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkConvertTimestamps/datetime_function (github.com/spandigital/cel2sql/v3) - allocs/op",
+            "value": 28,
+            "unit": "allocs/op",
+            "extra": "618902 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkConvertStringOperations/startsWith (github.com/spandigital/cel2sql/v3)",
+            "value": 2262,
+            "unit": "ns/op\t    1880 B/op\t      29 allocs/op",
+            "extra": "552879 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkConvertStringOperations/startsWith (github.com/spandigital/cel2sql/v3) - ns/op",
+            "value": 2262,
+            "unit": "ns/op",
+            "extra": "552879 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkConvertStringOperations/startsWith (github.com/spandigital/cel2sql/v3) - B/op",
+            "value": 1880,
+            "unit": "B/op",
+            "extra": "552879 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkConvertStringOperations/startsWith (github.com/spandigital/cel2sql/v3) - allocs/op",
+            "value": 29,
+            "unit": "allocs/op",
+            "extra": "552879 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkConvertStringOperations/endsWith (github.com/spandigital/cel2sql/v3)",
+            "value": 2283,
+            "unit": "ns/op\t    1880 B/op\t      29 allocs/op",
+            "extra": "522735 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkConvertStringOperations/endsWith (github.com/spandigital/cel2sql/v3) - ns/op",
+            "value": 2283,
+            "unit": "ns/op",
+            "extra": "522735 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkConvertStringOperations/endsWith (github.com/spandigital/cel2sql/v3) - B/op",
+            "value": 1880,
+            "unit": "B/op",
+            "extra": "522735 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkConvertStringOperations/endsWith (github.com/spandigital/cel2sql/v3) - allocs/op",
+            "value": 29,
+            "unit": "allocs/op",
+            "extra": "522735 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkConvertStringOperations/contains (github.com/spandigital/cel2sql/v3)",
+            "value": 2297,
+            "unit": "ns/op\t    1944 B/op\t      30 allocs/op",
+            "extra": "530317 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkConvertStringOperations/contains (github.com/spandigital/cel2sql/v3) - ns/op",
+            "value": 2297,
+            "unit": "ns/op",
+            "extra": "530317 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkConvertStringOperations/contains (github.com/spandigital/cel2sql/v3) - B/op",
+            "value": 1944,
+            "unit": "B/op",
+            "extra": "530317 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkConvertStringOperations/contains (github.com/spandigital/cel2sql/v3) - allocs/op",
+            "value": 30,
+            "unit": "allocs/op",
+            "extra": "530317 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkConvertStringOperations/concatenation (github.com/spandigital/cel2sql/v3)",
+            "value": 3344,
+            "unit": "ns/op\t    2528 B/op\t      42 allocs/op",
+            "extra": "348820 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkConvertStringOperations/concatenation (github.com/spandigital/cel2sql/v3) - ns/op",
+            "value": 3344,
+            "unit": "ns/op",
+            "extra": "348820 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkConvertStringOperations/concatenation (github.com/spandigital/cel2sql/v3) - B/op",
+            "value": 2528,
+            "unit": "B/op",
+            "extra": "348820 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkConvertStringOperations/concatenation (github.com/spandigital/cel2sql/v3) - allocs/op",
+            "value": 42,
+            "unit": "allocs/op",
+            "extra": "348820 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkConvertStringOperations/multiple_string_ops (github.com/spandigital/cel2sql/v3)",
+            "value": 6003,
+            "unit": "ns/op\t    4416 B/op\t      75 allocs/op",
+            "extra": "202074 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkConvertStringOperations/multiple_string_ops (github.com/spandigital/cel2sql/v3) - ns/op",
+            "value": 6003,
+            "unit": "ns/op",
+            "extra": "202074 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkConvertStringOperations/multiple_string_ops (github.com/spandigital/cel2sql/v3) - B/op",
+            "value": 4416,
+            "unit": "B/op",
+            "extra": "202074 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkConvertStringOperations/multiple_string_ops (github.com/spandigital/cel2sql/v3) - allocs/op",
+            "value": 75,
+            "unit": "allocs/op",
+            "extra": "202074 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkConvertStringOperations/split_basic (github.com/spandigital/cel2sql/v3)",
+            "value": 3919,
+            "unit": "ns/op\t    2872 B/op\t      48 allocs/op",
+            "extra": "308416 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkConvertStringOperations/split_basic (github.com/spandigital/cel2sql/v3) - ns/op",
+            "value": 3919,
+            "unit": "ns/op",
+            "extra": "308416 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkConvertStringOperations/split_basic (github.com/spandigital/cel2sql/v3) - B/op",
+            "value": 2872,
+            "unit": "B/op",
+            "extra": "308416 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkConvertStringOperations/split_basic (github.com/spandigital/cel2sql/v3) - allocs/op",
+            "value": 48,
+            "unit": "allocs/op",
+            "extra": "308416 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkConvertStringOperations/split_with_limit (github.com/spandigital/cel2sql/v3)",
+            "value": 4243,
+            "unit": "ns/op\t    3024 B/op\t      52 allocs/op",
+            "extra": "261448 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkConvertStringOperations/split_with_limit (github.com/spandigital/cel2sql/v3) - ns/op",
+            "value": 4243,
+            "unit": "ns/op",
+            "extra": "261448 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkConvertStringOperations/split_with_limit (github.com/spandigital/cel2sql/v3) - B/op",
+            "value": 3024,
+            "unit": "B/op",
+            "extra": "261448 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkConvertStringOperations/split_with_limit (github.com/spandigital/cel2sql/v3) - allocs/op",
+            "value": 52,
+            "unit": "allocs/op",
+            "extra": "261448 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkConvertStringOperations/join_basic (github.com/spandigital/cel2sql/v3)",
+            "value": 3031,
+            "unit": "ns/op\t    2568 B/op\t      49 allocs/op",
+            "extra": "385684 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkConvertStringOperations/join_basic (github.com/spandigital/cel2sql/v3) - ns/op",
+            "value": 3031,
+            "unit": "ns/op",
+            "extra": "385684 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkConvertStringOperations/join_basic (github.com/spandigital/cel2sql/v3) - B/op",
+            "value": 2568,
+            "unit": "B/op",
+            "extra": "385684 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkConvertStringOperations/join_basic (github.com/spandigital/cel2sql/v3) - allocs/op",
+            "value": 49,
+            "unit": "allocs/op",
+            "extra": "385684 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkConvertStringOperations/join_no_delimiter (github.com/spandigital/cel2sql/v3)",
+            "value": 2715,
+            "unit": "ns/op\t    2368 B/op\t      42 allocs/op",
+            "extra": "435483 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkConvertStringOperations/join_no_delimiter (github.com/spandigital/cel2sql/v3) - ns/op",
+            "value": 2715,
+            "unit": "ns/op",
+            "extra": "435483 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkConvertStringOperations/join_no_delimiter (github.com/spandigital/cel2sql/v3) - B/op",
+            "value": 2368,
+            "unit": "B/op",
+            "extra": "435483 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkConvertStringOperations/join_no_delimiter (github.com/spandigital/cel2sql/v3) - allocs/op",
+            "value": 42,
+            "unit": "allocs/op",
+            "extra": "435483 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkConvertStringOperations/format_simple (github.com/spandigital/cel2sql/v3)",
+            "value": 3168,
+            "unit": "ns/op\t    2472 B/op\t      44 allocs/op",
+            "extra": "341835 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkConvertStringOperations/format_simple (github.com/spandigital/cel2sql/v3) - ns/op",
+            "value": 3168,
+            "unit": "ns/op",
+            "extra": "341835 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkConvertStringOperations/format_simple (github.com/spandigital/cel2sql/v3) - B/op",
+            "value": 2472,
+            "unit": "B/op",
+            "extra": "341835 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkConvertStringOperations/format_simple (github.com/spandigital/cel2sql/v3) - allocs/op",
+            "value": 44,
+            "unit": "allocs/op",
+            "extra": "341835 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkConvertStringOperations/format_multiple_args (github.com/spandigital/cel2sql/v3)",
+            "value": 2929,
+            "unit": "ns/op\t    2392 B/op\t      46 allocs/op",
+            "extra": "398457 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkConvertStringOperations/format_multiple_args (github.com/spandigital/cel2sql/v3) - ns/op",
+            "value": 2929,
+            "unit": "ns/op",
+            "extra": "398457 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkConvertStringOperations/format_multiple_args (github.com/spandigital/cel2sql/v3) - B/op",
+            "value": 2392,
+            "unit": "B/op",
+            "extra": "398457 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkConvertStringOperations/format_multiple_args (github.com/spandigital/cel2sql/v3) - allocs/op",
+            "value": 46,
+            "unit": "allocs/op",
+            "extra": "398457 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkAnalyzeQuery/simple_comparison (github.com/spandigital/cel2sql/v3)",
+            "value": 6563,
+            "unit": "ns/op\t    5169 B/op\t      82 allocs/op",
+            "extra": "183073 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkAnalyzeQuery/simple_comparison (github.com/spandigital/cel2sql/v3) - ns/op",
+            "value": 6563,
+            "unit": "ns/op",
+            "extra": "183073 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkAnalyzeQuery/simple_comparison (github.com/spandigital/cel2sql/v3) - B/op",
+            "value": 5169,
+            "unit": "B/op",
+            "extra": "183073 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkAnalyzeQuery/simple_comparison (github.com/spandigital/cel2sql/v3) - allocs/op",
+            "value": 82,
+            "unit": "allocs/op",
+            "extra": "183073 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkAnalyzeQuery/json_path (github.com/spandigital/cel2sql/v3)",
+            "value": 6470,
+            "unit": "ns/op\t    4856 B/op\t      78 allocs/op",
+            "extra": "185372 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkAnalyzeQuery/json_path (github.com/spandigital/cel2sql/v3) - ns/op",
+            "value": 6470,
+            "unit": "ns/op",
+            "extra": "185372 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkAnalyzeQuery/json_path (github.com/spandigital/cel2sql/v3) - B/op",
+            "value": 4856,
+            "unit": "B/op",
+            "extra": "185372 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkAnalyzeQuery/json_path (github.com/spandigital/cel2sql/v3) - allocs/op",
+            "value": 78,
+            "unit": "allocs/op",
+            "extra": "185372 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkAnalyzeQuery/regex_pattern (github.com/spandigital/cel2sql/v3)",
+            "value": 11877,
+            "unit": "ns/op\t    9328 B/op\t     128 allocs/op",
+            "extra": "104252 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkAnalyzeQuery/regex_pattern (github.com/spandigital/cel2sql/v3) - ns/op",
+            "value": 11877,
+            "unit": "ns/op",
+            "extra": "104252 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkAnalyzeQuery/regex_pattern (github.com/spandigital/cel2sql/v3) - B/op",
+            "value": 9328,
+            "unit": "B/op",
+            "extra": "104252 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkAnalyzeQuery/regex_pattern (github.com/spandigital/cel2sql/v3) - allocs/op",
+            "value": 128,
+            "unit": "allocs/op",
+            "extra": "104252 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkAnalyzeQuery/array_operation (github.com/spandigital/cel2sql/v3)",
+            "value": 6967,
+            "unit": "ns/op\t    5553 B/op\t      93 allocs/op",
+            "extra": "167412 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkAnalyzeQuery/array_operation (github.com/spandigital/cel2sql/v3) - ns/op",
+            "value": 6967,
+            "unit": "ns/op",
+            "extra": "167412 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkAnalyzeQuery/array_operation (github.com/spandigital/cel2sql/v3) - B/op",
+            "value": 5553,
+            "unit": "B/op",
+            "extra": "167412 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkAnalyzeQuery/array_operation (github.com/spandigital/cel2sql/v3) - allocs/op",
+            "value": 93,
+            "unit": "allocs/op",
+            "extra": "167412 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkAnalyzeQuery/complex_query (github.com/spandigital/cel2sql/v3)",
+            "value": 21342,
+            "unit": "ns/op\t   15021 B/op\t     233 allocs/op",
+            "extra": "56886 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkAnalyzeQuery/complex_query (github.com/spandigital/cel2sql/v3) - ns/op",
+            "value": 21342,
+            "unit": "ns/op",
+            "extra": "56886 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkAnalyzeQuery/complex_query (github.com/spandigital/cel2sql/v3) - B/op",
+            "value": 15021,
+            "unit": "B/op",
+            "extra": "56886 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkAnalyzeQuery/complex_query (github.com/spandigital/cel2sql/v3) - allocs/op",
+            "value": 233,
+            "unit": "allocs/op",
+            "extra": "56886 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkConvertWithOptions/no_options (github.com/spandigital/cel2sql/v3)",
+            "value": 2771,
+            "unit": "ns/op\t    2096 B/op\t      33 allocs/op",
+            "extra": "415269 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkConvertWithOptions/no_options (github.com/spandigital/cel2sql/v3) - ns/op",
+            "value": 2771,
+            "unit": "ns/op",
+            "extra": "415269 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkConvertWithOptions/no_options (github.com/spandigital/cel2sql/v3) - B/op",
+            "value": 2096,
+            "unit": "B/op",
+            "extra": "415269 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkConvertWithOptions/no_options (github.com/spandigital/cel2sql/v3) - allocs/op",
+            "value": 33,
+            "unit": "allocs/op",
+            "extra": "415269 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkConvertWithOptions/with_schemas (github.com/spandigital/cel2sql/v3)",
+            "value": 2807,
+            "unit": "ns/op\t    2096 B/op\t      33 allocs/op",
+            "extra": "417760 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkConvertWithOptions/with_schemas (github.com/spandigital/cel2sql/v3) - ns/op",
+            "value": 2807,
+            "unit": "ns/op",
+            "extra": "417760 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkConvertWithOptions/with_schemas (github.com/spandigital/cel2sql/v3) - B/op",
+            "value": 2096,
+            "unit": "B/op",
+            "extra": "417760 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkConvertWithOptions/with_schemas (github.com/spandigital/cel2sql/v3) - allocs/op",
+            "value": 33,
+            "unit": "allocs/op",
+            "extra": "417760 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkConvertWithOptions/with_max_depth (github.com/spandigital/cel2sql/v3)",
+            "value": 2754,
+            "unit": "ns/op\t    2096 B/op\t      33 allocs/op",
+            "extra": "412333 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkConvertWithOptions/with_max_depth (github.com/spandigital/cel2sql/v3) - ns/op",
+            "value": 2754,
+            "unit": "ns/op",
+            "extra": "412333 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkConvertWithOptions/with_max_depth (github.com/spandigital/cel2sql/v3) - B/op",
+            "value": 2096,
+            "unit": "B/op",
+            "extra": "412333 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkConvertWithOptions/with_max_depth (github.com/spandigital/cel2sql/v3) - allocs/op",
+            "value": 33,
+            "unit": "allocs/op",
+            "extra": "412333 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkConvertWithOptions/with_max_output (github.com/spandigital/cel2sql/v3)",
+            "value": 2778,
+            "unit": "ns/op\t    2096 B/op\t      33 allocs/op",
+            "extra": "426265 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkConvertWithOptions/with_max_output (github.com/spandigital/cel2sql/v3) - ns/op",
+            "value": 2778,
+            "unit": "ns/op",
+            "extra": "426265 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkConvertWithOptions/with_max_output (github.com/spandigital/cel2sql/v3) - B/op",
+            "value": 2096,
+            "unit": "B/op",
+            "extra": "426265 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkConvertWithOptions/with_max_output (github.com/spandigital/cel2sql/v3) - allocs/op",
+            "value": 33,
+            "unit": "allocs/op",
+            "extra": "426265 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkConvertWithOptions/all_options (github.com/spandigital/cel2sql/v3)",
+            "value": 2770,
+            "unit": "ns/op\t    2096 B/op\t      33 allocs/op",
+            "extra": "389205 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkConvertWithOptions/all_options (github.com/spandigital/cel2sql/v3) - ns/op",
+            "value": 2770,
+            "unit": "ns/op",
+            "extra": "389205 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkConvertWithOptions/all_options (github.com/spandigital/cel2sql/v3) - B/op",
+            "value": 2096,
+            "unit": "B/op",
+            "extra": "389205 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkConvertWithOptions/all_options (github.com/spandigital/cel2sql/v3) - allocs/op",
+            "value": 33,
+            "unit": "allocs/op",
+            "extra": "389205 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkParameterizedVsInline/Parameterized (github.com/spandigital/cel2sql/v3)",
+            "value": 508608,
+            "unit": "ns/op\t   14400 B/op\t    1718 allocs/op",
+            "extra": "2383 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkParameterizedVsInline/Parameterized (github.com/spandigital/cel2sql/v3) - ns/op",
+            "value": 508608,
+            "unit": "ns/op",
+            "extra": "2383 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkParameterizedVsInline/Parameterized (github.com/spandigital/cel2sql/v3) - B/op",
+            "value": 14400,
+            "unit": "B/op",
+            "extra": "2383 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkParameterizedVsInline/Parameterized (github.com/spandigital/cel2sql/v3) - allocs/op",
+            "value": 1718,
+            "unit": "allocs/op",
+            "extra": "2383 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkParameterizedVsInline/Inline (github.com/spandigital/cel2sql/v3)",
+            "value": 423122,
+            "unit": "ns/op\t   14088 B/op\t    1710 allocs/op",
+            "extra": "2776 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkParameterizedVsInline/Inline (github.com/spandigital/cel2sql/v3) - ns/op",
+            "value": 423122,
+            "unit": "ns/op",
+            "extra": "2776 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkParameterizedVsInline/Inline (github.com/spandigital/cel2sql/v3) - B/op",
+            "value": 14088,
+            "unit": "B/op",
+            "extra": "2776 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkParameterizedVsInline/Inline (github.com/spandigital/cel2sql/v3) - allocs/op",
+            "value": 1710,
+            "unit": "allocs/op",
+            "extra": "2776 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkFieldLookup_Small (github.com/spandigital/cel2sql/v3/pg)",
+            "value": 606.6,
+            "unit": "ns/op\t     112 B/op\t       5 allocs/op",
+            "extra": "2078761 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkFieldLookup_Small (github.com/spandigital/cel2sql/v3/pg) - ns/op",
+            "value": 606.6,
+            "unit": "ns/op",
+            "extra": "2078761 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkFieldLookup_Small (github.com/spandigital/cel2sql/v3/pg) - B/op",
+            "value": 112,
+            "unit": "B/op",
+            "extra": "2078761 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkFieldLookup_Small (github.com/spandigital/cel2sql/v3/pg) - allocs/op",
+            "value": 5,
+            "unit": "allocs/op",
+            "extra": "2078761 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkFieldLookup_Medium (github.com/spandigital/cel2sql/v3/pg)",
+            "value": 588.4,
+            "unit": "ns/op\t     112 B/op\t       5 allocs/op",
+            "extra": "2050918 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkFieldLookup_Medium (github.com/spandigital/cel2sql/v3/pg) - ns/op",
+            "value": 588.4,
+            "unit": "ns/op",
+            "extra": "2050918 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkFieldLookup_Medium (github.com/spandigital/cel2sql/v3/pg) - B/op",
+            "value": 112,
+            "unit": "B/op",
+            "extra": "2050918 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkFieldLookup_Medium (github.com/spandigital/cel2sql/v3/pg) - allocs/op",
+            "value": 5,
+            "unit": "allocs/op",
+            "extra": "2050918 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkFieldLookup_Large (github.com/spandigital/cel2sql/v3/pg)",
+            "value": 583.9,
+            "unit": "ns/op\t     112 B/op\t       5 allocs/op",
+            "extra": "2061698 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkFieldLookup_Large (github.com/spandigital/cel2sql/v3/pg) - ns/op",
+            "value": 583.9,
+            "unit": "ns/op",
+            "extra": "2061698 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkFieldLookup_Large (github.com/spandigital/cel2sql/v3/pg) - B/op",
+            "value": 112,
+            "unit": "B/op",
+            "extra": "2061698 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkFieldLookup_Large (github.com/spandigital/cel2sql/v3/pg) - allocs/op",
+            "value": 5,
+            "unit": "allocs/op",
+            "extra": "2061698 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkFieldNames_Small (github.com/spandigital/cel2sql/v3/pg)",
+            "value": 143.2,
+            "unit": "ns/op\t     176 B/op\t       2 allocs/op",
+            "extra": "8530126 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkFieldNames_Small (github.com/spandigital/cel2sql/v3/pg) - ns/op",
+            "value": 143.2,
+            "unit": "ns/op",
+            "extra": "8530126 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkFieldNames_Small (github.com/spandigital/cel2sql/v3/pg) - B/op",
+            "value": 176,
+            "unit": "B/op",
+            "extra": "8530126 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkFieldNames_Small (github.com/spandigital/cel2sql/v3/pg) - allocs/op",
+            "value": 2,
+            "unit": "allocs/op",
+            "extra": "8530126 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkFieldNames_Large (github.com/spandigital/cel2sql/v3/pg)",
+            "value": 7619,
+            "unit": "ns/op\t   16400 B/op\t       2 allocs/op",
+            "extra": "153124 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkFieldNames_Large (github.com/spandigital/cel2sql/v3/pg) - ns/op",
+            "value": 7619,
+            "unit": "ns/op",
+            "extra": "153124 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkFieldNames_Large (github.com/spandigital/cel2sql/v3/pg) - B/op",
+            "value": 16400,
+            "unit": "B/op",
+            "extra": "153124 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkFieldNames_Large (github.com/spandigital/cel2sql/v3/pg) - allocs/op",
+            "value": 2,
+            "unit": "allocs/op",
+            "extra": "153124 times\n4 procs"
           }
         ]
       }
