@@ -13,6 +13,7 @@ func ArrayTests() []ConvertTestCase {
 				dialect.PostgreSQL: "ARRAY[1, 2, 3][1] = 1",
 				dialect.DuckDB:     "[1, 2, 3][1] = 1",
 				dialect.BigQuery:   "[1, 2, 3][OFFSET(0)] = 1",
+				dialect.Spark:      "array(1, 2, 3)[0] = 1",
 			},
 		},
 		{
@@ -23,6 +24,7 @@ func ArrayTests() []ConvertTestCase {
 				dialect.PostgreSQL: "string_list[1] = 'a'",
 				dialect.DuckDB:     "string_list[1] = 'a'",
 				dialect.BigQuery:   "string_list[OFFSET(0)] = 'a'",
+				dialect.Spark:      "string_list[0] = 'a'",
 			},
 		},
 		{
@@ -33,6 +35,7 @@ func ArrayTests() []ConvertTestCase {
 				dialect.PostgreSQL: "COALESCE(ARRAY_LENGTH(string_list, 1), 0)",
 				dialect.DuckDB:     "COALESCE(array_length(string_list), 0)",
 				dialect.BigQuery:   "ARRAY_LENGTH(string_list)",
+				dialect.Spark:      "COALESCE(size(string_list), 0)",
 			},
 		},
 		{
@@ -43,6 +46,7 @@ func ArrayTests() []ConvertTestCase {
 				dialect.PostgreSQL: "COALESCE(ARRAY_LENGTH(string_list, 1), 0) > 0",
 				dialect.DuckDB:     "COALESCE(array_length(string_list), 0) > 0",
 				dialect.BigQuery:   "ARRAY_LENGTH(string_list) > 0",
+				dialect.Spark:      "COALESCE(size(string_list), 0) > 0",
 			},
 		},
 		{
@@ -53,6 +57,7 @@ func ArrayTests() []ConvertTestCase {
 				dialect.PostgreSQL: true,
 				dialect.DuckDB:     true,
 				dialect.BigQuery:   true,
+				dialect.Spark:      true,
 			},
 		},
 		{
@@ -63,6 +68,7 @@ func ArrayTests() []ConvertTestCase {
 				dialect.PostgreSQL: true,
 				dialect.DuckDB:     true,
 				dialect.BigQuery:   true,
+				dialect.Spark:      true,
 			},
 		},
 	}

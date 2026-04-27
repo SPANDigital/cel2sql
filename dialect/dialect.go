@@ -17,6 +17,7 @@ const (
 	SQLite     Name = "sqlite"
 	DuckDB     Name = "duckdb"
 	BigQuery   Name = "bigquery"
+	Spark      Name = "spark"
 )
 
 // ErrUnsupportedFeature indicates that the requested feature is not supported by this dialect.

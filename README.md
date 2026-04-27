@@ -1,13 +1,14 @@
 # cel2sql
 
-> Convert [CEL (Common Expression Language)](https://cel.dev/) expressions to SQL for PostgreSQL, MySQL, SQLite, DuckDB, and BigQuery
+> Convert [CEL (Common Expression Language)](https://cel.dev/) expressions to SQL for PostgreSQL, MySQL, SQLite, DuckDB, BigQuery, and Apache Spark SQL
 
-[![Go Version](https://img.shields.io/badge/Go-1.24%2B-blue)](https://golang.org)
+[![Go Version](https://img.shields.io/badge/Go-1.25%2B-blue)](https://golang.org)
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-17-336791)](https://www.postgresql.org)
 [![MySQL](https://img.shields.io/badge/MySQL-8.0-4479A1)](https://www.mysql.com)
 [![SQLite](https://img.shields.io/badge/SQLite-3-003B57)](https://www.sqlite.org)
 [![DuckDB](https://img.shields.io/badge/DuckDB-1.x-FFF000)](https://duckdb.org)
 [![BigQuery](https://img.shields.io/badge/BigQuery-GCP-4285F4)](https://cloud.google.com/bigquery)
+[![Spark](https://img.shields.io/badge/Spark-3.x-E25A1C)](https://spark.apache.org)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 [![Benchmarks](https://img.shields.io/badge/benchmarks-performance%20tracking-green)](https://spandigital.github.io/cel2sql/dev/bench/)
 
@@ -65,7 +66,7 @@ func main() {
 
 ## Why cel2sql?
 
-✅ **Multi-Dialect**: PostgreSQL, MySQL, SQLite, DuckDB, and BigQuery from a single API
+✅ **Multi-Dialect**: PostgreSQL, MySQL, SQLite, DuckDB, BigQuery, and Apache Spark SQL from a single API
 ✅ **Type-Safe**: Catch errors at compile time, not runtime
 ✅ **Rich Features**: JSON/JSONB, arrays, regex, timestamps, and more
 ✅ **Well-Tested**: 100+ tests including integration tests with real databases
@@ -133,7 +134,7 @@ sql, err := cel2sql.Convert(ast,
 
 ## Multi-Dialect Support
 
-cel2sql supports 5 SQL dialects. PostgreSQL is the default; select other dialects with `WithDialect()`:
+cel2sql supports 6 SQL dialects. PostgreSQL is the default; select other dialects with `WithDialect()`:
 
 ```go
 import (
@@ -142,6 +143,7 @@ import (
     "github.com/spandigital/cel2sql/v3/dialect/sqlite"
     "github.com/spandigital/cel2sql/v3/dialect/duckdb"
     "github.com/spandigital/cel2sql/v3/dialect/bigquery"
+    "github.com/spandigital/cel2sql/v3/dialect/spark"
 )
 
 // PostgreSQL (default - no option needed)
@@ -158,21 +160,25 @@ sql, err := cel2sql.Convert(ast, cel2sql.WithDialect(duckdb.New()))
 
 // BigQuery
 sql, err := cel2sql.Convert(ast, cel2sql.WithDialect(bigquery.New()))
+
+// Apache Spark SQL
+sql, err := cel2sql.Convert(ast, cel2sql.WithDialect(spark.New()))
 ```
 
 ### Dialect Comparison
 
-| Feature | PostgreSQL | MySQL | SQLite | DuckDB | BigQuery |
-|---------|-----------|-------|--------|--------|----------|
-| String concat | `\|\|` | `CONCAT()` | `\|\|` | `\|\|` | `\|\|` |
-| Regex | `~ / ~*` | `REGEXP` | unsupported | `~ / ~*` | `REGEXP_CONTAINS()` |
-| JSON access | `->>'f'` | `->>'$.f'` | `json_extract()` | `->>'f'` | `JSON_VALUE()` |
-| Arrays | `ARRAY[...]` | JSON arrays | JSON arrays | `[...]` | `[...]` |
-| UNNEST | `UNNEST(x)` | `JSON_TABLE(...)` | `json_each(x)` | `UNNEST(x)` | `UNNEST(x)` |
-| Param placeholder | `$1, $2` | `?, ?` | `?, ?` | `$1, $2` | `@p1, @p2` |
-| Timestamp cast | `TIMESTAMP WITH TIME ZONE` | `DATETIME` | `datetime()` | `TIMESTAMPTZ` | `TIMESTAMP` |
-| Contains | `POSITION()` | `LOCATE()` | `INSTR()` | `CONTAINS()` | `STRPOS()` |
-| Index analysis | BTREE, GIN, GIN+trgm | BTREE, FULLTEXT | BTREE | ART | CLUSTERING, SEARCH_INDEX |
+| Feature | PostgreSQL | MySQL | SQLite | DuckDB | BigQuery | Spark |
+|---------|-----------|-------|--------|--------|----------|-------|
+| String concat | `\|\|` | `CONCAT()` | `\|\|` | `\|\|` | `\|\|` | `concat()` |
+| Regex | `~ / ~*` | `REGEXP` | unsupported | `~ / ~*` | `REGEXP_CONTAINS()` | `RLIKE` |
+| JSON access | `->>'f'` | `->>'$.f'` | `json_extract()` | `->>'f'` | `JSON_VALUE()` | `get_json_object()` |
+| Arrays | `ARRAY[...]` | JSON arrays | JSON arrays | `[...]` | `[...]` | `array(...)` |
+| Array index | 1-indexed | n/a | n/a | 1-indexed | 0-indexed (`OFFSET`) | 0-indexed |
+| UNNEST | `UNNEST(x)` | `JSON_TABLE(...)` | `json_each(x)` | `UNNEST(x)` | `UNNEST(x)` | `EXPLODE(x)` |
+| Param placeholder | `$1, $2` | `?, ?` | `?, ?` | `$1, $2` | `@p1, @p2` | `?, ?` |
+| Timestamp cast | `TIMESTAMP WITH TIME ZONE` | `DATETIME` | `datetime()` | `TIMESTAMPTZ` | `TIMESTAMP` | `TIMESTAMP` |
+| Contains | `POSITION()` | `LOCATE()` | `INSTR()` | `CONTAINS()` | `STRPOS()` | `LOCATE()` |
+| Index analysis | BTREE, GIN, GIN+trgm | BTREE, FULLTEXT | BTREE | ART | CLUSTERING, SEARCH_INDEX | not supported in v1 |
 
 ### Per-Dialect Type Providers
 
@@ -184,6 +190,7 @@ import "github.com/spandigital/cel2sql/v3/mysql"     // MySQL (*sql.DB)
 import "github.com/spandigital/cel2sql/v3/sqlite"    // SQLite (*sql.DB)
 import "github.com/spandigital/cel2sql/v3/duckdb"    // DuckDB (*sql.DB)
 import "github.com/spandigital/cel2sql/v3/bigquery"  // BigQuery (*bigquery.Client)
+import "github.com/spandigital/cel2sql/v3/spark"     // Spark SQL (*sql.DB; uses DESCRIBE TABLE)
 ```
 
 ## Query Analysis and Index Recommendations
@@ -229,15 +236,15 @@ for _, rec := range recommendations {
 
 ### Per-Dialect Index Types
 
-| Pattern | PostgreSQL | MySQL | SQLite | DuckDB | BigQuery |
-|---------|-----------|-------|--------|--------|----------|
-| Comparison | BTREE | BTREE | BTREE | ART | CLUSTERING |
-| JSON access | GIN | BTREE (functional) | _(skip)_ | ART | SEARCH_INDEX |
-| Regex | GIN + pg_trgm | FULLTEXT | _(skip)_ | _(skip)_ | _(skip)_ |
-| Array membership | GIN | _(skip)_ | _(skip)_ | ART | _(skip)_ |
-| Comprehension | GIN | _(skip)_ | _(skip)_ | ART | _(skip)_ |
+| Pattern | PostgreSQL | MySQL | SQLite | DuckDB | BigQuery | Spark |
+|---------|-----------|-------|--------|--------|----------|-------|
+| Comparison | BTREE | BTREE | BTREE | ART | CLUSTERING | _(skip)_ |
+| JSON access | GIN | BTREE (functional) | _(skip)_ | ART | SEARCH_INDEX | _(skip)_ |
+| Regex | GIN + pg_trgm | FULLTEXT | _(skip)_ | _(skip)_ | _(skip)_ | _(skip)_ |
+| Array membership | GIN | _(skip)_ | _(skip)_ | ART | _(skip)_ | _(skip)_ |
+| Comprehension | GIN | _(skip)_ | _(skip)_ | ART | _(skip)_ | _(skip)_ |
 
-Unsupported patterns are silently skipped (no recommendation emitted).
+Spark indexing depends on the storage layer (Delta Z-order, Iceberg sort, plain Parquet) and is out of scope for v1; index analysis is disabled for the Spark dialect. Unsupported patterns in other dialects are silently skipped.
 
 ### Example
 

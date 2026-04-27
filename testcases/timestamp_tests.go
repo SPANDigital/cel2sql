@@ -15,6 +15,7 @@ func TimestampTests() []ConvertTestCase {
 				dialect.SQLite:     "'+10 seconds'",
 				dialect.DuckDB:     "INTERVAL 10 SECOND",
 				dialect.BigQuery:   "INTERVAL 10 SECOND",
+				dialect.Spark:      "INTERVAL 10 SECOND",
 			},
 		},
 		{
@@ -27,6 +28,7 @@ func TimestampTests() []ConvertTestCase {
 				dialect.SQLite:     "'+61 minutes'",
 				dialect.DuckDB:     "INTERVAL 61 MINUTE",
 				dialect.BigQuery:   "INTERVAL 61 MINUTE",
+				dialect.Spark:      "INTERVAL 61 MINUTE",
 			},
 		},
 		{
@@ -39,6 +41,7 @@ func TimestampTests() []ConvertTestCase {
 				dialect.SQLite:     "'+1 hours'",
 				dialect.DuckDB:     "INTERVAL 1 HOUR",
 				dialect.BigQuery:   "INTERVAL 1 HOUR",
+				dialect.Spark:      "INTERVAL 1 HOUR",
 			},
 		},
 		{
@@ -51,6 +54,7 @@ func TimestampTests() []ConvertTestCase {
 				dialect.SQLite:     "CAST(strftime('%S', created_at) AS INTEGER)",
 				dialect.DuckDB:     "EXTRACT(SECOND FROM created_at)",
 				dialect.BigQuery:   "EXTRACT(SECOND FROM created_at)",
+				dialect.Spark:      "EXTRACT(SECOND FROM created_at)",
 			},
 		},
 		{
@@ -63,6 +67,7 @@ func TimestampTests() []ConvertTestCase {
 				dialect.SQLite:     "CAST(strftime('%H', created_at) AS INTEGER)",
 				dialect.DuckDB:     "EXTRACT(HOUR FROM created_at AT TIME ZONE 'Asia/Tokyo')",
 				dialect.BigQuery:   "EXTRACT(HOUR FROM created_at AT TIME ZONE 'Asia/Tokyo')",
+				dialect.Spark:      "EXTRACT(HOUR FROM created_at AT TIME ZONE 'Asia/Tokyo')",
 			},
 		},
 		{
@@ -75,6 +80,7 @@ func TimestampTests() []ConvertTestCase {
 				dialect.SQLite:     "datetime(created_at, '-'||'+1 hours') <= datetime('2021-09-01T18:00:00Z')",
 				dialect.DuckDB:     "created_at - INTERVAL 1 HOUR <= CAST('2021-09-01T18:00:00Z' AS TIMESTAMPTZ)",
 				dialect.BigQuery:   "TIMESTAMP_SUB(created_at, INTERVAL 1 HOUR) <= CAST('2021-09-01T18:00:00Z' AS TIMESTAMP)",
+				dialect.Spark:      "created_at - INTERVAL 1 HOUR <= CAST('2021-09-01T18:00:00Z' AS TIMESTAMP)",
 			},
 		},
 		{
@@ -88,6 +94,7 @@ func TimestampTests() []ConvertTestCase {
 				dialect.SQLite:     "'+'||1||' months'",
 				dialect.DuckDB:     "INTERVAL 1 MONTH",
 				dialect.BigQuery:   "INTERVAL 1 MONTH",
+				dialect.Spark:      "INTERVAL 1 MONTH",
 			},
 		},
 		{
@@ -101,6 +108,7 @@ func TimestampTests() []ConvertTestCase {
 				dialect.SQLite:     "CAST(strftime('%Y', birthday) AS INTEGER)",
 				dialect.DuckDB:     "EXTRACT(YEAR FROM birthday)",
 				dialect.BigQuery:   "EXTRACT(YEAR FROM birthday)",
+				dialect.Spark:      "EXTRACT(YEAR FROM birthday)",
 			},
 		},
 		{
@@ -114,6 +122,7 @@ func TimestampTests() []ConvertTestCase {
 				dialect.SQLite:     "CAST(strftime('%m', scheduled_at) AS INTEGER) - 1",
 				dialect.DuckDB:     "EXTRACT(MONTH FROM scheduled_at) - 1",
 				dialect.BigQuery:   "EXTRACT(MONTH FROM scheduled_at) - 1",
+				dialect.Spark:      "EXTRACT(MONTH FROM scheduled_at) - 1",
 			},
 		},
 	}

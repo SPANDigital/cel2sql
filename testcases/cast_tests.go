@@ -15,6 +15,7 @@ func CastTests() []ConvertTestCase {
 				dialect.SQLite:     "CAST(0 AS INTEGER) IS FALSE",
 				dialect.DuckDB:     "CAST(0 AS BOOLEAN) IS FALSE",
 				dialect.BigQuery:   "CAST(0 AS BOOL) IS FALSE",
+				dialect.Spark:      "CAST(0 AS BOOLEAN) IS FALSE",
 			},
 		},
 		{
@@ -27,6 +28,7 @@ func CastTests() []ConvertTestCase {
 				dialect.SQLite:     "CAST('test' AS BLOB)",
 				dialect.DuckDB:     "CAST('test' AS BLOB)",
 				dialect.BigQuery:   "CAST('test' AS BYTES)",
+				dialect.Spark:      "CAST('test' AS BINARY)",
 			},
 		},
 		{
@@ -39,6 +41,7 @@ func CastTests() []ConvertTestCase {
 				dialect.SQLite:     "CAST(TRUE AS INTEGER) = 1",
 				dialect.DuckDB:     "CAST(TRUE AS BIGINT) = 1",
 				dialect.BigQuery:   "CAST(TRUE AS INT64) = 1",
+				dialect.Spark:      "CAST(TRUE AS BIGINT) = 1",
 			},
 		},
 		{
@@ -51,6 +54,7 @@ func CastTests() []ConvertTestCase {
 				dialect.SQLite:     "CAST(TRUE AS TEXT) = 'true'",
 				dialect.DuckDB:     "CAST(TRUE AS VARCHAR) = 'true'",
 				dialect.BigQuery:   "CAST(TRUE AS STRING) = 'true'",
+				dialect.Spark:      "CAST(TRUE AS STRING) = 'true'",
 			},
 		},
 		{
@@ -63,6 +67,7 @@ func CastTests() []ConvertTestCase {
 				dialect.SQLite:     "CAST(created_at AS TEXT)",
 				dialect.DuckDB:     "CAST(created_at AS VARCHAR)",
 				dialect.BigQuery:   "CAST(created_at AS STRING)",
+				dialect.Spark:      "CAST(created_at AS STRING)",
 			},
 		},
 		{
@@ -75,6 +80,7 @@ func CastTests() []ConvertTestCase {
 				dialect.SQLite:     "CAST(strftime('%s', created_at) AS INTEGER)",
 				dialect.DuckDB:     "EXTRACT(EPOCH FROM created_at)::BIGINT",
 				dialect.BigQuery:   "UNIX_SECONDS(created_at)",
+				dialect.Spark:      "UNIX_TIMESTAMP(created_at)",
 			},
 		},
 	}

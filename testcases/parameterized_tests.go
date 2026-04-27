@@ -14,12 +14,14 @@ func ParameterizedTests() []ParameterizedTestCase {
 				dialect.SQLite:     "name = ?",
 				dialect.DuckDB:     "name = $1",
 				dialect.BigQuery:   "name = @p1",
+				dialect.Spark:      "name = ?",
 			},
 			WantParams: map[dialect.Name][]any{
 				dialect.PostgreSQL: {"John"},
 				dialect.SQLite:     {"John"},
 				dialect.DuckDB:     {"John"},
 				dialect.BigQuery:   {"John"},
+				dialect.Spark:      {"John"},
 			},
 		},
 		{
@@ -31,12 +33,14 @@ func ParameterizedTests() []ParameterizedTestCase {
 				dialect.SQLite:     "name = ? AND name != ?",
 				dialect.DuckDB:     "name = $1 AND name != $2",
 				dialect.BigQuery:   "name = @p1 AND name != @p2",
+				dialect.Spark:      "name = ? AND name != ?",
 			},
 			WantParams: map[dialect.Name][]any{
 				dialect.PostgreSQL: {"John", "Jane"},
 				dialect.SQLite:     {"John", "Jane"},
 				dialect.DuckDB:     {"John", "Jane"},
 				dialect.BigQuery:   {"John", "Jane"},
+				dialect.Spark:      {"John", "Jane"},
 			},
 		},
 		{
@@ -48,12 +52,14 @@ func ParameterizedTests() []ParameterizedTestCase {
 				dialect.SQLite:     "age = ?",
 				dialect.DuckDB:     "age = $1",
 				dialect.BigQuery:   "age = @p1",
+				dialect.Spark:      "age = ?",
 			},
 			WantParams: map[dialect.Name][]any{
 				dialect.PostgreSQL: {int64(18)},
 				dialect.SQLite:     {int64(18)},
 				dialect.DuckDB:     {int64(18)},
 				dialect.BigQuery:   {int64(18)},
+				dialect.Spark:      {int64(18)},
 			},
 		},
 		{
@@ -65,12 +71,14 @@ func ParameterizedTests() []ParameterizedTestCase {
 				dialect.SQLite:     "age > ? AND age < ?",
 				dialect.DuckDB:     "age > $1 AND age < $2",
 				dialect.BigQuery:   "age > @p1 AND age < @p2",
+				dialect.Spark:      "age > ? AND age < ?",
 			},
 			WantParams: map[dialect.Name][]any{
 				dialect.PostgreSQL: {int64(21), int64(65)},
 				dialect.SQLite:     {int64(21), int64(65)},
 				dialect.DuckDB:     {int64(21), int64(65)},
 				dialect.BigQuery:   {int64(21), int64(65)},
+				dialect.Spark:      {int64(21), int64(65)},
 			},
 		},
 		{
@@ -82,12 +90,14 @@ func ParameterizedTests() []ParameterizedTestCase {
 				dialect.SQLite:     "salary = ?",
 				dialect.DuckDB:     "salary = $1",
 				dialect.BigQuery:   "salary = @p1",
+				dialect.Spark:      "salary = ?",
 			},
 			WantParams: map[dialect.Name][]any{
 				dialect.PostgreSQL: {50000.50},
 				dialect.SQLite:     {50000.50},
 				dialect.DuckDB:     {50000.50},
 				dialect.BigQuery:   {50000.50},
+				dialect.Spark:      {50000.50},
 			},
 		},
 		{
@@ -99,12 +109,14 @@ func ParameterizedTests() []ParameterizedTestCase {
 				dialect.SQLite:     "active IS TRUE",
 				dialect.DuckDB:     "active IS TRUE",
 				dialect.BigQuery:   "active IS TRUE",
+				dialect.Spark:      "active IS TRUE",
 			},
 			WantParams: map[dialect.Name][]any{
 				dialect.PostgreSQL: {},
 				dialect.SQLite:     {},
 				dialect.DuckDB:     {},
 				dialect.BigQuery:   {},
+				dialect.Spark:      {},
 			},
 		},
 	}

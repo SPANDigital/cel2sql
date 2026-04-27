@@ -10,6 +10,7 @@ import (
 	bigqueryDialect "github.com/spandigital/cel2sql/v3/dialect/bigquery"
 	duckdbDialect "github.com/spandigital/cel2sql/v3/dialect/duckdb"
 	mysqlDialect "github.com/spandigital/cel2sql/v3/dialect/mysql"
+	sparkDialect "github.com/spandigital/cel2sql/v3/dialect/spark"
 	sqliteDialect "github.com/spandigital/cel2sql/v3/dialect/sqlite"
 	"github.com/spandigital/cel2sql/v3/pg"
 	"github.com/spandigital/cel2sql/v3/sqltypes"
@@ -288,6 +289,39 @@ func BigQueryEnvFactory() func(envSetup string) (*EnvResult, error) {
 	}
 }
 
+// SparkEnvFactory returns an environment factory for Spark SQL tests.
+// It uses the same CEL environments as PostgreSQL (CEL compilation is dialect-independent)
+// but sets the Spark dialect for SQL generation.
+func SparkEnvFactory() func(envSetup string) (*EnvResult, error) {
+	return func(envSetup string) (*EnvResult, error) {
+		switch envSetup {
+		case testcases.EnvDefault:
+			result, err := NewDefaultEnv()
+			if err != nil {
+				return nil, err
+			}
+			result.Opts = append(result.Opts, cel2sql.WithDialect(sparkDialect.New()))
+			return result, nil
+		case testcases.EnvWithTimestamp:
+			result, err := NewTimestampEnv()
+			if err != nil {
+				return nil, err
+			}
+			result.Opts = append(result.Opts, cel2sql.WithDialect(sparkDialect.New()))
+			return result, nil
+		case testcases.EnvWithJSON:
+			result, err := NewJSONSchemaEnv()
+			if err != nil {
+				return nil, err
+			}
+			result.Opts = append(result.Opts, cel2sql.WithDialect(sparkDialect.New()))
+			return result, nil
+		default:
+			return nil, fmt.Errorf("unknown environment setup: %s", envSetup)
+		}
+	}
+}
+
 // DialectEnvFactory returns an environment factory for the given dialect.
 // This is a convenience function that maps dialect names to their env factories.
 func DialectEnvFactory(d dialectpkg.Name) func(envSetup string) (*EnvResult, error) {
@@ -302,6 +336,8 @@ func DialectEnvFactory(d dialectpkg.Name) func(envSetup string) (*EnvResult, err
 		return DuckDBEnvFactory()
 	case dialectpkg.BigQuery:
 		return BigQueryEnvFactory()
+	case dialectpkg.Spark:
+		return SparkEnvFactory()
 	default:
 		return func(_ string) (*EnvResult, error) {
 			return nil, fmt.Errorf("no environment factory for dialect %s", d)
