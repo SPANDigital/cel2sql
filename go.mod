@@ -15,7 +15,7 @@ require (
 	github.com/testcontainers/testcontainers-go/modules/postgres v0.42.0
 	google.golang.org/api v0.269.0
 	google.golang.org/genproto/googleapis/api v0.0.0-20260203192932-546029d2fa20
-	google.golang.org/grpc v1.79.3
+	google.golang.org/grpc v1.80.0
 	modernc.org/sqlite v1.46.1
 )
 
