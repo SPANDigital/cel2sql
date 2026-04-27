@@ -123,9 +123,13 @@ sql, err := cel2sql.Convert(ast,
 **Available Options:**
 - `WithDialect(dialect.Dialect)` - Select target SQL dialect (default: PostgreSQL)
 - `WithSchemas(map[string]pg.Schema)` - Provide table schemas for JSON detection
+- `WithJSONVariables(vars ...string)` - Declare CEL variables that map to flat JSONB columns
+- `WithColumnAliases(map[string]string)` - Map CEL variable names to different SQL column names
 - `WithContext(context.Context)` - Enable cancellation and timeouts
 - `WithLogger(*slog.Logger)` - Enable structured logging
 - `WithMaxDepth(int)` - Set custom recursion depth limit (default: 100)
+- `WithMaxOutputLength(int)` - Set custom SQL output length limit (default: 50000)
+- `WithParamStartIndex(int)` - First placeholder index for `ConvertParameterized` (default: 1)
 
 ## Multi-Dialect Support
 

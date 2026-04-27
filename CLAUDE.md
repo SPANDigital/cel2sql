@@ -441,6 +441,55 @@ sqlCondition, err := cel2sql.Convert(ast)
 // Returns: table.field = 'value' AND table.age > 30
 ```
 
+### Flat JSONB Variables with WithJSONVariables
+
+Declare CEL variables that map to flat JSONB columns. Both `tags.color` and
+`tags["color"]` produce JSONB text-extraction operators instead of plain dot notation.
+
+```go
+result, err := cel2sql.ConvertParameterized(ast,
+    cel2sql.WithJSONVariables("tags", "metadata"))
+// CEL: tags.color == "blue" && metadata.source == "api"
+// SQL: tags->>'color' = $1 AND metadata->>'source' = $2
+```
+
+Without `WithJSONVariables`, JSONB detection still works through the existing
+`table.jsonColumn.key` pattern when schemas are provided.
+
+### Column Aliasing with WithColumnAliases
+
+Map CEL variable names to different SQL column names — useful when DB columns
+use prefixed names (`usr_name`) but expressions use clean names (`name`). Alias
+values are validated through the dialect's field-name validator.
+
+```go
+result, err := cel2sql.ConvertParameterized(ast,
+    cel2sql.WithColumnAliases(map[string]string{
+        "name":   "usr_name",
+        "active": "usr_active",
+    }))
+// CEL: name == "Alice" && active == true
+// SQL: usr_name = $1 AND usr_active IS TRUE
+```
+
+Combines with `WithJSONVariables` so aliased JSONB columns produce correctly
+prefixed operators (e.g., `tbl_tags->>'color'`).
+
+### Embedding Parameterized CEL SQL with WithParamStartIndex
+
+When embedding a CEL fragment inside a larger parameterized query, set the
+first placeholder index so it doesn't collide with existing parameters. Values
+less than 1 clamp to 1.
+
+```go
+// Caller already has $1..$4 in their outer query
+result, err := cel2sql.ConvertParameterized(ast,
+    cel2sql.WithParamStartIndex(5))
+// CEL: name == "Alice" && age > 30
+// SQL: name = $5 AND age > $6
+// Caller appends result.Parameters to their args at positions 5, 6
+```
+
 ### Query Analysis and Index Recommendations
 
 cel2sql can analyze CEL expressions and recommend **dialect-specific** database indexes to optimize performance.

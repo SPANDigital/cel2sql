@@ -51,12 +51,15 @@ type ConvertOption func(*convertOptions)
 
 // convertOptions holds configuration options for the Convert function.
 type convertOptions struct {
-	schemas      map[string]schema.Schema
-	ctx          context.Context
-	logger       *slog.Logger
-	maxDepth     int             // Maximum recursion depth (0 = use default)
-	maxOutputLen int             // Maximum SQL output length (0 = use default)
-	dialect      dialect.Dialect // SQL dialect (nil = PostgreSQL default)
+	schemas         map[string]schema.Schema
+	jsonVars        map[string]bool   // Variable names that are JSONB columns
+	columnAlias     map[string]string // CEL variable name → SQL column name
+	ctx             context.Context
+	logger          *slog.Logger
+	maxDepth        int             // Maximum recursion depth (0 = use default)
+	maxOutputLen    int             // Maximum SQL output length (0 = use default)
+	dialect         dialect.Dialect // SQL dialect (nil = PostgreSQL default)
+	paramStartIndex int             // First placeholder index for ConvertParameterized (1 = $1; 0 means default 1)
 }
 
 // WithDialect sets the SQL dialect for conversion.
@@ -83,6 +86,49 @@ func WithDialect(d dialect.Dialect) ConvertOption {
 func WithSchemas(schemas map[string]schema.Schema) ConvertOption {
 	return func(o *convertOptions) {
 		o.schemas = schemas
+	}
+}
+
+// WithJSONVariables declares CEL variable names that correspond to JSONB columns.
+// When a variable is marked as JSONB, field access via dot notation (context.host)
+// and bracket notation (context["host"]) will produce PostgreSQL JSONB operators
+// (e.g., context->>'host') instead of plain dot notation (context.host).
+//
+// Example:
+//
+//	result, err := cel2sql.ConvertParameterized(ast,
+//	    cel2sql.WithJSONVariables("context"))
+//	// CEL: context.host == "web-1"
+//	// SQL: context->>'host' = $1
+func WithJSONVariables(vars ...string) ConvertOption {
+	return func(o *convertOptions) {
+		if o.jsonVars == nil {
+			o.jsonVars = make(map[string]bool, len(vars))
+		}
+		for _, v := range vars {
+			o.jsonVars[v] = true
+		}
+	}
+}
+
+// WithColumnAliases maps CEL variable names to SQL column names.
+// When a CEL identifier matches a key in the alias map, the SQL output
+// uses the mapped column name instead. This is useful when the database
+// column names differ from the user-facing CEL variable names (e.g.,
+// prefixed column names in views or tables).
+//
+// Example:
+//
+//	result, err := cel2sql.ConvertParameterized(ast,
+//	    cel2sql.WithColumnAliases(map[string]string{
+//	        "name":   "usr_name",
+//	        "active": "usr_active",
+//	    }))
+//	// CEL: name == "Alice"
+//	// SQL: usr_name = $1
+func WithColumnAliases(aliases map[string]string) ConvertOption {
+	return func(o *convertOptions) {
+		o.columnAlias = aliases
 	}
 }
 
@@ -174,6 +220,19 @@ func WithMaxOutputLength(maxLength int) ConvertOption {
 	}
 }
 
+// WithParamStartIndex sets the first placeholder index for ConvertParameterized.
+// Use this when embedding the CEL fragment into a larger parameterized query so
+// placeholders don't clash with existing parameters. Default is 1 ($1, $2, ...).
+// Values less than 1 are clamped to 1.
+//
+// Example: WithParamStartIndex(5) produces $5, $6, ...; the caller appends
+// result.Parameters to their args at the corresponding positions.
+func WithParamStartIndex(index int) ConvertOption {
+	return func(o *convertOptions) {
+		o.paramStartIndex = index
+	}
+}
+
 // Result represents the output of a CEL to SQL conversion with parameterized queries.
 // It contains the SQL string with placeholders ($1, $2, etc.) and the corresponding parameter values.
 type Result struct {
@@ -223,6 +282,8 @@ func Convert(ast *cel.Ast, opts ...ConvertOption) (string, error) {
 	un := &converter{
 		typeMap:      checkedExpr.TypeMap,
 		schemas:      options.schemas,
+		jsonVars:     options.jsonVars,
+		columnAlias:  options.columnAlias,
 		ctx:          options.ctx,
 		logger:       options.logger,
 		dialect:      options.dialect,
@@ -296,15 +357,22 @@ func ConvertParameterized(ast *cel.Ast, opts ...ConvertOption) (*Result, error) 
 		return nil, err
 	}
 
+	paramStart := options.paramStartIndex
+	if paramStart < 1 {
+		paramStart = 1
+	}
 	un := &converter{
 		typeMap:      checkedExpr.TypeMap,
 		schemas:      options.schemas,
+		jsonVars:     options.jsonVars,
+		columnAlias:  options.columnAlias,
 		ctx:          options.ctx,
 		logger:       options.logger,
 		dialect:      options.dialect,
 		maxDepth:     options.maxDepth,
 		maxOutputLen: options.maxOutputLen,
-		parameterize: true, // Enable parameterization
+		parameterize: true,           // Enable parameterization
+		paramCount:   paramStart - 1, // First placeholder will be paramStart after first increment
 	}
 
 	if err := un.visit(checkedExpr.Expr); err != nil {
@@ -332,6 +400,8 @@ type converter struct {
 	str                strings.Builder
 	typeMap            map[int64]*exprpb.Type
 	schemas            map[string]schema.Schema
+	jsonVars           map[string]bool   // Variable names that are JSONB columns
+	columnAlias        map[string]string // CEL variable name → SQL column name
 	ctx                context.Context
 	logger             *slog.Logger
 	dialect            dialect.Dialect
@@ -1880,12 +1950,15 @@ func (con *converter) visitCallMapIndex(expr *exprpb.Expr) error {
 		return fmt.Errorf("%w: map index operator requires map and key arguments", ErrInvalidArguments)
 	}
 	m := args[0]
-	nested := isBinaryOrTernaryOperator(m)
-	if err := con.visitMaybeNested(m, nested); err != nil {
-		return err
-	}
 	fieldName, err := extractFieldName(args[1])
 	if err != nil {
+		return err
+	}
+	if identExpr := m.GetIdentExpr(); identExpr != nil && con.isJSONVariable(identExpr.GetName()) {
+		return con.dialect.WriteJSONFieldAccess(&con.str, func() error { return con.visit(m) }, fieldName, true)
+	}
+	nested := isBinaryOrTernaryOperator(m)
+	if err := con.visitMaybeNested(m, nested); err != nil {
 		return err
 	}
 	con.str.WriteString(".")
@@ -2265,15 +2338,16 @@ func (con *converter) visitIdent(expr *exprpb.Expr) error {
 		return fmt.Errorf("%w: %w", ErrInvalidFieldName, err)
 	}
 
-	// Check if this identifier needs numeric casting for JSON comprehensions
-	if con.needsNumericCasting(identName) {
-		con.str.WriteString("(")
-		con.str.WriteString(identName)
-		con.str.WriteString(")")
-		con.dialect.WriteCastToNumeric(&con.str)
-	} else {
-		con.str.WriteString(identName)
+	// Apply column alias if configured
+	sqlName := identName
+	if alias, ok := con.columnAlias[identName]; ok {
+		if err := con.dialect.ValidateFieldName(alias); err != nil {
+			return fmt.Errorf("%w: %w", ErrInvalidFieldName, err)
+		}
+		sqlName = alias
 	}
+
+	con.str.WriteString(sqlName)
 	return nil
 }
 

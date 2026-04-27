@@ -17,9 +17,17 @@ const (
 	jsonbArrayElementsText = "jsonb_array_elements_text"
 )
 
-// shouldUseJSONPath determines if we should use JSON path operators for field access
-// This function checks if the operand represents a JSON/JSONB field using schema information
+// shouldUseJSONPath determines if we should use JSON path operators for field access.
+// This function checks if the operand represents a JSON/JSONB field using schema
+// information or the WithJSONVariables option for flat JSONB variables.
 func (con *converter) shouldUseJSONPath(operand *exprpb.Expr, _ string) bool {
+	// Check if the operand is a flat variable declared as JSONB via WithJSONVariables
+	if identExpr := operand.GetIdentExpr(); identExpr != nil {
+		if con.isJSONVariable(identExpr.GetName()) {
+			return true
+		}
+	}
+
 	// Check if the operand is a direct table.column access where column is JSON
 	if selectExpr := operand.GetSelectExpr(); selectExpr != nil {
 		// For obj.metadata, check if metadata is a JSON column in obj table
@@ -32,7 +40,14 @@ func (con *converter) shouldUseJSONPath(operand *exprpb.Expr, _ string) bool {
 				slog.String("field", fieldName),
 				slog.Bool("is_json", isJSON),
 			)
-			return isJSON
+			if isJSON {
+				return true
+			}
+			// If the root identifier is a JSONB variable (WithJSONVariables),
+			// the whole chain should use JSON operators.
+			if con.isJSONVariable(tableName) {
+				return true
+			}
 		}
 
 		// Check if there's a JSON field somewhere in the operand chain
@@ -45,6 +60,11 @@ func (con *converter) shouldUseJSONPath(operand *exprpb.Expr, _ string) bool {
 	return false
 }
 
+// isJSONVariable checks if a variable name was declared as JSONB via WithJSONVariables.
+func (con *converter) isJSONVariable(name string) bool {
+	return con.jsonVars != nil && con.jsonVars[name]
+}
+
 // hasJSONFieldInChain checks if there's a JSON field anywhere in the select expression chain
 func (con *converter) hasJSONFieldInChain(expr *exprpb.Expr) bool {
 	if selectExpr := expr.GetSelectExpr(); selectExpr != nil {
@@ -55,6 +75,11 @@ func (con *converter) hasJSONFieldInChain(expr *exprpb.Expr) bool {
 			tableName := identExpr.GetName()
 			field := selectExpr.GetField()
 			if con.isFieldJSON(tableName, field) {
+				return true
+			}
+			// Check if the root identifier was declared as a JSON variable
+			// via WithJSONVariables (e.g., tags.corpus.section).
+			if con.isJSONVariable(tableName) {
 				return true
 			}
 		}
@@ -79,14 +104,6 @@ func (con *converter) isJSONTextExtraction(expr *exprpb.Expr) bool {
 	}
 
 	return false
-}
-
-// needsNumericCasting checks if an identifier represents a numeric iteration variable from JSON
-func (con *converter) needsNumericCasting(identName string) bool {
-	// Common iteration variable names that come from numeric JSON arrays
-	numericIterationVars := []string{"score", "value", "num", "amount", "count", "level"}
-
-	return slices.Contains(numericIterationVars, identName)
 }
 
 // isNumericJSONField checks if a JSON field name typically contains numeric values
@@ -292,8 +309,10 @@ func (con *converter) buildJSONPathInternal(expr *exprpb.Expr, isFinalField bool
 	// Check if the operand is also a select expression (nested access)
 	if operandSelect := operand.GetSelectExpr(); operandSelect != nil {
 		// Check if this is a direct table.column access (e.g., obj.metadata)
-		// If so, we should NOT apply JSON operators to this level
-		if tableName, columnName, ok := con.getTableAndFieldFromSelectChain(operand); ok {
+		// If so, we should NOT apply JSON operators to this level.
+		// Skip this shortcut when the root is a flat JSONB variable (WithJSONVariables);
+		// those should produce JSON operators all the way down (tags->'corpus'->>'section').
+		if tableName, columnName, ok := con.getTableAndFieldFromSelectChain(operand); ok && !con.isJSONVariable(tableName) {
 			// This is table.column where column is JSON/JSONB
 			// Render as table.column without JSON operators, then add JSON operator for the current field
 			return con.dialect.WriteJSONFieldAccess(&con.str, func() error {
