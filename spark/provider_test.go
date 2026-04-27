@@ -147,3 +147,69 @@ func TestLoadTableSchema_RejectsInvalidNames(t *testing.T) {
 		assert.ErrorIs(t, err, spark.ErrInvalidSchema)
 	}
 }
+
+func TestSparkColumnToFieldSchema(t *testing.T) {
+	tests := []struct {
+		name      string
+		dataType  string
+		want      spark.FieldSchema
+		wantField string // verifies one notable property; empty = compare full struct
+	}{
+		{
+			name:     "primitive int",
+			dataType: "int",
+			want:     spark.FieldSchema{Name: "c", Type: "int"},
+		},
+		{
+			name:     "decimal with params normalized",
+			dataType: "decimal(10,2)",
+			want:     spark.FieldSchema{Name: "c", Type: "decimal"},
+		},
+		{
+			name:     "varchar with size",
+			dataType: "varchar(64)",
+			want:     spark.FieldSchema{Name: "c", Type: "varchar"},
+		},
+		{
+			name:     "1d array",
+			dataType: "array<int>",
+			want: spark.FieldSchema{
+				Name: "c", Type: "int",
+				Repeated: true, Dimensions: 1, ElementType: "int",
+			},
+		},
+		{
+			name:     "2d nested array",
+			dataType: "array<array<int>>",
+			want: spark.FieldSchema{
+				Name: "c", Type: "int",
+				Repeated: true, Dimensions: 2, ElementType: "int",
+			},
+		},
+		{
+			name:     "3d nested array",
+			dataType: "array<array<array<string>>>",
+			want: spark.FieldSchema{
+				Name: "c", Type: "string",
+				Repeated: true, Dimensions: 3, ElementType: "string",
+			},
+		},
+		{
+			name:     "struct with parameterized types",
+			dataType: "struct<price:decimal(10,2),qty:int>",
+			want: spark.FieldSchema{
+				Name: "c", Type: "struct",
+				Schema: []spark.FieldSchema{
+					{Name: "price", Type: "decimal"},
+					{Name: "qty", Type: "int"},
+				},
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := spark.SparkColumnToFieldSchemaForTest("c", tt.dataType)
+			assert.Equal(t, tt.want, got)
+		})
+	}
+}

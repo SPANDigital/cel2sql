@@ -105,21 +105,13 @@ func (d *Dialect) WriteArrayMembership(w *strings.Builder, writeElem, writeArray
 
 // --- Type Casting ---
 
-// WriteCastToNumeric writes a Spark numeric cast suffix (postfix `::DOUBLE` style is
-// not supported; the converter wraps in CAST(... AS DOUBLE) instead via WriteTypeName).
-// This method is called only as a fallback for ad-hoc casts, so emit the standard suffix
-// pattern that Spark accepts in expressions like `(expr)::DOUBLE` is invalid; use CAST.
+// WriteCastToNumeric writes a Spark numeric coercion suffix.
+// Spark does not support PostgreSQL-style `::TYPE` postfix casts, so we use the
+// arithmetic coercion `+ 0` (same convention MySQL and SQLite use): `'5' + 0`
+// evaluates as a number in Spark, ensuring JSON text extractions are compared
+// numerically rather than lexicographically.
 func (d *Dialect) WriteCastToNumeric(w *strings.Builder) {
-	// Spark requires CAST(...). The converter typically writes "(" + expr + ")" before
-	// calling this; we close the parens and append a CAST wrapper using the AS clause.
-	// However, the existing converter pattern for other dialects appends ::TYPE after
-	// the parenthesized expression. To stay shape-compatible we emit a comment-safe
-	// CAST tail: ` AS DOUBLE)`. This expects the converter to have opened with `CAST(`.
-	// In practice cel2sql uses the postfix path via DuckDB/PostgreSQL semantics; for
-	// Spark we emit a no-op suffix and let CAST happen via WriteTypeName / explicit casts.
-	// Empty implementation keeps SQL valid: `(expr)` without a cast still evaluates.
-	// JSON-text comparison paths in the converter will explicitly use CAST.
-	_ = w
+	w.WriteString(" + 0")
 }
 
 // WriteTypeName writes a Spark SQL type name for CAST expressions.
@@ -246,15 +238,17 @@ func (d *Dialect) WriteJSONExistence(w *strings.Builder, _ bool, fieldName strin
 	return nil
 }
 
-// WriteJSONArrayElements writes Spark JSON array expansion using from_json + explode.
-// The converter wraps this in a subquery / lateral form upstream; we emit the
-// from_json result so callers can chain explode() externally.
+// WriteJSONArrayElements writes Spark JSON array expansion as EXPLODE(from_json(...)).
+// The converter uses this in `FROM <here> AS iter`, so the result must be a
+// set-returning expression. EXPLODE turns the parsed array into a relation of
+// element rows. Element type is fixed to STRING in v1; comparisons coerce via
+// arithmetic context (see WriteCastToNumeric).
 func (d *Dialect) WriteJSONArrayElements(w *strings.Builder, _, _ bool, writeExpr func() error) error {
-	w.WriteString("from_json(")
+	w.WriteString("EXPLODE(from_json(")
 	if err := writeExpr(); err != nil {
 		return err
 	}
-	w.WriteString(", 'ARRAY<STRING>')")
+	w.WriteString(", 'ARRAY<STRING>'))")
 	return nil
 }
 
@@ -283,23 +277,28 @@ func (d *Dialect) WriteJSONExtractPath(w *strings.Builder, pathSegments []string
 	return nil
 }
 
-// WriteJSONArrayMembership writes Spark JSON array membership.
+// WriteJSONArrayMembership writes Spark JSON array membership as a scalar
+// subquery that scans elements. The converter writes `lhs = ` before this,
+// so the result is `lhs = (SELECT col FROM (SELECT EXPLODE(from_json(rhs,
+// 'ARRAY<STRING>')) AS col) t)`. This mirrors SQLite's `lhs = (SELECT value
+// FROM json_each(...))` pattern; both dialects rely on the subquery
+// returning at most one match for the comparison to succeed.
 func (d *Dialect) WriteJSONArrayMembership(w *strings.Builder, _ string, writeExpr func() error) error {
-	w.WriteString("from_json(")
+	w.WriteString("(SELECT col FROM (SELECT EXPLODE(from_json(")
 	if err := writeExpr(); err != nil {
 		return err
 	}
-	w.WriteString(", 'ARRAY<STRING>')")
+	w.WriteString(", 'ARRAY<STRING>')) AS col) t)")
 	return nil
 }
 
 // WriteNestedJSONArrayMembership writes Spark nested JSON array membership.
 func (d *Dialect) WriteNestedJSONArrayMembership(w *strings.Builder, writeExpr func() error) error {
-	w.WriteString("from_json(")
+	w.WriteString("(SELECT col FROM (SELECT EXPLODE(from_json(")
 	if err := writeExpr(); err != nil {
 		return err
 	}
-	w.WriteString(", 'ARRAY<STRING>')")
+	w.WriteString(", 'ARRAY<STRING>')) AS col) t)")
 	return nil
 }
 

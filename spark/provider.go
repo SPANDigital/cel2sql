@@ -123,12 +123,12 @@ func (tp *typeProvider) LoadTableSchema(ctx context.Context, tableName string) e
 func sparkColumnToFieldSchema(name, dataType string) FieldSchema {
 	dt := strings.TrimSpace(strings.ToLower(dataType))
 
-	if isArr, elem := detectSparkArray(dt); isArr {
+	if isArr, elem, dims := detectSparkArray(dt); isArr {
 		return FieldSchema{
 			Name:        name,
 			Type:        normalizeSparkType(elem),
 			Repeated:    true,
-			Dimensions:  1,
+			Dimensions:  dims,
 			ElementType: normalizeSparkType(elem),
 		}
 	}
@@ -149,14 +149,22 @@ func sparkColumnToFieldSchema(name, dataType string) FieldSchema {
 }
 
 // detectSparkArray reports whether a Spark type string is array<T> and returns
-// the element type T. Nested arrays (array<array<T>>) collapse to dimension 1
-// in v1; multi-dimensional arrays are uncommon in Spark and unsupported by
-// the dialect emitter.
-func detectSparkArray(dt string) (isArray bool, elementType string) {
+// the (innermost) element type T plus the number of nested array<...> wrappers.
+// `array<int>` → (true, "int", 1); `array<array<int>>` → (true, "int", 2).
+// Multi-dimensional arrays are surfaced via Dimensions so the dialect emitter
+// can return ErrUnsupportedFeature on size() rather than silently treating the
+// outer array as 1D.
+func detectSparkArray(dt string) (isArray bool, elementType string, dimensions int) {
 	if !strings.HasPrefix(dt, "array<") || !strings.HasSuffix(dt, ">") {
-		return false, ""
+		return false, "", 0
 	}
-	return true, dt[len("array<") : len(dt)-1]
+	dims := 0
+	cur := dt
+	for strings.HasPrefix(cur, "array<") && strings.HasSuffix(cur, ">") {
+		dims++
+		cur = cur[len("array<") : len(cur)-1]
+	}
+	return true, cur, dims
 }
 
 // parseSparkStruct parses a Spark struct type string of the form
@@ -185,23 +193,31 @@ func parseSparkStruct(dt string) ([]FieldSchema, bool) {
 	return out, true
 }
 
-// splitTopLevel splits s on sep, ignoring sep inside angle-bracket pairs.
+// splitTopLevel splits s on sep, ignoring sep inside angle-bracket or
+// parenthesis pairs. Parenthesis tracking is needed for parameterized types
+// like decimal(10,2) appearing inside struct<…> definitions.
 func splitTopLevel(s string, sep byte) []string {
 	var (
-		out   []string
-		depth int
-		start int
+		out         []string
+		angle, paren int
+		start       int
 	)
 	for i := 0; i < len(s); i++ {
 		switch s[i] {
 		case '<':
-			depth++
+			angle++
 		case '>':
-			if depth > 0 {
-				depth--
+			if angle > 0 {
+				angle--
+			}
+		case '(':
+			paren++
+		case ')':
+			if paren > 0 {
+				paren--
 			}
 		case sep:
-			if depth == 0 {
+			if angle == 0 && paren == 0 {
 				out = append(out, s[start:i])
 				start = i + 1
 			}
@@ -212,18 +228,25 @@ func splitTopLevel(s string, sep byte) []string {
 }
 
 // indexTopLevel returns the index of the first sep at depth 0, or -1.
+// Tracks both angle-bracket and parenthesis depth.
 func indexTopLevel(s string, sep byte) int {
-	depth := 0
+	var angle, paren int
 	for i := 0; i < len(s); i++ {
 		switch s[i] {
 		case '<':
-			depth++
+			angle++
 		case '>':
-			if depth > 0 {
-				depth--
+			if angle > 0 {
+				angle--
+			}
+		case '(':
+			paren++
+		case ')':
+			if paren > 0 {
+				paren--
 			}
 		case sep:
-			if depth == 0 {
+			if angle == 0 && paren == 0 {
 				return i
 			}
 		}
