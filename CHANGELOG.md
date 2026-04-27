@@ -2,6 +2,34 @@
 
 ## [Unreleased]
 
+## [3.8.0] - 2026-04-27
+### Added
+- **Apache Spark SQL dialect** (#117) — sixth supported dialect, alongside
+  PostgreSQL, MySQL, SQLite, DuckDB, and BigQuery. Includes the full
+  `dialect.Dialect` implementation (RLIKE regex, `get_json_object` for JSON,
+  `array(...)` literals, 0-indexed array access, `EXPLODE`/`collect_list`
+  for comprehensions), plus a `*sql.DB`-based type provider that introspects
+  schemas via `DESCRIBE TABLE` (works with any database/sql driver such as
+  gohive). Index analysis is intentionally disabled in v1 because Spark
+  indexing is storage-layer-specific (Delta Z-order vs Iceberg sort vs
+  plain Parquet).
+
+### Documentation
+- **Claude Code skills under `.claude/skills/`** (#118, #120):
+  - `skill-authoring` — codifies authoring discipline for agent skills
+    (progressive disclosure, ≤500-line SKILL.md, scripts over prose).
+    Transferred from SPANDigital/ai#16.
+  - `add-sql-dialect` — captures the ~25-file procedure of adding a new
+    dialect, including a method-divergence matrix across the 6 dialects,
+    a testcase-coverage check script, and a build-tagged template that
+    generates expected SQL for every shared test case.
+  - `add-cel-feature` — covers wiring a new CEL operator/function/macro
+    across all dialects, with a converter file map and a
+    dialect-method-checklist.
+  - `release-cel2sql` — the release flow itself, including a
+    `prepare_release.py` script that splits `[Unreleased]` into a dated
+    versioned section and prints the branch/commit/tag commands.
+
 ## [3.7.1] - 2026-04-27
 
 ### Fixed
