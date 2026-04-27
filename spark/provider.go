@@ -82,6 +82,9 @@ func (tp *typeProvider) LoadTableSchema(ctx context.Context, tableName string) e
 		return fmt.Errorf("%w: no database connection available", ErrInvalidSchema)
 	}
 
+	// DESCRIBE TABLE does not accept parameterized table names; the name was validated
+	// against a strict identifier regex above, so the concatenation is safe.
+	// #nosec G202 -- table name validated against validTableName regex
 	query := "DESCRIBE TABLE " + tableName
 	rows, err := tp.db.QueryContext(ctx, query)
 	if err != nil {
