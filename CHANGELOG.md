@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+## [3.8.1] - 2026-04-27
+### Changed
+- **Dependencies**
+  - `github.com/google/cel-go` 0.27.0 → 0.28.0 (#125)
+  - `modernc.org/sqlite` 1.46.1 → 1.50.0 (#124)
+  - `cloud.google.com/go/bigquery` 1.74.0 → 1.76.0 (#123)
+  - `github.com/lib/pq` 1.11.2 → 1.12.3 (#122)
+
 ## [3.8.0] - 2026-04-27
 ### Added
 - **Apache Spark SQL dialect** (#117) — sixth supported dialect, alongside
