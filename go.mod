@@ -1,12 +1,12 @@
 module github.com/spandigital/cel2sql/v3
 
-go 1.25.7
+go 1.25.9
 
 require (
 	cloud.google.com/go/bigquery v1.74.0
 	github.com/go-sql-driver/mysql v1.9.3
 	github.com/google/cel-go v0.27.0
-	github.com/jackc/pgx/v5 v5.8.0
+	github.com/jackc/pgx/v5 v5.9.2
 	github.com/lib/pq v1.11.2
 	github.com/stretchr/testify v1.11.1
 	github.com/testcontainers/testcontainers-go v0.42.0
