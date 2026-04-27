@@ -2,20 +2,47 @@
 
 ## [Unreleased]
 
+## [3.7.0] - 2026-04-27
+
 ### Added
-- **WithJSONVariables option** — declare CEL variable names that map to flat JSONB
-  columns so `context.host == "x"` produces `context->>'host' = 'x'` without a parent
-  table struct. Both dot notation (`tags.color`) and bracket notation (`tags["color"]`)
-  are supported. Backported from observeinc/cel2sql fork.
-- **WithColumnAliases option** — map CEL variable names to different SQL column names
-  (e.g., `name` → `usr_name`). Combines with `WithJSONVariables` for aliased JSONB
-  columns. Alias values are validated via the dialect's field name validator.
-  Backported from observeinc/cel2sql fork.
-- **WithParamStartIndex option** — for `ConvertParameterized`, set the first
+- **WithJSONVariables option** (#113) — declare CEL variable names that map to flat
+  JSONB columns so `context.host == "x"` produces `context->>'host' = 'x'` without a
+  parent table struct. Both dot notation (`tags.color`) and bracket notation
+  (`tags["color"]`) are supported, including arbitrarily nested paths
+  (`tags.corpus.section` → `tags->'corpus'->>'section'`). Backported from
+  observeinc/cel2sql fork with extensions.
+- **WithColumnAliases option** (#113) — map CEL variable names to different SQL column
+  names (e.g., `name` → `usr_name`). Combines with `WithJSONVariables` for aliased
+  JSONB columns (`tbl_tags->>'color'`). Alias values are validated via the dialect's
+  field-name validator. Backported from observeinc/cel2sql fork.
+- **WithParamStartIndex option** (#113) — for `ConvertParameterized`, set the first
   placeholder index (e.g., `WithParamStartIndex(5)` produces `$5, $6, ...`). Useful
   when embedding the CEL fragment in a larger parameterized query. Values less than 1
   clamp to 1. Backported from observeinc/cel2sql fork PR #2.
-- **Multi-Dialect SQL Support**
+
+### Changed
+- **BREAKING: Removed name-based numeric-cast heuristic in `visitIdent`** (#113) —
+  identifiers named `score`, `value`, `num`, `amount`, `count`, or `level` are no
+  longer auto-cast to `::numeric`. The heuristic was a footgun that incorrectly cast
+  plain (non-JSON) variables that happened to share these names. Numeric casting is
+  now driven solely by JSON text-extraction context (handled in `visitCall`). Callers
+  that relied on the implicit cast should add an explicit cast in CEL or use the
+  JSON comprehension paths. Backported from observeinc/cel2sql fork PR #1.
+- **Dependencies (security)** (#114, #107)
+  - `testcontainers-go` 0.40.0 → 0.42.0; switches from the legacy
+    `github.com/docker/docker` SDK to `github.com/moby/moby/client`, removing the
+    SDK from the dependency graph and clearing the unfixed GO-2026-4887 (Moby AuthZ
+    bypass) and GO-2026-4883 (HTTP request smuggling) advisories.
+  - Go directive 1.25.7 → 1.25.9 (clears GO-2026-4601, 4602, 4865, 4869, 4870,
+    4946, 4947 in the stdlib).
+  - `jackc/pgx/v5` 5.8.0 → 5.9.2 (clears GHSA-j88v-2chj-qfwx).
+  - `golang.org/x/net` 0.50.0 → 0.53.0 (clears GO-2026-4559).
+  - `filippo.io/edwards25519` 1.1.0 → 1.1.1.
+
+## [3.6.0] - 2026-02-25
+
+### Added
+- **Multi-Dialect SQL Support** (#104)
   - Introduced `Dialect` interface for pluggable SQL generation (`dialect/dialect.go`)
   - PostgreSQL dialect extracted from converter into `dialect/postgres/` (zero behavior change)
   - MySQL dialect implementation (`dialect/mysql/`)
@@ -27,15 +54,6 @@
   - Dialect-agnostic schema types in `schema/` package
   - Shared test case infrastructure (`testcases/`, `testutil/`) with per-dialect expected SQL
   - Dialect registry for name-based lookup (`dialect.Register()`, `dialect.Get()`)
-
-### Changed
-- **BREAKING: Removed name-based numeric-cast heuristic in `visitIdent`** —
-  identifiers named `score`, `value`, `num`, `amount`, `count`, or `level` are no
-  longer auto-cast to `::numeric`. The heuristic was a footgun that incorrectly cast
-  plain (non-JSON) variables that happened to share these names. Numeric casting is
-  now driven solely by JSON text-extraction context (handled in `visitCall`). Callers
-  that relied on the implicit cast should add an explicit cast in CEL or use the
-  JSON comprehension paths. Backported from observeinc/cel2sql fork PR #1.
 
 ## [3.5.0] - 2026-01-08
 
