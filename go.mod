@@ -7,7 +7,7 @@ require (
 	github.com/go-sql-driver/mysql v1.9.3
 	github.com/google/cel-go v0.28.0
 	github.com/jackc/pgx/v5 v5.9.2
-	github.com/lib/pq v1.11.2
+	github.com/lib/pq v1.12.3
 	github.com/stretchr/testify v1.11.1
 	github.com/testcontainers/testcontainers-go v0.42.0
 	github.com/testcontainers/testcontainers-go/modules/gcloud v0.42.0
