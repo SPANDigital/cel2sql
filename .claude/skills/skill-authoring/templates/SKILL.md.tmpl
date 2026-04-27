@@ -1,0 +1,46 @@
+---
+name: REPLACE-with-folder-name-lowercase-hyphenated
+description: REPLACE with one or two third-person sentences. Describe WHAT this skill does and WHEN to use it. Include concrete keywords the agent will match on (tool names, file types, domains). Example shape — "Fetches OpenStreetMap data for Cape Town's City Bowl and converts it to Phaser-ready tile coordinates. Use when generating the base map, adding a neighbourhood, or placing real-world POIs onto the tile grid."
+---
+
+# REPLACE with Skill Title
+
+REPLACE with a one-paragraph overview: what this skill lets the agent do, and why it's a skill (progressive disclosure benefit) rather than inline prose in a CLAUDE.md.
+
+## Quick start
+
+REPLACE with the happy-path workflow — the single most common thing a user will ask. Show commands inline. Keep it to 5–10 lines.
+
+## REPLACE with feature / section 2
+
+Cover the next most common path here. If any subsection has deep detail, link out instead of inlining:
+
+For REPLACE-topic, see [references/REPLACE-topic.md](references/REPLACE-topic.md).
+
+## Scripts
+
+List every script with exact invocation and expected output. Be explicit about execution intent.
+
+- **Run** `python scripts/REPLACE-script.py <args>` — REPLACE with what it does and what it emits.
+- **See** `scripts/REPLACE-script.py` — REPLACE (use only when the agent should read, not execute).
+
+## References
+
+One-line description per file. The agent uses these lines to decide whether to open a reference.
+
+- [references/REPLACE-topic-a.md](references/REPLACE-topic-a.md) — REPLACE with one-line description.
+- [references/REPLACE-topic-b.md](references/REPLACE-topic-b.md) — REPLACE with one-line description.
+
+## Conventions
+
+REPLACE with any hard rules this skill enforces — naming, layer structure, format requirements, palette constraints. Keep this section as a bulleted list of imperatives.
+
+<!--
+Author's checklist before committing (delete this comment block before merge):
+
+1. Replace every REPLACE-... placeholder.
+2. Draft 3 eval scenarios (real prompts + expected behaviour) FIRST, before writing prose.
+3. Keep this file ≤ 200 lines.
+4. Run: python <path-to>/skill-authoring/scripts/lint_skill.py .
+5. Walk <path-to>/skill-authoring/references/review-checklist.md.
+-->
