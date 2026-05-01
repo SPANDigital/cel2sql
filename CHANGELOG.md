@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+## [3.8.2] - 2026-05-01
+### Changed
+- **Dependencies**
+  - `google.golang.org/api` 0.276.0 → 0.277.0 (#128)
+  - `github.com/go-sql-driver/mysql` 1.9.3 → 1.10.0 (#127)
+
 ## [3.8.1] - 2026-04-27
 ### Changed
 - **Dependencies**
