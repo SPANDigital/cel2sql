@@ -2,6 +2,25 @@
 
 ## [Unreleased]
 
+## [3.8.3] - 2026-06-08
+### Security
+- **Cleared a wave of Go security advisories** (#136) flagged by the OSV
+  Security Scan and govulncheck. Bumped the `go` directive 1.25.9 → 1.25.11
+  (stdlib GO-2026-4918/-4971/-4976/-4977/-4980/-4981/-4982/-4986 and the
+  newer -5037/-5038/-5039) and pinned indirect dependencies to their fixed
+  versions:
+  - `golang.org/x/crypto` 0.50.0 → 0.52.0 (GO-2026-5005/-5006/-5013..-5021/-5023/-5033)
+  - `golang.org/x/net` 0.53.0 → 0.55.0 (GO-2026-5025..-5030)
+  - `golang.org/x/sys` 0.43.0 → 0.45.0 (GO-2026-5024)
+
+### Changed
+- **Dependencies**
+  - `modernc.org/sqlite` 1.50.0 → 1.52.0 (#133)
+  - `github.com/google/cel-go` 0.28.0 → 0.28.1 (#135)
+  - `google.golang.org/api` 0.277.0 → 0.279.0 (#134)
+  - `cloud.google.com/go/bigquery` 1.76.0 → 1.77.0 (#131)
+  - `google.golang.org/grpc` 1.80.0 → 1.81.0 (#130)
+
 ## [3.8.2] - 2026-05-01
 ### Changed
 - **Dependencies**
