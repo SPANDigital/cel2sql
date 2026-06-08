@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+## [3.8.4] - 2026-06-08
+### Changed
+- **Dependencies**
+  - `google.golang.org/api` 0.279.0 → 0.283.0 (#140)
+  - `google.golang.org/grpc` 1.81.0 → 1.81.1 (#139)
+  - `github.com/jackc/pgx/v5` 5.9.2 → 5.10.0 (#138)
+
 ## [3.8.3] - 2026-06-08
 ### Security
 - **Cleared a wave of Go security advisories** (#136) flagged by the OSV
