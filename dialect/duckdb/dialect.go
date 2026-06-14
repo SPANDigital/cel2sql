@@ -261,23 +261,33 @@ func (d *Dialect) WriteJSONExtractPath(w *strings.Builder, pathSegments []string
 	return nil
 }
 
-// WriteJSONArrayMembership writes DuckDB JSON array membership using json_each.
-func (d *Dialect) WriteJSONArrayMembership(w *strings.Builder, _ string, writeExpr func() error) error {
-	w.WriteString("(SELECT value FROM json_each(")
-	if err := writeExpr(); err != nil {
+// WriteJSONArrayMembership writes DuckDB JSON array membership using
+// EXISTS (SELECT 1 FROM json_each(arr) WHERE value = elem).
+func (d *Dialect) WriteJSONArrayMembership(w *strings.Builder, _ string, writeElem func() error, writeArray func() error) error {
+	w.WriteString("EXISTS (SELECT 1 FROM json_each(")
+	if err := writeArray(); err != nil {
 		return err
 	}
-	w.WriteString("))")
+	w.WriteString(") WHERE value = ")
+	if err := writeElem(); err != nil {
+		return err
+	}
+	w.WriteString(")")
 	return nil
 }
 
-// WriteNestedJSONArrayMembership writes DuckDB nested JSON array membership.
-func (d *Dialect) WriteNestedJSONArrayMembership(w *strings.Builder, writeExpr func() error) error {
-	w.WriteString("(SELECT value FROM json_each(")
-	if err := writeExpr(); err != nil {
+// WriteNestedJSONArrayMembership writes DuckDB nested JSON array membership using
+// EXISTS (SELECT 1 FROM json_each(arr) WHERE value = elem).
+func (d *Dialect) WriteNestedJSONArrayMembership(w *strings.Builder, writeElem func() error, writeArray func() error) error {
+	w.WriteString("EXISTS (SELECT 1 FROM json_each(")
+	if err := writeArray(); err != nil {
 		return err
 	}
-	w.WriteString("))")
+	w.WriteString(") WHERE value = ")
+	if err := writeElem(); err != nil {
+		return err
+	}
+	w.WriteString(")")
 	return nil
 }
 

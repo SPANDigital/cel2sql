@@ -277,28 +277,34 @@ func (d *Dialect) WriteJSONExtractPath(w *strings.Builder, pathSegments []string
 	return nil
 }
 
-// WriteJSONArrayMembership writes Spark JSON array membership as a scalar
-// subquery that scans elements. The converter writes `lhs = ` before this,
-// so the result is `lhs = (SELECT col FROM (SELECT EXPLODE(from_json(rhs,
-// 'ARRAY<STRING>')) AS col) t)`. This mirrors SQLite's `lhs = (SELECT value
-// FROM json_each(...))` pattern; both dialects rely on the subquery
-// returning at most one match for the comparison to succeed.
-func (d *Dialect) WriteJSONArrayMembership(w *strings.Builder, _ string, writeExpr func() error) error {
-	w.WriteString("(SELECT col FROM (SELECT EXPLODE(from_json(")
-	if err := writeExpr(); err != nil {
+// WriteJSONArrayMembership writes Spark JSON array membership using
+// array_contains(from_json(arr, 'ARRAY<STRING>'), elem). The dialect owns the
+// full boolean predicate, parsing the JSON array and testing for the element.
+func (d *Dialect) WriteJSONArrayMembership(w *strings.Builder, _ string, writeElem func() error, writeArray func() error) error {
+	w.WriteString("array_contains(from_json(")
+	if err := writeArray(); err != nil {
 		return err
 	}
-	w.WriteString(", 'ARRAY<STRING>')) AS col) t)")
+	w.WriteString(", 'ARRAY<STRING>'), ")
+	if err := writeElem(); err != nil {
+		return err
+	}
+	w.WriteString(")")
 	return nil
 }
 
-// WriteNestedJSONArrayMembership writes Spark nested JSON array membership.
-func (d *Dialect) WriteNestedJSONArrayMembership(w *strings.Builder, writeExpr func() error) error {
-	w.WriteString("(SELECT col FROM (SELECT EXPLODE(from_json(")
-	if err := writeExpr(); err != nil {
+// WriteNestedJSONArrayMembership writes Spark nested JSON array membership using
+// array_contains(from_json(arr, 'ARRAY<STRING>'), elem).
+func (d *Dialect) WriteNestedJSONArrayMembership(w *strings.Builder, writeElem func() error, writeArray func() error) error {
+	w.WriteString("array_contains(from_json(")
+	if err := writeArray(); err != nil {
 		return err
 	}
-	w.WriteString(", 'ARRAY<STRING>')) AS col) t)")
+	w.WriteString(", 'ARRAY<STRING>'), ")
+	if err := writeElem(); err != nil {
+		return err
+	}
+	w.WriteString(")")
 	return nil
 }
 
