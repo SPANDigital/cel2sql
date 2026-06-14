@@ -18,6 +18,16 @@
 examples/*/main
 examples/*/main.exe
 
+# Example binaries built without -o (named after the directory)
+examples/basic/basic
+examples/comprehensions/comprehensions
+examples/context/context
+examples/index_analysis/index_analysis
+examples/load_table_schema/load_table_schema
+examples/logging/logging
+examples/parameterized/parameterized
+examples/string_extensions/string_extensions
+
 # Claude Code settings
 .claude/settings.local.json
 

@@ -1,10 +1,9 @@
 package mysql
 
 import (
-	"errors"
-	"fmt"
 	"regexp"
-	"strings"
+
+	"github.com/spandigital/cel2sql/v3/dialect/internal/identsafe"
 )
 
 const (
@@ -71,21 +70,5 @@ var (
 
 // validateFieldName validates that a field name follows MySQL naming conventions.
 func validateFieldName(name string) error {
-	if len(name) == 0 {
-		return errors.New("field name cannot be empty")
-	}
-
-	if len(name) > maxMySQLIdentifierLength {
-		return fmt.Errorf("field name %q exceeds MySQL maximum identifier length of %d characters", name, maxMySQLIdentifierLength)
-	}
-
-	if !fieldNameRegexp.MatchString(name) {
-		return fmt.Errorf("field name %q must start with a letter or underscore and contain only alphanumeric characters and underscores", name)
-	}
-
-	if reservedSQLKeywords[strings.ToLower(name)] {
-		return fmt.Errorf("field name %q is a reserved SQL keyword and cannot be used without quoting", name)
-	}
-
-	return nil
+	return identsafe.ValidateFieldName(name, "MySQL", maxMySQLIdentifierLength, fieldNameRegexp, reservedSQLKeywords)
 }

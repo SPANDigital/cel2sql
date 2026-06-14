@@ -1,6 +1,22 @@
 # Changelog
 
 ## [Unreleased]
+### Fixed
+- **JSON array membership (`in`) now generates a correct boolean predicate on
+  every dialect.** Each dialect now owns the full predicate, emitting both the
+  element and the array expression, instead of relying on the caller to prepend
+  `elem = `. This resolves semantically wrong SQL on several dialects:
+  - **MySQL**: switched from `JSON_CONTAINS(arr, CAST(? AS JSON))` (which
+    emitted a stray `?` and ignored the element) to
+    `JSON_OVERLAPS(JSON_ARRAY(elem), arr)`.
+  - **SQLite/DuckDB**: switched from a bare `(SELECT value FROM json_each(arr))`
+    scalar subquery to `EXISTS (SELECT 1 FROM json_each(arr) WHERE value = elem)`.
+  - **BigQuery**: switched from the invalid `= UNNEST(...)` form to
+    `elem IN UNNEST(JSON_VALUE_ARRAY(arr))`.
+  - **PostgreSQL**: unchanged semantics (`elem = ANY(ARRAY(SELECT jsonFunc(arr)))`).
+  - **Spark**: `array_contains(from_json(arr, 'ARRAY<STRING>'), elem)`.
+
+  Ported from cel2sql4j ([SPANDigital/cel2sql4j@1835215](https://github.com/SPANDigital/cel2sql4j/commit/1835215bb1244b3b15c82315f264354566cfa499)).
 
 ## [3.8.4] - 2026-06-08
 ### Changed

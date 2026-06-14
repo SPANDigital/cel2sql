@@ -702,12 +702,25 @@ func (con *converter) visitCallBinary(expr *exprpb.Expr) error {
 		)
 	}
 
-	// Handle array membership (IN operator with list) via dialect before writing LHS.
-	// This allows dialects like SQLite to use a fundamentally different pattern
-	// (e.g., "elem IN (SELECT value FROM json_each(array))") instead of "elem = ANY(array)".
-	if fun == operators.In && isListType(rhsType) {
-		// Non-JSON list membership
-		if !isFieldAccessExpression(rhs) || !con.isJSONArrayField(rhs) {
+	// Handle array membership (IN operator) via dialect before writing LHS.
+	// This allows each dialect to own the complete boolean predicate, using a
+	// fundamentally different pattern (e.g., SQLite's
+	// "EXISTS (SELECT 1 FROM json_each(array) WHERE value = elem)") instead of
+	// the caller emitting "elem = ANY(array)".
+	if fun == operators.In && (isListType(rhsType) || isFieldAccessExpression(rhs)) {
+		// JSON array membership: the dialect emits both the element and array.
+		if isFieldAccessExpression(rhs) && con.isJSONArrayField(rhs) {
+			writeElem := func() error { return con.visitMaybeNested(lhs, lhsParen) }
+			if con.isNestedJSONAccess(rhs) {
+				return con.dialect.WriteNestedJSONArrayMembership(&con.str, writeElem,
+					func() error { return con.visitNestedJSONForArray(rhs) })
+			}
+			jsonFunc := con.getJSONArrayFunction(rhs)
+			return con.dialect.WriteJSONArrayMembership(&con.str, jsonFunc, writeElem,
+				func() error { return con.visitMaybeNested(rhs, rhsParen) })
+		}
+		// Non-JSON list membership.
+		if isListType(rhsType) {
 			return con.dialect.WriteArrayMembership(&con.str,
 				func() error { return con.visitMaybeNested(lhs, lhsParen) },
 				func() error { return con.visitMaybeNested(rhs, rhsParen) },
@@ -769,40 +782,18 @@ func (con *converter) visitCallBinary(expr *exprpb.Expr) error {
 	con.str.WriteString(" ")
 	con.str.WriteString(operator)
 	con.str.WriteString(" ")
-	if fun == operators.In && (isListType(rhsType) || isFieldAccessExpression(rhs)) {
-		// Check if we're dealing with a JSON array
-		if isFieldAccessExpression(rhs) && con.isJSONArrayField(rhs) {
-			// For JSON arrays, use dialect-specific JSON array membership
-			jsonFunc := con.getJSONArrayFunction(rhs)
-
-			// For nested JSON access like settings.permissions, we need to handle differently
-			if con.isNestedJSONAccess(rhs) {
-				// Use dialect-specific nested JSON array membership
-				if err := con.dialect.WriteNestedJSONArrayMembership(&con.str, func() error {
-					return con.visitNestedJSONForArray(rhs)
-				}); err != nil {
-					return err
-				}
-				return nil
-			}
-			// For direct JSON array access
-			if err := con.dialect.WriteJSONArrayMembership(&con.str, jsonFunc, func() error {
-				return con.visitMaybeNested(rhs, rhsParen)
-			}); err != nil {
-				return err
-			}
-			return nil
-		}
+	// Remaining membership case: field access on a non-JSON, non-list-typed
+	// column (e.g. a Dyn-typed array column) wraps the RHS in ANY().
+	// JSON arrays and list literals are handled by the dialect before the LHS
+	// is written.
+	if fun == operators.In && isFieldAccessExpression(rhs) {
 		con.str.WriteString("ANY(")
 	}
 	if err := con.visitMaybeNested(rhs, rhsParen); err != nil {
 		return err
 	}
-	if fun == operators.In && (isListType(rhsType) || isFieldAccessExpression(rhs)) {
-		// Check if we're dealing with a JSON array - already handled above for JSON arrays
-		if !isFieldAccessExpression(rhs) || !con.isJSONArrayField(rhs) {
-			con.str.WriteString(")")
-		}
+	if fun == operators.In && isFieldAccessExpression(rhs) {
+		con.str.WriteString(")")
 	}
 	return nil
 }

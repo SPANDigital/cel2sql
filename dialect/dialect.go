@@ -132,12 +132,16 @@ type Dialect interface {
 	WriteJSONExtractPath(w *strings.Builder, pathSegments []string, writeRoot func() error) error
 
 	// WriteJSONArrayMembership writes a JSON array membership test for the IN operator.
-	// For PostgreSQL: ANY(ARRAY(SELECT jsonb_func(expr))).
-	WriteJSONArrayMembership(w *strings.Builder, jsonFunc string, writeExpr func() error) error
+	// The dialect owns the complete boolean predicate, emitting both the element
+	// and the array expressions.
+	// For PostgreSQL: elem = ANY(ARRAY(SELECT jsonb_func(arr))).
+	WriteJSONArrayMembership(w *strings.Builder, jsonFunc string, writeElem func() error, writeArray func() error) error
 
 	// WriteNestedJSONArrayMembership writes a nested JSON array membership test.
-	// For PostgreSQL: ANY(ARRAY(SELECT jsonb_array_elements_text(expr))).
-	WriteNestedJSONArrayMembership(w *strings.Builder, writeExpr func() error) error
+	// The dialect owns the complete boolean predicate, emitting both the element
+	// and the array expressions.
+	// For PostgreSQL: elem = ANY(ARRAY(SELECT jsonb_array_elements_text(arr))).
+	WriteNestedJSONArrayMembership(w *strings.Builder, writeElem func() error, writeArray func() error) error
 
 	// --- Timestamps ---
 

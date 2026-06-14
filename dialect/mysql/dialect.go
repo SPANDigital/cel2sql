@@ -266,23 +266,33 @@ func (d *Dialect) WriteJSONExtractPath(w *strings.Builder, pathSegments []string
 	return nil
 }
 
-// WriteJSONArrayMembership writes MySQL JSON array membership using JSON_CONTAINS.
-func (d *Dialect) WriteJSONArrayMembership(w *strings.Builder, _ string, writeExpr func() error) error {
-	w.WriteString("JSON_CONTAINS(")
-	if err := writeExpr(); err != nil {
+// WriteJSONArrayMembership writes MySQL JSON array membership using
+// JSON_OVERLAPS(JSON_ARRAY(elem), arr).
+func (d *Dialect) WriteJSONArrayMembership(w *strings.Builder, _ string, writeElem func() error, writeArray func() error) error {
+	w.WriteString("JSON_OVERLAPS(JSON_ARRAY(")
+	if err := writeElem(); err != nil {
 		return err
 	}
-	w.WriteString(", CAST(? AS JSON))")
+	w.WriteString("), ")
+	if err := writeArray(); err != nil {
+		return err
+	}
+	w.WriteString(")")
 	return nil
 }
 
-// WriteNestedJSONArrayMembership writes MySQL nested JSON array membership.
-func (d *Dialect) WriteNestedJSONArrayMembership(w *strings.Builder, writeExpr func() error) error {
-	w.WriteString("JSON_CONTAINS(")
-	if err := writeExpr(); err != nil {
+// WriteNestedJSONArrayMembership writes MySQL nested JSON array membership using
+// JSON_OVERLAPS(JSON_ARRAY(elem), arr).
+func (d *Dialect) WriteNestedJSONArrayMembership(w *strings.Builder, writeElem func() error, writeArray func() error) error {
+	w.WriteString("JSON_OVERLAPS(JSON_ARRAY(")
+	if err := writeElem(); err != nil {
 		return err
 	}
-	w.WriteString(", CAST(? AS JSON))")
+	w.WriteString("), ")
+	if err := writeArray(); err != nil {
+		return err
+	}
+	w.WriteString(")")
 	return nil
 }
 

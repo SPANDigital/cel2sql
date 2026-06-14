@@ -261,20 +261,28 @@ func (d *Dialect) WriteJSONExtractPath(w *strings.Builder, pathSegments []string
 	return nil
 }
 
-// WriteJSONArrayMembership writes BigQuery JSON array membership.
-func (d *Dialect) WriteJSONArrayMembership(w *strings.Builder, _ string, writeExpr func() error) error {
-	w.WriteString("UNNEST(JSON_VALUE_ARRAY(")
-	if err := writeExpr(); err != nil {
+// WriteJSONArrayMembership writes BigQuery JSON array membership using
+// elem IN UNNEST(JSON_VALUE_ARRAY(arr)).
+func (d *Dialect) WriteJSONArrayMembership(w *strings.Builder, _ string, writeElem func() error, writeArray func() error) error {
+	if err := writeElem(); err != nil {
+		return err
+	}
+	w.WriteString(" IN UNNEST(JSON_VALUE_ARRAY(")
+	if err := writeArray(); err != nil {
 		return err
 	}
 	w.WriteString("))")
 	return nil
 }
 
-// WriteNestedJSONArrayMembership writes BigQuery nested JSON array membership.
-func (d *Dialect) WriteNestedJSONArrayMembership(w *strings.Builder, writeExpr func() error) error {
-	w.WriteString("UNNEST(JSON_VALUE_ARRAY(")
-	if err := writeExpr(); err != nil {
+// WriteNestedJSONArrayMembership writes BigQuery nested JSON array membership using
+// elem IN UNNEST(JSON_VALUE_ARRAY(arr)).
+func (d *Dialect) WriteNestedJSONArrayMembership(w *strings.Builder, writeElem func() error, writeArray func() error) error {
+	if err := writeElem(); err != nil {
+		return err
+	}
+	w.WriteString(" IN UNNEST(JSON_VALUE_ARRAY(")
+	if err := writeArray(); err != nil {
 		return err
 	}
 	w.WriteString("))")

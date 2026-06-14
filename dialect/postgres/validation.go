@@ -1,10 +1,9 @@
 package postgres
 
 import (
-	"errors"
-	"fmt"
 	"regexp"
-	"strings"
+
+	"github.com/spandigital/cel2sql/v3/dialect/internal/identsafe"
 )
 
 const (
@@ -46,21 +45,5 @@ var (
 // validateFieldName validates that a field name follows PostgreSQL naming conventions
 // and is safe to use in SQL queries without quoting.
 func validateFieldName(name string) error {
-	if len(name) == 0 {
-		return errors.New("field name cannot be empty")
-	}
-
-	if len(name) > maxPostgreSQLIdentifierLength {
-		return fmt.Errorf("field name %q exceeds PostgreSQL maximum identifier length of %d characters", name, maxPostgreSQLIdentifierLength)
-	}
-
-	if !fieldNameRegexp.MatchString(name) {
-		return fmt.Errorf("field name %q must start with a letter or underscore and contain only alphanumeric characters and underscores", name)
-	}
-
-	if reservedSQLKeywords[strings.ToLower(name)] {
-		return fmt.Errorf("field name %q is a reserved SQL keyword and cannot be used without quoting", name)
-	}
-
-	return nil
+	return identsafe.ValidateFieldName(name, "PostgreSQL", maxPostgreSQLIdentifierLength, fieldNameRegexp, reservedSQLKeywords)
 }

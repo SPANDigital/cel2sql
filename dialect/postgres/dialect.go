@@ -275,22 +275,28 @@ func (d *Dialect) WriteJSONExtractPath(w *strings.Builder, pathSegments []string
 	return nil
 }
 
-// WriteJSONArrayMembership writes ANY(ARRAY(SELECT json_func(expr))) for PostgreSQL.
-func (d *Dialect) WriteJSONArrayMembership(w *strings.Builder, jsonFunc string, writeExpr func() error) error {
-	w.WriteString("ANY(ARRAY(SELECT ")
+// WriteJSONArrayMembership writes elem = ANY(ARRAY(SELECT json_func(arr))) for PostgreSQL.
+func (d *Dialect) WriteJSONArrayMembership(w *strings.Builder, jsonFunc string, writeElem func() error, writeArray func() error) error {
+	if err := writeElem(); err != nil {
+		return err
+	}
+	w.WriteString(" = ANY(ARRAY(SELECT ")
 	w.WriteString(jsonFunc)
 	w.WriteString("(")
-	if err := writeExpr(); err != nil {
+	if err := writeArray(); err != nil {
 		return err
 	}
 	w.WriteString(")))")
 	return nil
 }
 
-// WriteNestedJSONArrayMembership writes ANY(ARRAY(SELECT jsonb_array_elements_text(expr))) for PostgreSQL.
-func (d *Dialect) WriteNestedJSONArrayMembership(w *strings.Builder, writeExpr func() error) error {
-	w.WriteString("ANY(ARRAY(SELECT jsonb_array_elements_text(")
-	if err := writeExpr(); err != nil {
+// WriteNestedJSONArrayMembership writes elem = ANY(ARRAY(SELECT jsonb_array_elements_text(arr))) for PostgreSQL.
+func (d *Dialect) WriteNestedJSONArrayMembership(w *strings.Builder, writeElem func() error, writeArray func() error) error {
+	if err := writeElem(); err != nil {
+		return err
+	}
+	w.WriteString(" = ANY(ARRAY(SELECT jsonb_array_elements_text(")
+	if err := writeArray(); err != nil {
 		return err
 	}
 	w.WriteString(")))")
