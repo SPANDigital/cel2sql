@@ -1,6 +1,8 @@
 # Changelog
 
 ## [Unreleased]
+
+## [3.8.5] - 2026-06-14
 ### Fixed
 - **JSON array membership (`in`) now generates a correct boolean predicate on
   every dialect.** Each dialect now owns the full predicate, emitting both the
