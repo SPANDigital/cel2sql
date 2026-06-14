@@ -69,8 +69,8 @@ func TestJSONFieldNameEscaping_SingleQuote(t *testing.T) {
 func TestJSONFieldNameEscaping_Documentation(t *testing.T) {
 	t.Log("This test documents that JSON field names are escaped in generated SQL")
 	t.Log("Single quotes in field names would be escaped by doubling them: ' -> ''")
-	t.Log("The escapeJSONFieldName() function in utils.go handles this escaping")
-	t.Log("All JSON path operators (->, ->>, ?) use escapeJSONFieldName() for security")
+	t.Log("Each dialect's escapeJSONFieldName() (dialect/<name>/dialect.go) handles this escaping")
+	t.Log("All JSON path operators (->, ->>, ?) escape field names for security")
 }
 
 // TestJSONFieldNameEscaping_HasFunction tests escaping in has() macro for JSON existence checks
@@ -118,22 +118,6 @@ func TestJSONFieldNameEscaping_HasFunction(t *testing.T) {
 			t.Logf("Generated SQL: %s", sqlCondition)
 		})
 	}
-}
-
-// TestEscapeJSONFieldNameFunction tests the escapeJSONFieldName utility function directly
-func TestEscapeJSONFieldNameFunction(t *testing.T) {
-	// Note: We can't directly test the unexported function, but we verify its behavior
-	// through the integration tests above. This test documents the expected behavior.
-
-	t.Log("The escapeJSONFieldName() function in utils.go escapes single quotes")
-	t.Log("Example: \"user's name\" -> \"user''s name\"")
-	t.Log("This prevents SQL injection when field names contain single quotes")
-	t.Log("The function is used in:")
-	t.Log("  - cel2sql.go — visitSelect() for -> and ->> operators")
-	t.Log("  - cel2sql.go — visitHasFunction() for ? and -> operators")
-	t.Log("  - cel2sql.go — visitNestedJSONHas() for jsonb_extract_path_text()")
-	t.Log("  - json.go — buildJSONPathForArray() for nested JSON paths")
-	t.Log("  - json.go — buildJSONPathInternal() for all JSON path construction")
 }
 
 // TestJSONFieldNameEscaping_SecurityImplications tests security aspects

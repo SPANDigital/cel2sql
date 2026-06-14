@@ -11,9 +11,9 @@ import (
 
 	"github.com/google/cel-go/checker/decls"
 	"github.com/google/cel-go/common/types"
-	"github.com/google/cel-go/common/types/ref"
 	exprpb "google.golang.org/genproto/googleapis/api/expr/v1alpha1"
 
+	"github.com/spandigital/cel2sql/v3/internal/celprovider"
 	"github.com/spandigital/cel2sql/v3/schema"
 )
 
@@ -44,13 +44,13 @@ type TypeProvider interface {
 }
 
 type typeProvider struct {
-	schemas map[string]Schema
-	db      *sql.DB
+	celprovider.Base
+	db *sql.DB
 }
 
 // NewTypeProvider creates a new SQLite type provider with pre-defined schemas.
 func NewTypeProvider(schemas map[string]Schema) TypeProvider {
-	return &typeProvider{schemas: schemas}
+	return &typeProvider{Base: celprovider.Base{Schemas: schemas, Mapper: sqliteTypeToCELExprType}}
 }
 
 // NewTypeProviderWithConnection creates a new SQLite type provider that can introspect database schemas.
@@ -61,8 +61,8 @@ func NewTypeProviderWithConnection(_ context.Context, db *sql.DB) (TypeProvider,
 	}
 
 	return &typeProvider{
-		schemas: make(map[string]Schema),
-		db:      db,
+		Base: celprovider.Base{Schemas: make(map[string]Schema), Mapper: sqliteTypeToCELExprType},
+		db:   db,
 	}, nil
 }
 
@@ -111,7 +111,7 @@ func (tp *typeProvider) LoadTableSchema(ctx context.Context, tableName string) e
 		return fmt.Errorf("%w: table %q has no columns or does not exist", ErrInvalidSchema, tableName)
 	}
 
-	tp.schemas[tableName] = NewSchema(fields)
+	tp.Schemas[tableName] = NewSchema(fields)
 	return nil
 }
 
@@ -177,75 +177,6 @@ func normalizeSQLiteType(colType string) string {
 
 	// Default to text for unknown types (SQLite's flexible typing)
 	return sqliteTypeText
-}
-
-// Close is a no-op since we don't own the *sql.DB.
-func (tp *typeProvider) Close() {
-	// No-op: caller owns the *sql.DB connection
-}
-
-// GetSchemas returns the schemas known to this type provider.
-func (tp *typeProvider) GetSchemas() map[string]Schema {
-	return tp.schemas
-}
-
-// EnumValue implements types.Provider.
-func (tp *typeProvider) EnumValue(_ string) ref.Val {
-	return types.NewErr("unknown enum value")
-}
-
-// FindIdent implements types.Provider.
-func (tp *typeProvider) FindIdent(_ string) (ref.Val, bool) {
-	return nil, false
-}
-
-// FindStructType implements types.Provider.
-func (tp *typeProvider) FindStructType(structType string) (*types.Type, bool) {
-	if _, ok := tp.schemas[structType]; ok {
-		return types.NewObjectType(structType), true
-	}
-	return nil, false
-}
-
-// FindStructFieldNames implements types.Provider.
-func (tp *typeProvider) FindStructFieldNames(structType string) ([]string, bool) {
-	s, ok := tp.schemas[structType]
-	if !ok {
-		return nil, false
-	}
-	fields := s.Fields()
-	names := make([]string, len(fields))
-	for i, f := range fields {
-		names[i] = f.Name
-	}
-	return names, true
-}
-
-// FindStructFieldType implements types.Provider.
-func (tp *typeProvider) FindStructFieldType(structType, fieldName string) (*types.FieldType, bool) {
-	s, ok := tp.schemas[structType]
-	if !ok {
-		return nil, false
-	}
-	field, found := s.FindField(fieldName)
-	if !found {
-		return nil, false
-	}
-
-	exprType := sqliteTypeToCELExprType(field)
-	celType, err := types.ExprTypeToType(exprType)
-	if err != nil {
-		return nil, false
-	}
-
-	return &types.FieldType{
-		Type: celType,
-	}, true
-}
-
-// NewValue implements types.Provider.
-func (tp *typeProvider) NewValue(_ string, _ map[string]ref.Val) ref.Val {
-	return types.NewErr("unknown type in schema")
 }
 
 // sqliteTypeToCELExprType converts a SQLite field schema to a CEL expression type.
