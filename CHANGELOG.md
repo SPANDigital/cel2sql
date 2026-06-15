@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+## [3.8.6] - 2026-06-15
+### Changed
+- **Dependencies**
+  - `google.golang.org/api` 0.283.0 → 0.284.0 (#142)
+
 ## [3.8.5] - 2026-06-14
 ### Fixed
 - **JSON array membership (`in`) now generates a correct boolean predicate on
