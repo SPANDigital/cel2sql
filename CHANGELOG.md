@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+## [3.8.7] - 2026-06-18
+### Changed
+- **Dependencies**
+  - `google.golang.org/api` 0.284.0 → 0.285.0 (#146)
+
 ## [3.8.6] - 2026-06-15
 ### Changed
 - **Dependencies**
