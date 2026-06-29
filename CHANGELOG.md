@@ -2,6 +2,22 @@
 
 ## [Unreleased]
 
+## [3.8.8] - 2026-06-29
+### Changed
+- **Dependencies**
+  - `modernc.org/sqlite` 1.52.0 → 1.53.0 (#151)
+  - `github.com/testcontainers/testcontainers-go` 0.42.0 → 0.43.0 (#149)
+  - `github.com/testcontainers/testcontainers-go/modules/postgres` 0.42.0 → 0.43.0 (#150)
+  - `github.com/testcontainers/testcontainers-go/modules/mysql` 0.42.0 → 0.43.0 (#148)
+  - `github.com/testcontainers/testcontainers-go/modules/gcloud` 0.42.0 → 0.43.0 (#152)
+
+### Fixed
+- **CI**
+  - Grant the Dependency Update workflow `contents: write` so it can push the
+    `update-dependencies` branch (was failing with a 403 push permission error) (#153).
+  - Raise the scheduled Fuzzing job `timeout-minutes` to 45 so the three 10-minute
+    fuzz functions finish before the job times out (#153).
+
 ## [3.8.7] - 2026-06-18
 ### Changed
 - **Dependencies**
