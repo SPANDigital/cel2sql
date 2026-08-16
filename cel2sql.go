@@ -405,13 +405,17 @@ type converter struct {
 	ctx                context.Context
 	logger             *slog.Logger
 	dialect            dialect.Dialect
-	depth              int   // Current recursion depth
-	maxDepth           int   // Maximum allowed recursion depth
-	maxOutputLen       int   // Maximum allowed SQL output length
-	comprehensionDepth int   // Current comprehension nesting depth
-	parameterize       bool  // Enable parameterized output
-	parameters         []any // Collected parameters for parameterized queries
-	paramCount         int   // Parameter counter for placeholders
+	depth              int // Current recursion depth
+	maxDepth           int // Maximum allowed recursion depth
+	maxOutputLen       int // Maximum allowed SQL output length
+	comprehensionDepth int // Current comprehension nesting depth
+	// iterVars are the comprehension iteration variables in scope. A
+	// reference to one is written by the dialect, which knows whether its own
+	// source bound the alias to a value or to a row.
+	iterVars     map[string]bool
+	parameterize bool  // Enable parameterized output
+	parameters   []any // Collected parameters for parameterized queries
+	paramCount   int   // Parameter counter for placeholders
 }
 
 // checkContext checks if the context has been cancelled or expired.
@@ -2061,6 +2065,15 @@ func (con *converter) visitAllComprehension(expr *exprpb.Expr, info *Comprehensi
 		return newConversionError(errMsgUnsupportedComprehension, "expression is not a comprehension (ALL)")
 	}
 
+	// Every reference to the iteration variable is written by the dialect,
+	// which knows whether its own comprehension source binds the alias to a
+	// value or to a row. Bound before anything is written, because a filter
+	// and a map name the variable in their projection, ahead of the FROM.
+	//
+	// Restored afterwards, since comprehensions nest and an inner one may
+	// reuse a name.
+	defer con.bindIterVar(info.IterVar)()
+
 	iterRange := comprehension.GetIterRange()
 
 	con.str.WriteString("NOT EXISTS (SELECT 1 FROM ")
@@ -2088,6 +2101,15 @@ func (con *converter) visitExistsComprehension(expr *exprpb.Expr, info *Comprehe
 		return newConversionError(errMsgUnsupportedComprehension, "expression is not a comprehension (EXISTS)")
 	}
 
+	// Every reference to the iteration variable is written by the dialect,
+	// which knows whether its own comprehension source binds the alias to a
+	// value or to a row. Bound before anything is written, because a filter
+	// and a map name the variable in their projection, ahead of the FROM.
+	//
+	// Restored afterwards, since comprehensions nest and an inner one may
+	// reuse a name.
+	defer con.bindIterVar(info.IterVar)()
+
 	iterRange := comprehension.GetIterRange()
 
 	con.str.WriteString("EXISTS (SELECT 1 FROM ")
@@ -2114,6 +2136,15 @@ func (con *converter) visitExistsOneComprehension(expr *exprpb.Expr, info *Compr
 		return newConversionError(errMsgUnsupportedComprehension, "expression is not a comprehension (EXISTS_ONE)")
 	}
 
+	// Every reference to the iteration variable is written by the dialect,
+	// which knows whether its own comprehension source binds the alias to a
+	// value or to a row. Bound before anything is written, because a filter
+	// and a map name the variable in their projection, ahead of the FROM.
+	//
+	// Restored afterwards, since comprehensions nest and an inner one may
+	// reuse a name.
+	defer con.bindIterVar(info.IterVar)()
+
 	iterRange := comprehension.GetIterRange()
 
 	con.str.WriteString("(SELECT COUNT(*) FROM ")
@@ -2139,6 +2170,15 @@ func (con *converter) visitMapComprehension(expr *exprpb.Expr, info *Comprehensi
 	if comprehension == nil {
 		return newConversionError(errMsgUnsupportedComprehension, "expression is not a comprehension (MAP)")
 	}
+
+	// Every reference to the iteration variable is written by the dialect,
+	// which knows whether its own comprehension source binds the alias to a
+	// value or to a row. Bound before anything is written, because a filter
+	// and a map name the variable in their projection, ahead of the FROM.
+	//
+	// Restored afterwards, since comprehensions nest and an inner one may
+	// reuse a name.
+	defer con.bindIterVar(info.IterVar)()
 
 	iterRange := comprehension.GetIterRange()
 
@@ -2175,10 +2215,23 @@ func (con *converter) visitFilterComprehension(expr *exprpb.Expr, info *Comprehe
 		return newConversionError(errMsgUnsupportedComprehension, "expression is not a comprehension (FILTER)")
 	}
 
+	// Every reference to the iteration variable is written by the dialect,
+	// which knows whether its own comprehension source binds the alias to a
+	// value or to a row. Bound before anything is written, because a filter
+	// and a map name the variable in their projection, ahead of the FROM.
+	//
+	// Restored afterwards, since comprehensions nest and an inner one may
+	// reuse a name.
+	defer con.bindIterVar(info.IterVar)()
+
 	iterRange := comprehension.GetIterRange()
 
 	con.dialect.WriteArraySubqueryOpen(&con.str)
-	con.str.WriteString(info.IterVar)
+	// The projection names the iteration variable, so it goes through the
+	// dialect for the same reason a reference in the predicate does.
+	if err := con.dialect.WriteIterVarRef(&con.str, info.IterVar); err != nil {
+		return wrapConversionError(err, "writing the iteration variable in FILTER comprehension")
+	}
 	con.dialect.WriteArraySubqueryExprClose(&con.str)
 	con.str.WriteString(" FROM ")
 	if err := con.writeComprehensionSource(iterRange); err != nil {
@@ -2327,6 +2380,12 @@ func (con *converter) visitIdent(expr *exprpb.Expr) error {
 	// Validate identifier name for security (prevent SQL injection)
 	if err := con.dialect.ValidateFieldName(identName); err != nil {
 		return fmt.Errorf("%w: %w", ErrInvalidFieldName, err)
+	}
+
+	// An iteration variable is the dialect's to write: its alias may name a
+	// row rather than a value, depending on what the source bound it to.
+	if con.iterVars[identName] {
+		return con.dialect.WriteIterVarRef(&con.str, identName)
 	}
 
 	// Apply column alias if configured
@@ -2629,6 +2688,26 @@ func (con *converter) writeComprehensionSource(iterRange *exprpb.Expr) error {
 	return con.dialect.WriteUnnest(&con.str, func() error {
 		return con.visit(iterRange)
 	})
+}
+
+// bindIterVar records how a comprehension's iteration variable was bound, for
+// as long as its predicate is being written.
+//
+// Scoped rather than accumulated: comprehensions nest, and an inner one may
+// reuse a name the outer one bound differently. The returned function restores
+// whatever the name meant before.
+func (con *converter) bindIterVar(name string) func() {
+	if con.iterVars == nil {
+		con.iterVars = map[string]bool{}
+	}
+	had := con.iterVars[name]
+	con.iterVars[name] = true
+	return func() {
+		if had {
+			return
+		}
+		delete(con.iterVars, name)
+	}
 }
 
 func (con *converter) visitMaybeNested(expr *exprpb.Expr, nested bool) error {

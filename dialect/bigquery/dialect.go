@@ -510,3 +510,12 @@ func bigqueryTypeName(typeName string) string {
 		return strings.ToUpper(typeName)
 	}
 }
+
+// WriteIterVarRef writes a reference to a comprehension's iteration variable.
+//
+// The alias is the value itself here: UNNEST binds one element per row to the
+// alias, so nothing has to be selected out of it.
+func (d *Dialect) WriteIterVarRef(w *strings.Builder, alias string) error {
+	w.WriteString(alias)
+	return nil
+}

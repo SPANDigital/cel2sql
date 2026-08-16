@@ -483,3 +483,16 @@ func (d *Dialect) SupportsIndexAnalysis() bool { return true }
 func escapeJSONFieldName(fieldName string) string {
 	return strings.ReplaceAll(fieldName, "'", "''")
 }
+
+// WriteIterVarRef writes a reference to a comprehension's iteration variable.
+//
+// The alias is the value itself here: UNNEST binds one element per row to the
+// alias, so nothing has to be selected out of it.
+func (d *Dialect) WriteIterVarRef(w *strings.Builder, alias string) error {
+	// JSON_TABLE is given a COLUMNS(value ...) clause by WriteUnnest and by
+	// WriteJSONArrayElements alike, so the alias names a row with one column
+	// and a reference to the element is that column.
+	w.WriteString(alias)
+	w.WriteString(".value")
+	return nil
+}
