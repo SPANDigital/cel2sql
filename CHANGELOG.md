@@ -1,6 +1,8 @@
 # Changelog
 
 ## [Unreleased]
+
+## [3.8.10] - 2026-08-22
 ### Fixed
 - **MySQL comprehensions**: `exists` and `all` now generate
   `(SELECT COUNT(*) FROM JSON_TABLE(...)) > 0` / `= 0` instead of
