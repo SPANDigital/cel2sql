@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"testing"
 
+	"cel.dev/cel-go/common/types"
 	_ "github.com/go-sql-driver/mysql"
-	"github.com/google/cel-go/common/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/testcontainers/testcontainers-go"

@@ -160,7 +160,7 @@ person.tags.filter(t, t.startsWith('a')).join(',')
 
 ## Related Documentation
 
-- [CEL String Extensions](https://github.com/google/cel-go/tree/master/ext#strings)
+- [CEL String Extensions](https://github.com/cel-expr/cel-go/tree/master/ext#strings)
 - [PostgreSQL String Functions](https://www.postgresql.org/docs/current/functions-string.html)
 - [PostgreSQL Array Functions](https://www.postgresql.org/docs/current/functions-array.html)
 - [cel2sql Operators Reference](../../docs/operators-reference.md)

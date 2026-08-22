@@ -9,8 +9,8 @@ import (
 	"strings"
 	"testing"
 
+	"cel.dev/cel-go/cel"
 	"cloud.google.com/go/bigquery"
-	"github.com/google/cel-go/cel"
 	"github.com/stretchr/testify/require"
 	"github.com/testcontainers/testcontainers-go"
 	tcbigquery "github.com/testcontainers/testcontainers-go/modules/gcloud/bigquery"

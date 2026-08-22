@@ -228,7 +228,7 @@ import (
     "fmt"
     "log"
 
-    "github.com/google/cel-go/cel"
+    "cel.dev/cel-go/cel"
     "github.com/spandigital/cel2sql/v3"
     "github.com/spandigital/cel2sql/v3/pg"
 )

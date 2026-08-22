@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"testing"
 
+	"cel.dev/cel-go/cel"
 	_ "github.com/go-sql-driver/mysql"
-	"github.com/google/cel-go/cel"
 	"github.com/stretchr/testify/require"
 	"github.com/testcontainers/testcontainers-go"
 	tcmysql "github.com/testcontainers/testcontainers-go/modules/mysql"

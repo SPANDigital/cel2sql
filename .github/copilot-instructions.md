@@ -87,7 +87,7 @@ info.metadata.corpus.section == "Guide" && info.metadata.version.major == 2
 
 ### Dependencies
 
-- **CEL**: `github.com/google/cel-go` - Core CEL functionality
+- **CEL**: `cel.dev/cel-go` - Core CEL functionality
 - **PostgreSQL**: `github.com/jackc/pgx/v5` - Database driver
 - **Protobuf**: Required for CEL (don't remove these dependencies)
 - **Testing**: `github.com/stretchr/testify`

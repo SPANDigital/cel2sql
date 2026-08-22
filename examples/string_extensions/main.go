@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/google/cel-go/cel"
-	"github.com/google/cel-go/ext"
+	"cel.dev/cel-go/cel"
+	"cel.dev/cel-go/ext"
 	"github.com/spandigital/cel2sql/v3"
 	"github.com/spandigital/cel2sql/v3/pg"
 )

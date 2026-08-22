@@ -29,7 +29,7 @@ package main
 
 import (
     "fmt"
-    "github.com/google/cel-go/cel"
+    "cel.dev/cel-go/cel"
     "github.com/spandigital/cel2sql/v3"
     "github.com/spandigital/cel2sql/v3/pg"
 )
@@ -645,7 +645,7 @@ Apache 2.0 - See [LICENSE](LICENSE) for details.
 
 ## Related Projects
 
-- [CEL-Go](https://github.com/google/cel-go) - Common Expression Language implementation in Go
+- [CEL-Go](https://github.com/cel-expr/cel-go) - Common Expression Language implementation in Go
 - [CEL Spec](https://github.com/google/cel-spec) - Common Expression Language specification
 
 ## Need Help?

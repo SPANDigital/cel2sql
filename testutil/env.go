@@ -3,7 +3,7 @@ package testutil
 import (
 	"fmt"
 
-	"github.com/google/cel-go/cel"
+	"cel.dev/cel-go/cel"
 
 	"github.com/spandigital/cel2sql/v3"
 	dialectpkg "github.com/spandigital/cel2sql/v3/dialect"

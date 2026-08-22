@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/google/cel-go/cel"
+	"cel.dev/cel-go/cel"
 	"github.com/spandigital/cel2sql/v3/dialect"
 	dialectbq "github.com/spandigital/cel2sql/v3/dialect/bigquery"
 	dialectduckdb "github.com/spandigital/cel2sql/v3/dialect/duckdb"

@@ -1,7 +1,7 @@
 package cel2sql
 
 import (
-	"github.com/google/cel-go/common/operators"
+	"cel.dev/cel-go/common/operators"
 )
 
 // standardSQLBinaryOperators maps CEL binary operators to PostgreSQL SQL operators
