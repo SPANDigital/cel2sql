@@ -2,7 +2,7 @@
 
 > Convert [CEL (Common Expression Language)](https://cel.dev/) expressions to SQL for PostgreSQL, MySQL, SQLite, DuckDB, BigQuery, and Apache Spark SQL
 
-[![Go Version](https://img.shields.io/badge/Go-1.25%2B-blue)](https://golang.org)
+[![Go Version](https://img.shields.io/badge/Go-1.26%2B-blue)](https://golang.org)
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-17-336791)](https://www.postgresql.org)
 [![MySQL](https://img.shields.io/badge/MySQL-8.0-4479A1)](https://www.mysql.com)
 [![SQLite](https://img.shields.io/badge/SQLite-3-003B57)](https://www.sqlite.org)
