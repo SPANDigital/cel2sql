@@ -1,6 +1,6 @@
 module github.com/spandigital/cel2sql/v3
 
-go 1.25.13
+go 1.26.7
 
 require (
 	cloud.google.com/go/bigquery v1.81.0

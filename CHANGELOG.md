@@ -1,6 +1,13 @@
 # Changelog
 
 ## [Unreleased]
+### Changed
+- **Go 1.26 toolchain** (#174): the `go` directive moves to 1.26.7 (latest
+  1.26 patch, keeping the OSV/govulncheck stdlib scans clean) and all CI
+  workflows build with Go 1.26.x. golangci-lint in CI moves v2.6 → v2.12,
+  with `goconst` tuned to stop flagging type-name switches, keyword maps,
+  and fixture data. Consumers now need a Go 1.26+ toolchain (older `go`
+  binaries with toolchain auto-download still work).
 
 ## [3.8.10] - 2026-08-22
 ### Fixed

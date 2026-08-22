@@ -5,6 +5,23 @@ run:
   modules-download-mode: readonly
 
 linters:
+  settings:
+    goconst:
+      # Type-name switches, keyword maps, and String() methods repeat short
+      # domain literals by design; only flag heavy repetition.
+      ignore-tests: true
+      min-occurrences: 8
+  exclusions:
+    rules:
+      - path: ^examples/
+        linters:
+          - goconst
+      - path: ^testcases/
+        linters:
+          - goconst
+      - path: ^test/
+        linters:
+          - goconst
   enable:
     # Core linters (enabled by default)
     - errcheck
