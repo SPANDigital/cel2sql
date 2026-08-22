@@ -1,0 +1,3 @@
+[[IgnoredVulns]]
+id = "GO-2026-5932"
+reason = "golang.org/x/crypto/openpgp is unmaintained by design with no fixed version; pulled in transitively by test-only dependencies and not called by cel2sql"
