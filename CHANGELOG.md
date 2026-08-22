@@ -1,6 +1,14 @@
 # Changelog
 
 ## [Unreleased]
+### Fixed
+- **SQLite/MySQL comprehensions**: a reference to a comprehension's iteration
+  variable now names the value rather than the source alias. `json_each` and
+  `JSON_TABLE` are table-valued functions, so `approvals.exists(a, a ==
+  "alice")` generated `WHERE a = ?` against a row of `key, value, type, …` —
+  SQL the converter reported as a success and the database rejected with
+  "no such column: a". Dialects write the reference themselves now, through
+  the new `Dialect.WriteIterVarRef`.
 
 ## [3.8.8] - 2026-06-29
 ### Changed

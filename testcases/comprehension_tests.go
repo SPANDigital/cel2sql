@@ -11,7 +11,7 @@ func ComprehensionTests() []ConvertTestCase {
 			Category: CategoryComprehension,
 			WantSQL: map[dialect.Name]string{
 				dialect.PostgreSQL: "NOT EXISTS (SELECT 1 FROM UNNEST(string_list) AS x WHERE NOT (x != 'bad'))",
-				dialect.SQLite:     "NOT EXISTS (SELECT 1 FROM json_each(string_list) AS x WHERE NOT (x != 'bad'))",
+				dialect.SQLite:     "NOT EXISTS (SELECT 1 FROM json_each(string_list) AS x WHERE NOT (x.value != 'bad'))",
 				dialect.DuckDB:     "NOT EXISTS (SELECT 1 FROM UNNEST(string_list) AS x WHERE NOT (x != 'bad'))",
 				dialect.BigQuery:   "NOT EXISTS (SELECT 1 FROM UNNEST(string_list) AS x WHERE NOT (x != 'bad'))",
 				dialect.Spark:      "NOT EXISTS (SELECT 1 FROM EXPLODE(string_list) AS x WHERE NOT (x != 'bad'))",
@@ -23,7 +23,7 @@ func ComprehensionTests() []ConvertTestCase {
 			Category: CategoryComprehension,
 			WantSQL: map[dialect.Name]string{
 				dialect.PostgreSQL: "EXISTS (SELECT 1 FROM UNNEST(string_list) AS x WHERE x = 'good')",
-				dialect.SQLite:     "EXISTS (SELECT 1 FROM json_each(string_list) AS x WHERE x = 'good')",
+				dialect.SQLite:     "EXISTS (SELECT 1 FROM json_each(string_list) AS x WHERE x.value = 'good')",
 				dialect.DuckDB:     "EXISTS (SELECT 1 FROM UNNEST(string_list) AS x WHERE x = 'good')",
 				dialect.BigQuery:   "EXISTS (SELECT 1 FROM UNNEST(string_list) AS x WHERE x = 'good')",
 				dialect.Spark:      "EXISTS (SELECT 1 FROM EXPLODE(string_list) AS x WHERE x = 'good')",
@@ -35,7 +35,7 @@ func ComprehensionTests() []ConvertTestCase {
 			Category: CategoryComprehension,
 			WantSQL: map[dialect.Name]string{
 				dialect.PostgreSQL: "(SELECT COUNT(*) FROM UNNEST(string_list) AS x WHERE x = 'unique') = 1",
-				dialect.SQLite:     "(SELECT COUNT(*) FROM json_each(string_list) AS x WHERE x = 'unique') = 1",
+				dialect.SQLite:     "(SELECT COUNT(*) FROM json_each(string_list) AS x WHERE x.value = 'unique') = 1",
 				dialect.DuckDB:     "(SELECT COUNT(*) FROM UNNEST(string_list) AS x WHERE x = 'unique') = 1",
 				dialect.BigQuery:   "(SELECT COUNT(*) FROM UNNEST(string_list) AS x WHERE x = 'unique') = 1",
 				dialect.Spark:      "(SELECT COUNT(*) FROM EXPLODE(string_list) AS x WHERE x = 'unique') = 1",
@@ -47,7 +47,7 @@ func ComprehensionTests() []ConvertTestCase {
 			Category: CategoryComprehension,
 			WantSQL: map[dialect.Name]string{
 				dialect.PostgreSQL: "ARRAY(SELECT x FROM UNNEST(string_list) AS x WHERE x != 'bad')",
-				dialect.SQLite:     "(SELECT json_group_array(x) FROM json_each(string_list) AS x WHERE x != 'bad')",
+				dialect.SQLite:     "(SELECT json_group_array(x.value) FROM json_each(string_list) AS x WHERE x.value != 'bad')",
 				dialect.DuckDB:     "ARRAY(SELECT x FROM UNNEST(string_list) AS x WHERE x != 'bad')",
 				dialect.BigQuery:   "ARRAY(SELECT x FROM UNNEST(string_list) AS x WHERE x != 'bad')",
 				dialect.Spark:      "(SELECT collect_list(x) FROM EXPLODE(string_list) AS x WHERE x != 'bad')",
@@ -59,7 +59,7 @@ func ComprehensionTests() []ConvertTestCase {
 			Category: CategoryComprehension,
 			WantSQL: map[dialect.Name]string{
 				dialect.PostgreSQL: "ARRAY(SELECT x || '_suffix' FROM UNNEST(string_list) AS x)",
-				dialect.SQLite:     "(SELECT json_group_array(x || '_suffix') FROM json_each(string_list) AS x)",
+				dialect.SQLite:     "(SELECT json_group_array(x.value || '_suffix') FROM json_each(string_list) AS x)",
 				dialect.DuckDB:     "ARRAY(SELECT x || '_suffix' FROM UNNEST(string_list) AS x)",
 				dialect.BigQuery:   "ARRAY(SELECT x || '_suffix' FROM UNNEST(string_list) AS x)",
 				dialect.Spark:      "(SELECT collect_list(concat(x, '_suffix')) FROM EXPLODE(string_list) AS x)",

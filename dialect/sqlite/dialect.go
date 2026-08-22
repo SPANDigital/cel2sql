@@ -470,3 +470,20 @@ func sqliteExtractFormat(part string) string {
 		return "%Y"
 	}
 }
+
+// WriteIterVarRef writes a reference to a comprehension's iteration variable.
+//
+// json_each is a table-valued function, so the alias names a row of key,
+// value, type, atom, id, parent, fullkey and path — not the element. A
+// comparison against the array's element wants the value column, and writing
+// the bare alias produces "no such column: a" at query time from SQL the
+// converter reported as a success.
+//
+// Unconditional, because both of this dialect's comprehension sources are
+// json_each: WriteUnnest and WriteJSONArrayElements write the same function,
+// so every iteration variable here names one of its rows.
+func (d *Dialect) WriteIterVarRef(w *strings.Builder, alias string) error {
+	w.WriteString(alias)
+	w.WriteString(".value")
+	return nil
+}

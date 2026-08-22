@@ -181,6 +181,21 @@ type Dialect interface {
 
 	// --- Comprehensions ---
 
+	// WriteIterVarRef writes a reference to a comprehension's iteration
+	// variable, given the alias the source was bound to.
+	//
+	// The alias is the whole value where the source is an UNNEST-style
+	// binding, which is why the default implementation writes it unchanged.
+	// Where the source is a table-valued function it is not: SQLite's
+	// json_each yields rows of key, value, type and more, so a comparison
+	// against the array's element has to name the column that holds it.
+	//
+	// No flag for which source bound it: a dialect writes both of them, so it
+	// already knows. SQLite renders json_each for either, MySQL renders
+	// JSON_TABLE with a value column for either, and DuckDB's UNNEST binds
+	// the element itself.
+	WriteIterVarRef(w *strings.Builder, alias string) error
+
 	// WriteUnnest writes the UNNEST source for comprehensions.
 	// For PostgreSQL: UNNEST(array). For MySQL: JSON_TABLE(...).
 	WriteUnnest(w *strings.Builder, writeSource func() error) error
