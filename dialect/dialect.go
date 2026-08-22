@@ -196,6 +196,21 @@ type Dialect interface {
 	// the element itself.
 	WriteIterVarRef(w *strings.Builder, alias string) error
 
+	// WriteComprehensionExists wraps a comprehension's existential subquery.
+	// writeBody writes everything between FROM and the subquery's closing
+	// paren: the source, its alias, and the predicate's WHERE clause.
+	//
+	// Most dialects write EXISTS (SELECT 1 FROM <body>). MySQL cannot: its
+	// 8.x optimizer turns a correlated EXISTS into a semijoin and loses the
+	// correlation to a JSON_TABLE source, silently matching nothing, so it
+	// writes (SELECT COUNT(*) FROM <body>) > 0 instead.
+	WriteComprehensionExists(w *strings.Builder, writeBody func() error) error
+
+	// WriteComprehensionNotExists is WriteComprehensionExists negated: NOT
+	// EXISTS (SELECT 1 FROM <body>) for most dialects, (SELECT COUNT(*) FROM
+	// <body>) = 0 for MySQL.
+	WriteComprehensionNotExists(w *strings.Builder, writeBody func() error) error
+
 	// WriteUnnest writes the UNNEST source for comprehensions.
 	// For PostgreSQL: UNNEST(array). For MySQL: JSON_TABLE(...).
 	WriteUnnest(w *strings.Builder, writeSource func() error) error

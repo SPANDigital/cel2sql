@@ -487,3 +487,23 @@ func (d *Dialect) WriteIterVarRef(w *strings.Builder, alias string) error {
 	w.WriteString(".value")
 	return nil
 }
+
+// WriteComprehensionExists writes EXISTS (SELECT 1 FROM <body>).
+func (d *Dialect) WriteComprehensionExists(w *strings.Builder, writeBody func() error) error {
+	w.WriteString("EXISTS (SELECT 1 FROM ")
+	if err := writeBody(); err != nil {
+		return err
+	}
+	w.WriteString(")")
+	return nil
+}
+
+// WriteComprehensionNotExists writes NOT EXISTS (SELECT 1 FROM <body>).
+func (d *Dialect) WriteComprehensionNotExists(w *strings.Builder, writeBody func() error) error {
+	w.WriteString("NOT EXISTS (SELECT 1 FROM ")
+	if err := writeBody(); err != nil {
+		return err
+	}
+	w.WriteString(")")
+	return nil
+}

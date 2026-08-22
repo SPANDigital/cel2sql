@@ -14,14 +14,13 @@ import (
 )
 
 // TestMySQLComprehensionRunsAgainstMySQL converts a comprehension and then
-// executes it, mirroring TestSQLiteComprehensionRunsAgainstSQLite: JSON_TABLE
-// is a table-valued function, so a reference to the iteration variable that
-// names the alias rather than its value column is SQL the converter reports
-// as a success and MySQL rejects at query time.
-//
-// Requires MySQL 8.4+: on 8.0 (EOL April 2026) a correlated JSON_TABLE inside
-// EXISTS silently matches nothing when run as a prepared statement, so these
-// queries return no error and no rows there.
+// executes it, mirroring TestSQLiteComprehensionRunsAgainstSQLite: only a
+// real server catches SQL that parses but misbehaves. It has caught two
+// distinct bugs of that kind — an iteration-variable reference naming the
+// JSON_TABLE alias instead of its value column (an unknown-column error at
+// query time), and EXISTS wrappers that the MySQL 8.x optimizer turns into a
+// semijoin, losing the correlation to JSON_TABLE and silently matching
+// nothing (hence the COUNT forms in the MySQL dialect).
 func TestMySQLComprehensionRunsAgainstMySQL(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping integration test in short mode")
