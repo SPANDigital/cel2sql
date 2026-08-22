@@ -1,6 +1,8 @@
 # Changelog
 
 ## [Unreleased]
+
+## [3.8.9] - 2026-08-22
 ### Fixed
 - **SQLite/MySQL comprehensions**: a reference to a comprehension's iteration
   variable now names the value rather than the source alias. `json_each` and
@@ -9,6 +11,17 @@
   SQL the converter reported as a success and the database rejected with
   "no such column: a". Dialects write the reference themselves now, through
   the new `Dialect.WriteIterVarRef`.
+
+### Security
+- Updated dependencies to fix known vulnerabilities: `google.golang.org/grpc`
+  1.81.1 → 1.83.1 (GO-2026-6061), `golang.org/x/text` 0.38.0 → 0.41.0
+  (GO-2026-5970), `github.com/google/cel-go` 0.28.1 → 0.31.0
+  (GHSA-gcjh-h69q-9w9g), `github.com/moby/go-archive` 0.2.0 → 0.3.3
+  (GHSA-hfg8-hc9c-6c3h), plus a Go 1.25.13 toolchain bump for stdlib fixes.
+
+### Changed
+- Updated `cloud.google.com/go/bigquery` to 1.81.0, `google.golang.org/api`
+  to 0.293.0, `modernc.org/sqlite` to 1.57.0, and transitive dependencies.
 
 ## [3.8.8] - 2026-06-29
 ### Changed
