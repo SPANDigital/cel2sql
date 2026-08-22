@@ -12,9 +12,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/google/cel-go/cel"
-	"github.com/google/cel-go/common/operators"
-	"github.com/google/cel-go/common/overloads"
+	"cel.dev/cel-go/cel"
+	"cel.dev/cel-go/common/operators"
+	"cel.dev/cel-go/common/overloads"
 	exprpb "google.golang.org/genproto/googleapis/api/expr/v1alpha1"
 
 	"github.com/spandigital/cel2sql/v3/dialect"
@@ -23,7 +23,7 @@ import (
 )
 
 // Implementations based on `google/cel-go`'s unparser
-// https://github.com/google/cel-go/blob/master/parser/unparser.go
+// https://cel.dev/cel-go/blob/master/parser/unparser.go
 
 // Resource limit constants.
 const (

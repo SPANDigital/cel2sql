@@ -15,7 +15,7 @@ import (
 	"log"
 	"strings"
 
-	"github.com/google/cel-go/cel"
+	"cel.dev/cel-go/cel"
 	_ "github.com/lib/pq"
 	"github.com/spandigital/cel2sql/v3"
 	"github.com/spandigital/cel2sql/v3/pg"

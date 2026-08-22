@@ -8,8 +8,8 @@ import (
 	"strings"
 	"testing"
 
+	"cel.dev/cel-go/common/types"
 	bq "cloud.google.com/go/bigquery"
-	"github.com/google/cel-go/common/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/testcontainers/testcontainers-go"
