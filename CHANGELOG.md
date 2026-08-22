@@ -1,6 +1,13 @@
 # Changelog
 
 ## [Unreleased]
+### Changed
+- **CI**: retired the scheduled Dependency Update workflow (#176). Its PRs
+  were created with the default `GITHUB_TOKEN`, so CI never ran on them,
+  and its blanket `go get -u` bumped the `go` directive to unpatched .0
+  releases. Dependabot takes over fully: gomod updates now include indirect
+  dependencies, grouped weekly for minor/patch bumps (majors stay separate),
+  plus weekly grouped GitHub Actions updates.
 
 ## [3.9.0] - 2026-08-22
 ### Changed
