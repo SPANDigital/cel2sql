@@ -17,11 +17,11 @@ import (
 	"github.com/spandigital/cel2sql/v3/pg"
 )
 
-// setupMySQLContainer starts a MySQL 8 container and returns a database connection.
+// setupMySQLContainer starts a MySQL 8.4 container and returns a database connection.
 func setupMySQLContainer(ctx context.Context, t *testing.T) (testcontainers.Container, *sql.DB) {
 	t.Helper()
 
-	container, err := tcmysql.Run(ctx, "mysql:8.0",
+	container, err := tcmysql.Run(ctx, "mysql:8.4",
 		tcmysql.WithDatabase("testdb"),
 		tcmysql.WithUsername("testuser"),
 		tcmysql.WithPassword("testpass"),

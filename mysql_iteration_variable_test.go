@@ -18,6 +18,10 @@ import (
 // is a table-valued function, so a reference to the iteration variable that
 // names the alias rather than its value column is SQL the converter reports
 // as a success and MySQL rejects at query time.
+//
+// Requires MySQL 8.4+: on 8.0 (EOL April 2026) a correlated JSON_TABLE inside
+// EXISTS silently matches nothing when run as a prepared statement, so these
+// queries return no error and no rows there.
 func TestMySQLComprehensionRunsAgainstMySQL(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping integration test in short mode")
