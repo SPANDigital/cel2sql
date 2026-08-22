@@ -1,6 +1,17 @@
 # Changelog
 
 ## [Unreleased]
+### Fixed
+- **MySQL comprehensions**: `exists` and `all` now generate
+  `(SELECT COUNT(*) FROM JSON_TABLE(...)) > 0` / `= 0` instead of
+  `EXISTS` / `NOT EXISTS` subqueries. The MySQL 8.x optimizer transforms a
+  correlated `EXISTS` into a semijoin and loses the correlation to a
+  `JSON_TABLE` source, so the previous SQL executed without error but
+  silently matched nothing (works from MySQL 9.x; COUNT comparisons are
+  never transformed). Discovered by the new integration test that executes
+  generated comprehension SQL against a real MySQL. Adds
+  `Dialect.WriteComprehensionExists` / `WriteComprehensionNotExists`;
+  MySQL integration tests now run against MySQL 8.4 LTS (8.0 is EOL).
 
 ## [3.8.9] - 2026-08-22
 ### Fixed

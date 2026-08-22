@@ -2076,23 +2076,22 @@ func (con *converter) visitAllComprehension(expr *exprpb.Expr, info *Comprehensi
 
 	iterRange := comprehension.GetIterRange()
 
-	con.str.WriteString("NOT EXISTS (SELECT 1 FROM ")
-	if err := con.writeComprehensionSource(iterRange); err != nil {
-		return wrapConversionError(err, "visiting iter range in ALL comprehension")
-	}
-	con.str.WriteString(" AS ")
-	con.str.WriteString(info.IterVar)
-
-	if info.Predicate != nil {
-		con.str.WriteString(" WHERE NOT (")
-		if err := con.visit(info.Predicate); err != nil {
-			return wrapConversionError(err, "visiting predicate in ALL comprehension")
+	return con.dialect.WriteComprehensionNotExists(&con.str, func() error {
+		if err := con.writeComprehensionSource(iterRange); err != nil {
+			return wrapConversionError(err, "visiting iter range in ALL comprehension")
 		}
-		con.str.WriteString(")")
-	}
+		con.str.WriteString(" AS ")
+		con.str.WriteString(info.IterVar)
 
-	con.str.WriteString(")")
-	return nil
+		if info.Predicate != nil {
+			con.str.WriteString(" WHERE NOT (")
+			if err := con.visit(info.Predicate); err != nil {
+				return wrapConversionError(err, "visiting predicate in ALL comprehension")
+			}
+			con.str.WriteString(")")
+		}
+		return nil
+	})
 }
 
 func (con *converter) visitExistsComprehension(expr *exprpb.Expr, info *ComprehensionInfo) error {
@@ -2112,22 +2111,21 @@ func (con *converter) visitExistsComprehension(expr *exprpb.Expr, info *Comprehe
 
 	iterRange := comprehension.GetIterRange()
 
-	con.str.WriteString("EXISTS (SELECT 1 FROM ")
-	if err := con.writeComprehensionSource(iterRange); err != nil {
-		return wrapConversionError(err, "visiting iter range in EXISTS comprehension")
-	}
-	con.str.WriteString(" AS ")
-	con.str.WriteString(info.IterVar)
-
-	if info.Predicate != nil {
-		con.str.WriteString(" WHERE ")
-		if err := con.visit(info.Predicate); err != nil {
-			return wrapConversionError(err, "visiting predicate in EXISTS comprehension")
+	return con.dialect.WriteComprehensionExists(&con.str, func() error {
+		if err := con.writeComprehensionSource(iterRange); err != nil {
+			return wrapConversionError(err, "visiting iter range in EXISTS comprehension")
 		}
-	}
+		con.str.WriteString(" AS ")
+		con.str.WriteString(info.IterVar)
 
-	con.str.WriteString(")")
-	return nil
+		if info.Predicate != nil {
+			con.str.WriteString(" WHERE ")
+			if err := con.visit(info.Predicate); err != nil {
+				return wrapConversionError(err, "visiting predicate in EXISTS comprehension")
+			}
+		}
+		return nil
+	})
 }
 
 func (con *converter) visitExistsOneComprehension(expr *exprpb.Expr, info *ComprehensionInfo) error {

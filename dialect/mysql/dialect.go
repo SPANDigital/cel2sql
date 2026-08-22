@@ -496,3 +496,29 @@ func (d *Dialect) WriteIterVarRef(w *strings.Builder, alias string) error {
 	w.WriteString(".value")
 	return nil
 }
+
+// WriteComprehensionExists writes (SELECT COUNT(*) FROM <body>) > 0.
+//
+// Not EXISTS: the MySQL 8.x optimizer transforms a correlated EXISTS into a
+// semijoin and loses the correlation to a JSON_TABLE source, so the subquery
+// silently matches nothing (works again from 9.x, and on 8.x only with
+// optimizer_switch='semijoin=off'). A COUNT comparison is never transformed.
+func (d *Dialect) WriteComprehensionExists(w *strings.Builder, writeBody func() error) error {
+	w.WriteString("(SELECT COUNT(*) FROM ")
+	if err := writeBody(); err != nil {
+		return err
+	}
+	w.WriteString(") > 0")
+	return nil
+}
+
+// WriteComprehensionNotExists writes (SELECT COUNT(*) FROM <body>) = 0, for
+// the same reason WriteComprehensionExists avoids EXISTS.
+func (d *Dialect) WriteComprehensionNotExists(w *strings.Builder, writeBody func() error) error {
+	w.WriteString("(SELECT COUNT(*) FROM ")
+	if err := writeBody(); err != nil {
+		return err
+	}
+	w.WriteString(") = 0")
+	return nil
+}

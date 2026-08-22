@@ -143,7 +143,7 @@ func TestTypeProvider_Close(_ *testing.T) {
 func setupMySQLContainer(ctx context.Context, t *testing.T) (*tcmysql.MySQLContainer, *sql.DB) {
 	t.Helper()
 
-	container, err := tcmysql.Run(ctx, "mysql:8.0",
+	container, err := tcmysql.Run(ctx, "mysql:8.4",
 		tcmysql.WithDatabase("testdb"),
 		tcmysql.WithUsername("testuser"),
 		tcmysql.WithPassword("testpass"),

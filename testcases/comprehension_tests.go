@@ -11,6 +11,7 @@ func ComprehensionTests() []ConvertTestCase {
 			Category: CategoryComprehension,
 			WantSQL: map[dialect.Name]string{
 				dialect.PostgreSQL: "NOT EXISTS (SELECT 1 FROM UNNEST(string_list) AS x WHERE NOT (x != 'bad'))",
+				dialect.MySQL:      "(SELECT COUNT(*) FROM JSON_TABLE(string_list, '$[*]' COLUMNS(value TEXT PATH '$')) AS x WHERE NOT (x.value != 'bad')) = 0",
 				dialect.SQLite:     "NOT EXISTS (SELECT 1 FROM json_each(string_list) AS x WHERE NOT (x.value != 'bad'))",
 				dialect.DuckDB:     "NOT EXISTS (SELECT 1 FROM UNNEST(string_list) AS x WHERE NOT (x != 'bad'))",
 				dialect.BigQuery:   "NOT EXISTS (SELECT 1 FROM UNNEST(string_list) AS x WHERE NOT (x != 'bad'))",
@@ -23,6 +24,7 @@ func ComprehensionTests() []ConvertTestCase {
 			Category: CategoryComprehension,
 			WantSQL: map[dialect.Name]string{
 				dialect.PostgreSQL: "EXISTS (SELECT 1 FROM UNNEST(string_list) AS x WHERE x = 'good')",
+				dialect.MySQL:      "(SELECT COUNT(*) FROM JSON_TABLE(string_list, '$[*]' COLUMNS(value TEXT PATH '$')) AS x WHERE x.value = 'good') > 0",
 				dialect.SQLite:     "EXISTS (SELECT 1 FROM json_each(string_list) AS x WHERE x.value = 'good')",
 				dialect.DuckDB:     "EXISTS (SELECT 1 FROM UNNEST(string_list) AS x WHERE x = 'good')",
 				dialect.BigQuery:   "EXISTS (SELECT 1 FROM UNNEST(string_list) AS x WHERE x = 'good')",
@@ -35,6 +37,7 @@ func ComprehensionTests() []ConvertTestCase {
 			Category: CategoryComprehension,
 			WantSQL: map[dialect.Name]string{
 				dialect.PostgreSQL: "(SELECT COUNT(*) FROM UNNEST(string_list) AS x WHERE x = 'unique') = 1",
+				dialect.MySQL:      "(SELECT COUNT(*) FROM JSON_TABLE(string_list, '$[*]' COLUMNS(value TEXT PATH '$')) AS x WHERE x.value = 'unique') = 1",
 				dialect.SQLite:     "(SELECT COUNT(*) FROM json_each(string_list) AS x WHERE x.value = 'unique') = 1",
 				dialect.DuckDB:     "(SELECT COUNT(*) FROM UNNEST(string_list) AS x WHERE x = 'unique') = 1",
 				dialect.BigQuery:   "(SELECT COUNT(*) FROM UNNEST(string_list) AS x WHERE x = 'unique') = 1",
