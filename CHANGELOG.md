@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 ### Changed
+- **cel-go moves to the `cel.dev/cel-go` module path** (#172): cel-go
+  v0.32.0 renamed its module, and v0.31.0 was the last release under
+  `github.com/google/cel-go`. All imports and docs now use the new path,
+  picking up v0.32.0 (JWT/HMAC libraries, timestamp parsing helpers,
+  concurrency fixes). No cel2sql API changes — but applications that pass
+  `*cel.Ast` values into cel2sql must build them with `cel.dev/cel-go`
+  types from the same cel-go version, so this is effectively a
+  compile-time migration for consumers too.
 - **Go 1.26 toolchain** (#174): the `go` directive moves to 1.26.7 (latest
   1.26 patch, keeping the OSV/govulncheck stdlib scans clean) and all CI
   workflows build with Go 1.26.x. golangci-lint in CI moves v2.6 → v2.12,
