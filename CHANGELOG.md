@@ -1,6 +1,8 @@
 # Changelog
 
 ## [Unreleased]
+
+## [3.9.0] - 2026-08-22
 ### Changed
 - **cel-go moves to the `cel.dev/cel-go` module path** (#172): cel-go
   v0.32.0 renamed its module, and v0.31.0 was the last release under
