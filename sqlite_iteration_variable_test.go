@@ -62,7 +62,7 @@ func TestSQLiteComprehensionRunsAgainstSQLite(t *testing.T) {
 			require.NoError(t, err)
 
 			rows, err := db.Query(
-				`SELECT id FROM reviews WHERE `+converted.SQL, converted.Parameters...)
+				`SELECT id FROM reviews WHERE `+converted.SQL, converted.Parameters...) //nolint:gosec // converted.SQL is parameterized output under test, not user input
 			require.NoError(t, err, "generated SQL: %s", converted.SQL)
 			defer func() { _ = rows.Close() }()
 
