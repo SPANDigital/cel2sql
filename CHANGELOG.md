@@ -1,6 +1,8 @@
 # Changelog
 
 ## [Unreleased]
+
+## [3.9.1] - 2026-08-23
 ### Changed
 - **CI**: retired the scheduled Dependency Update workflow (#176). Its PRs
   were created with the default `GITHUB_TOKEN`, so CI never ran on them,
@@ -8,6 +10,12 @@
   releases. Dependabot takes over fully: gomod updates now include indirect
   dependencies, grouped weekly for minor/patch bumps (majors stay separate),
   plus weekly grouped GitHub Actions updates.
+- **Dependencies**: first grouped dependabot updates — 32 minor/patch Go
+  module bumps in one PR (#184), `github.com/google/flatbuffers`
+  23.5.26 → 25.12.19 (#185), and 5 GitHub Actions bumps (#183).
+- **CI**: the fuzz workflow pins Go as `1.26.x` with `check-latest`; the
+  bare `1.26` pin resolved to go1.26.6 under `setup-go@v7`'s
+  `GOTOOLCHAIN=local` and refused go.mod's `go 1.26.7` (#183).
 
 ## [3.9.0] - 2026-08-22
 ### Changed
