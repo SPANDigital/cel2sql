@@ -76,7 +76,7 @@ jobs:
         run: $(go env GOPATH)/bin/gosec -fmt sarif -out results.sarif ./...
 
       - name: Upload SARIF file
-        uses: github/codeql-action/upload-sarif@v3
+        uses: github/codeql-action/upload-sarif@v4
         with:
           sarif_file: results.sarif
         if: always() && hashFiles('results.sarif') != ''
