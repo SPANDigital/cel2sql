@@ -8,6 +8,7 @@ This guide covers parameterized query support in cel2sql, including performance 
 - [Why Use Parameterized Queries?](#why-use-parameterized-queries)
 - [API Reference](#api-reference)
 - [What Gets Parameterized?](#what-gets-parameterized)
+- [Placeholder Style](#placeholder-style)
 - [Performance Optimization](#performance-optimization)
 - [Security Considerations](#security-considerations)
 - [Integration with database/sql](#integration-with-databasesql)
@@ -117,6 +118,8 @@ All functional options from `Convert()` are supported:
 - `WithContext(ctx)` - Enable cancellation and timeouts
 - `WithLogger(logger)` - Enable structured logging
 - `WithMaxDepth(depth)` - Set recursion depth limit
+- `WithParamStartIndex(n)` - First placeholder index, for splicing into a larger query you number yourself
+- `WithPlaceholderStyle(style)` - Render `?` instead of the dialect's native placeholder; see [Placeholder Style](#placeholder-style)
 
 ### Result Type
 
@@ -212,6 +215,92 @@ Parameters are numbered sequentially in the order they appear:
 // SQL: user.age > $1 AND user.salary < $2 AND user.name = $3
 // Parameters: [18, 100000.0, "John"]
 ```
+
+## Placeholder Style
+
+By default each dialect renders its native placeholder syntax:
+
+| Dialect | Placeholder |
+|---------|-------------|
+| PostgreSQL, DuckDB | `$1, $2` |
+| MySQL, SQLite, Spark | `?, ?` |
+| BigQuery | `@p1, @p2` |
+
+Some callers cannot accept pre-numbered placeholders. GORM, `sqlx.Rebind` and
+squirrel each number placeholders from their own running count across the whole
+statement, then rewrite them for the target driver. A fragment that arrives
+already numbered is passed through untouched and reaches the database unbound.
+
+`WithPlaceholderStyle(PlaceholderQuestion)` emits `?` for every parameter and
+leaves the numbering to them:
+
+```go
+result, err := cel2sql.ConvertParameterized(ast,
+    cel2sql.WithPlaceholderStyle(cel2sql.PlaceholderQuestion))
+// result.SQL:        "name = ? AND age > ?"
+// result.Parameters: []any{"Alice", int64(30)}
+```
+
+The style is orthogonal to the dialect — it changes only the placeholder syntax,
+never the SQL around it. For MySQL, SQLite and Spark, whose native placeholder is
+already `?`, it produces identical output.
+
+### With GORM
+
+```go
+result, err := cel2sql.ConvertParameterized(ast,
+    cel2sql.WithPlaceholderStyle(cel2sql.PlaceholderQuestion))
+if err != nil {
+    return err
+}
+db.Where(result.SQL, result.Parameters...).Find(&users)
+```
+
+GORM rewrites each `?` to `$1`, `$2` … for PostgreSQL, `@p1` for SQL Server, or
+leaves it as `?` for MySQL and SQLite.
+
+### Why not rewrite `$n` to `?` yourself?
+
+Because not every `$1` in the output is a placeholder. A pattern passed to
+`matches()` is inlined as a string literal, so this CEL:
+
+```cel
+name.matches("a$1b")
+```
+
+produces SQL containing a literal `a$1b`. A `$\d+` search-and-replace would
+corrupt the pattern and leave the parameter count wrong. Only the converter
+knows which `$1` it wrote.
+
+### Interaction with WithParamStartIndex
+
+`WithParamStartIndex` has no visible effect under `PlaceholderQuestion` — there is
+no index to offset. The two options serve opposite situations: `WithParamStartIndex`
+for splicing into a query you number yourself, `PlaceholderQuestion` for handing the
+numbering to a driver.
+
+### Limitation: PostgreSQL jsonb existence
+
+PostgreSQL spells the jsonb existence test as the `?` operator:
+
+```sql
+metadata ? 'active'
+```
+
+That `?` is an operator, not a placeholder, and a consumer scanning for `?` cannot
+tell the difference — it would bind a value to the operator and shift every
+parameter after it. Rather than return SQL that silently binds wrong,
+`ConvertParameterized` fails when `PlaceholderQuestion` would produce more `?` than
+parameters:
+
+```
+cannot use PlaceholderQuestion with this expression: the generated SQL contains a ?
+that is an operator rather than a bind placeholder
+```
+
+Use `PlaceholderDialect` for such expressions, or avoid `has()` on a JSONB column.
+Only PostgreSQL is affected; every other dialect writes JSON existence as a
+function call.
 
 ## Performance Optimization
 

@@ -51,15 +51,16 @@ type ConvertOption func(*convertOptions)
 
 // convertOptions holds configuration options for the Convert function.
 type convertOptions struct {
-	schemas         map[string]schema.Schema
-	jsonVars        map[string]bool   // Variable names that are JSONB columns
-	columnAlias     map[string]string // CEL variable name → SQL column name
-	ctx             context.Context
-	logger          *slog.Logger
-	maxDepth        int             // Maximum recursion depth (0 = use default)
-	maxOutputLen    int             // Maximum SQL output length (0 = use default)
-	dialect         dialect.Dialect // SQL dialect (nil = PostgreSQL default)
-	paramStartIndex int             // First placeholder index for ConvertParameterized (1 = $1; 0 means default 1)
+	schemas          map[string]schema.Schema
+	jsonVars         map[string]bool   // Variable names that are JSONB columns
+	columnAlias      map[string]string // CEL variable name → SQL column name
+	ctx              context.Context
+	logger           *slog.Logger
+	maxDepth         int              // Maximum recursion depth (0 = use default)
+	maxOutputLen     int              // Maximum SQL output length (0 = use default)
+	dialect          dialect.Dialect  // SQL dialect (nil = PostgreSQL default)
+	paramStartIndex  int              // First placeholder index for ConvertParameterized (1 = $1; 0 means default 1)
+	placeholderStyle PlaceholderStyle // How ConvertParameterized renders placeholders
 }
 
 // WithDialect sets the SQL dialect for conversion.
@@ -233,6 +234,54 @@ func WithParamStartIndex(index int) ConvertOption {
 	}
 }
 
+// PlaceholderStyle selects how ConvertParameterized renders bind placeholders.
+type PlaceholderStyle int
+
+const (
+	// PlaceholderDialect uses the dialect's native placeholder syntax: $1 for
+	// PostgreSQL and DuckDB, @p1 for BigQuery, ? for MySQL, SQLite and Spark.
+	// This is the default.
+	PlaceholderDialect PlaceholderStyle = iota
+
+	// PlaceholderQuestion emits ? for every parameter regardless of dialect,
+	// leaving the numbering to the caller.
+	//
+	// Use it with a driver or query builder that rebinds placeholders itself —
+	// GORM, sqlx.Rebind, squirrel. Those number placeholders from their own
+	// running count across the whole statement, so they cannot bind a fragment
+	// that arrives already numbered, and they have no way to renumber one.
+	//
+	// Rewriting $1..$n to ? after the fact is not a safe substitute: a pattern
+	// passed to matches() is inlined as a string literal, so a CEL expression
+	// like matches('a$1b') puts a literal $1 in the SQL that such a rewrite
+	// would corrupt. Only the converter knows which $1 is a placeholder.
+	PlaceholderQuestion
+)
+
+// WithPlaceholderStyle sets how ConvertParameterized renders bind placeholders.
+// It has no effect on Convert, which inlines literals rather than binding them.
+//
+// The style is orthogonal to the dialect: it changes only the placeholder
+// syntax, never the SQL around it. For MySQL, SQLite and Spark — whose native
+// placeholder is already ? — PlaceholderQuestion produces identical output.
+//
+// WithParamStartIndex has no visible effect under PlaceholderQuestion, since
+// there is no index to offset. The two options serve opposite situations:
+// WithParamStartIndex for splicing into a query you number yourself,
+// PlaceholderQuestion for handing the numbering to a driver.
+//
+// Example:
+//
+//	result, err := cel2sql.ConvertParameterized(ast,
+//	    cel2sql.WithPlaceholderStyle(cel2sql.PlaceholderQuestion))
+//	// result.SQL: "name = ? AND age > ?"
+//	db.Where(result.SQL, result.Parameters...)
+func WithPlaceholderStyle(style PlaceholderStyle) ConvertOption {
+	return func(o *convertOptions) {
+		o.placeholderStyle = style
+	}
+}
+
 // Result represents the output of a CEL to SQL conversion with parameterized queries.
 // It contains the SQL string with placeholders ($1, $2, etc.) and the corresponding parameter values.
 type Result struct {
@@ -362,17 +411,18 @@ func ConvertParameterized(ast *cel.Ast, opts ...ConvertOption) (*Result, error) 
 		paramStart = 1
 	}
 	un := &converter{
-		typeMap:      checkedExpr.TypeMap,
-		schemas:      options.schemas,
-		jsonVars:     options.jsonVars,
-		columnAlias:  options.columnAlias,
-		ctx:          options.ctx,
-		logger:       options.logger,
-		dialect:      options.dialect,
-		maxDepth:     options.maxDepth,
-		maxOutputLen: options.maxOutputLen,
-		parameterize: true,           // Enable parameterization
-		paramCount:   paramStart - 1, // First placeholder will be paramStart after first increment
+		typeMap:          checkedExpr.TypeMap,
+		schemas:          options.schemas,
+		jsonVars:         options.jsonVars,
+		columnAlias:      options.columnAlias,
+		ctx:              options.ctx,
+		logger:           options.logger,
+		dialect:          options.dialect,
+		maxDepth:         options.maxDepth,
+		maxOutputLen:     options.maxOutputLen,
+		parameterize:     true,           // Enable parameterization
+		paramCount:       paramStart - 1, // First placeholder will be paramStart after first increment
+		placeholderStyle: options.placeholderStyle,
 	}
 
 	if err := un.visit(checkedExpr.Expr); err != nil {
@@ -381,6 +431,12 @@ func ConvertParameterized(ast *cel.Ast, opts ...ConvertOption) (*Result, error) 
 	}
 
 	sql := un.str.String()
+
+	if err := checkQuestionPlaceholders(options.placeholderStyle, sql, len(un.parameters)); err != nil {
+		options.logger.Error("parameterized conversion produced ambiguous placeholders", slog.Any("error", err))
+		return nil, err
+	}
+
 	duration := time.Since(start)
 
 	options.logger.LogAttrs(context.Background(), slog.LevelDebug,
@@ -396,6 +452,37 @@ func ConvertParameterized(ast *cel.Ast, opts ...ConvertOption) (*Result, error) 
 	}, nil
 }
 
+// checkQuestionPlaceholders verifies that every ? in the generated SQL is a bind
+// placeholder.
+//
+// PostgreSQL's jsonb existence operator is itself a ?, so an expression like
+// has(payload.field) against a JSONB column emits a ? that is an operator rather
+// than a placeholder. Consumers of PlaceholderQuestion scan for ? without parsing
+// SQL, so they would bind a value to that operator and shift every parameter
+// after it — wrong rows, no error. Fail here instead.
+//
+// Only PostgreSQL is affected; every other dialect writes JSON existence as a
+// function call.
+func checkQuestionPlaceholders(style PlaceholderStyle, sql string, paramCount int) error {
+	if style != PlaceholderQuestion {
+		return nil
+	}
+	found := strings.Count(sql, "?")
+	if found == paramCount {
+		return nil
+	}
+	return &ConversionError{
+		UserMessage: "cannot use PlaceholderQuestion with this expression: the generated SQL " +
+			"contains a ? that is an operator rather than a bind placeholder",
+		InternalDetails: fmt.Sprintf(
+			"generated SQL contains %d '?' but %d parameters; a dialect operator spelled '?' "+
+				"(PostgreSQL jsonb existence) collides with question-mark placeholders. "+
+				"Use PlaceholderDialect, or avoid has() on a JSONB column.",
+			found, paramCount),
+		WrappedErr: ErrUnsupportedDialectFeature,
+	}
+}
+
 type converter struct {
 	str                strings.Builder
 	typeMap            map[int64]*exprpb.Type
@@ -405,6 +492,7 @@ type converter struct {
 	ctx                context.Context
 	logger             *slog.Logger
 	dialect            dialect.Dialect
+	placeholderStyle   PlaceholderStyle
 	depth              int // Current recursion depth
 	maxDepth           int // Maximum allowed recursion depth
 	maxOutputLen       int // Maximum allowed SQL output length
@@ -2296,6 +2384,18 @@ func (con *converter) visitTransformMapEntryComprehension(_ *exprpb.Expr, _ *Com
 	return fmt.Errorf("%w: TRANSFORM_MAP_ENTRY comprehension requires map/JSON support (not yet implemented)", ErrInvalidComprehension)
 }
 
+// writeParamPlaceholder emits one bind placeholder and advances the counter.
+// Under PlaceholderQuestion the index is still tracked, so the placeholder count
+// stays in step with len(parameters) even though it is not rendered.
+func (con *converter) writeParamPlaceholder() {
+	con.paramCount++
+	if con.placeholderStyle == PlaceholderQuestion {
+		con.str.WriteByte('?')
+		return
+	}
+	con.dialect.WriteParamPlaceholder(&con.str, con.paramCount)
+}
+
 func (con *converter) visitConst(expr *exprpb.Expr) error {
 	c := expr.GetConstExpr()
 	switch c.ConstantKind.(type) {
@@ -2311,8 +2411,7 @@ func (con *converter) visitConst(expr *exprpb.Expr) error {
 		con.str.WriteString("NULL")
 	case *exprpb.Constant_Int64Value:
 		if con.parameterize {
-			con.paramCount++
-			con.dialect.WriteParamPlaceholder(&con.str, con.paramCount)
+			con.writeParamPlaceholder()
 			con.parameters = append(con.parameters, c.GetInt64Value())
 		} else {
 			i := strconv.FormatInt(c.GetInt64Value(), 10)
@@ -2320,8 +2419,7 @@ func (con *converter) visitConst(expr *exprpb.Expr) error {
 		}
 	case *exprpb.Constant_Uint64Value:
 		if con.parameterize {
-			con.paramCount++
-			con.dialect.WriteParamPlaceholder(&con.str, con.paramCount)
+			con.writeParamPlaceholder()
 			con.parameters = append(con.parameters, c.GetUint64Value())
 		} else {
 			ui := strconv.FormatUint(c.GetUint64Value(), 10)
@@ -2329,8 +2427,7 @@ func (con *converter) visitConst(expr *exprpb.Expr) error {
 		}
 	case *exprpb.Constant_DoubleValue:
 		if con.parameterize {
-			con.paramCount++
-			con.dialect.WriteParamPlaceholder(&con.str, con.paramCount)
+			con.writeParamPlaceholder()
 			con.parameters = append(con.parameters, c.GetDoubleValue())
 		} else {
 			d := strconv.FormatFloat(c.GetDoubleValue(), 'g', -1, 64)
@@ -2344,8 +2441,7 @@ func (con *converter) visitConst(expr *exprpb.Expr) error {
 		}
 
 		if con.parameterize {
-			con.paramCount++
-			con.dialect.WriteParamPlaceholder(&con.str, con.paramCount)
+			con.writeParamPlaceholder()
 			con.parameters = append(con.parameters, str)
 		} else {
 			con.dialect.WriteStringLiteral(&con.str, str)
@@ -2354,8 +2450,7 @@ func (con *converter) visitConst(expr *exprpb.Expr) error {
 		b := c.GetBytesValue()
 
 		if con.parameterize {
-			con.paramCount++
-			con.dialect.WriteParamPlaceholder(&con.str, con.paramCount)
+			con.writeParamPlaceholder()
 			con.parameters = append(con.parameters, b)
 		} else {
 			// Validate byte array length to prevent resource exhaustion (CWE-400)

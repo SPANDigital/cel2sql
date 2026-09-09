@@ -2,6 +2,31 @@
 
 ## [Unreleased]
 
+### Added
+- **`WithPlaceholderStyle` option** — render `?` for every bind parameter instead
+  of the dialect's native placeholder, for callers whose driver or query builder
+  rebinds placeholders itself (GORM, `sqlx.Rebind`, squirrel). Those number
+  placeholders from their own running count across the whole statement, so a
+  fragment that arrives already numbered as `$1, $2` is passed through untouched
+  and reaches the database unbound. `PlaceholderDialect` remains the default and
+  output is unchanged for every existing caller; the style is orthogonal to the
+  dialect and is a no-op for MySQL, SQLite and Spark, whose native placeholder is
+  already `?`. `WithParamStartIndex` has no visible effect under
+  `PlaceholderQuestion` — the two options serve opposite situations.
+
+  Rewriting `$n` to `?` after conversion is not a safe substitute: `matches()`
+  inlines its pattern as a string literal, so `matches('a$1b')` puts a literal
+  `$1` in the SQL that such a rewrite would corrupt.
+
+  **Known limitation**: PostgreSQL spells jsonb existence as the `?` operator, so
+  `has()` on a JSONB column would emit a `?` that a placeholder-scanning consumer
+  cannot distinguish from a bind marker. `ConvertParameterized` returns an error
+  in that case rather than SQL that would silently bind wrong. Only PostgreSQL is
+  affected; every other dialect writes JSON existence as a function call. Emitting
+  `jsonb_exists(...)` under this style would lift the restriction, but the
+  operator form is what the planner reliably matches against a GIN index, so that
+  is a performance trade rather than a free win.
+
 ## [3.9.3] - 2026-09-09
 ### Changed
 - **Dependencies**: 22 grouped minor/patch Go module bumps (#190) —
