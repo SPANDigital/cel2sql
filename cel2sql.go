@@ -499,7 +499,11 @@ type converter struct {
 	// iterVars are the comprehension iteration variables in scope. A
 	// reference to one is written by the dialect, which knows whether its own
 	// source bound the alias to a value or to a row.
-	iterVars     map[string]bool
+	iterVars map[string]bool
+	// jsonIterVars marks those iteration variables whose range yields JSON
+	// values rather than rows or scalars, so field access on them extracts
+	// from the document instead of naming a composite field.
+	jsonIterVars map[string]bool
 	parameterize bool  // Enable parameterized output
 	parameters   []any // Collected parameters for parameterized queries
 	paramCount   int   // Parameter counter for placeholders
@@ -557,6 +561,13 @@ func (con *converter) visit(expr *exprpb.Expr) error {
 		return con.visitStruct(expr)
 	}
 	return newConversionErrorf(errMsgUnsupportedExpression, "expr type: %T, id: %d", expr.ExprKind, expr.Id)
+}
+
+// isJSONSQLType reports whether a declared SQL type is a JSON document type.
+// Schemas loaded by a provider set IsJSON explicitly, but hand-built ones often
+// only carry the type name.
+func isJSONSQLType(sqlType string) bool {
+	return strings.EqualFold(sqlType, "json") || strings.EqualFold(sqlType, "jsonb")
 }
 
 // isFieldJSON checks if a field in a table is a JSON/JSONB type using schema information
@@ -2159,7 +2170,7 @@ func (con *converter) visitAllComprehension(expr *exprpb.Expr, info *Comprehensi
 	//
 	// Restored afterwards, since comprehensions nest and an inner one may
 	// reuse a name.
-	defer con.bindIterVar(info.IterVar)()
+	defer con.bindIterVar(info.IterVar, con.iterRangeYieldsJSON(comprehension.GetIterRange()))()
 
 	iterRange := comprehension.GetIterRange()
 
@@ -2194,7 +2205,7 @@ func (con *converter) visitExistsComprehension(expr *exprpb.Expr, info *Comprehe
 	//
 	// Restored afterwards, since comprehensions nest and an inner one may
 	// reuse a name.
-	defer con.bindIterVar(info.IterVar)()
+	defer con.bindIterVar(info.IterVar, con.iterRangeYieldsJSON(comprehension.GetIterRange()))()
 
 	iterRange := comprehension.GetIterRange()
 
@@ -2228,7 +2239,7 @@ func (con *converter) visitExistsOneComprehension(expr *exprpb.Expr, info *Compr
 	//
 	// Restored afterwards, since comprehensions nest and an inner one may
 	// reuse a name.
-	defer con.bindIterVar(info.IterVar)()
+	defer con.bindIterVar(info.IterVar, con.iterRangeYieldsJSON(comprehension.GetIterRange()))()
 
 	iterRange := comprehension.GetIterRange()
 
@@ -2263,7 +2274,7 @@ func (con *converter) visitMapComprehension(expr *exprpb.Expr, info *Comprehensi
 	//
 	// Restored afterwards, since comprehensions nest and an inner one may
 	// reuse a name.
-	defer con.bindIterVar(info.IterVar)()
+	defer con.bindIterVar(info.IterVar, con.iterRangeYieldsJSON(comprehension.GetIterRange()))()
 
 	iterRange := comprehension.GetIterRange()
 
@@ -2307,7 +2318,7 @@ func (con *converter) visitFilterComprehension(expr *exprpb.Expr, info *Comprehe
 	//
 	// Restored afterwards, since comprehensions nest and an inner one may
 	// reuse a name.
-	defer con.bindIterVar(info.IterVar)()
+	defer con.bindIterVar(info.IterVar, con.iterRangeYieldsJSON(comprehension.GetIterRange()))()
 
 	iterRange := comprehension.GetIterRange()
 
@@ -2526,49 +2537,19 @@ func (con *converter) visitSelect(expr *exprpb.Expr) error {
 
 	// Check if we should use JSON path operators
 	// We need to determine if the operand is a JSON/JSONB field
-	useJSONPath := con.shouldUseJSONPath(sel.GetOperand(), fieldName)
-	useJSONObjectAccess := con.isJSONObjectFieldAccess(expr)
-
-	// Check if this is a nested JSON path that requires special handling
-	if useJSONPath && !useJSONObjectAccess {
+	if con.shouldUseJSONPath(sel.GetOperand(), fieldName) {
 		// Use the specialized JSON path builder for nested access
 		return con.buildJSONPath(expr)
 	}
 
 	nested := !sel.GetTestOnly() && isBinaryOrTernaryOperator(sel.GetOperand())
 
-	writeBase := func() error {
-		return con.visitMaybeNested(sel.GetOperand(), nested)
+	// Regular field selection
+	if err := con.visitMaybeNested(sel.GetOperand(), nested); err != nil {
+		return err
 	}
-
-	switch {
-	case useJSONPath:
-		// Use dialect-specific JSON field access (text extraction)
-		if err := con.dialect.WriteJSONFieldAccess(&con.str, writeBase, fieldName, true); err != nil {
-			return err
-		}
-	case useJSONObjectAccess:
-		// Use dialect-specific JSON object field access in comprehensions
-		isNumeric := con.isNumericJSONField(fieldName)
-		if isNumeric {
-			con.str.WriteString("(")
-		}
-		if err := con.dialect.WriteJSONFieldAccess(&con.str, writeBase, fieldName, true); err != nil {
-			return err
-		}
-		if isNumeric {
-			// Close parentheses and add numeric cast
-			con.str.WriteString(")")
-			con.dialect.WriteCastToNumeric(&con.str)
-		}
-	default:
-		// Regular field selection
-		if err := writeBase(); err != nil {
-			return err
-		}
-		con.str.WriteString(".")
-		con.str.WriteString(fieldName)
-	}
+	con.str.WriteString(".")
+	con.str.WriteString(fieldName)
 
 	return nil
 }
@@ -2771,18 +2752,66 @@ func (con *converter) writeComprehensionSource(iterRange *exprpb.Expr) error {
 // Scoped rather than accumulated: comprehensions nest, and an inner one may
 // reuse a name the outer one bound differently. The returned function restores
 // whatever the name meant before.
-func (con *converter) bindIterVar(name string) func() {
+func (con *converter) bindIterVar(name string, yieldsJSON bool) func() {
 	if con.iterVars == nil {
 		con.iterVars = map[string]bool{}
 	}
+	if con.jsonIterVars == nil {
+		con.jsonIterVars = map[string]bool{}
+	}
 	had := con.iterVars[name]
+	prevJSON, hadJSON := con.jsonIterVars[name]
 	con.iterVars[name] = true
+	con.jsonIterVars[name] = yieldsJSON
 	return func() {
+		if hadJSON {
+			con.jsonIterVars[name] = prevJSON
+		} else {
+			delete(con.jsonIterVars, name)
+		}
 		if had {
 			return
 		}
 		delete(con.iterVars, name)
 	}
+}
+
+// iterRangeYieldsJSON reports whether unnesting this range binds the iteration
+// variable to a JSON value. A jsonb array yields documents, so field access on
+// the variable must extract from them; an array of a composite type yields rows,
+// where the same access names a real column.
+func (con *converter) iterRangeYieldsJSON(iterRange *exprpb.Expr) bool {
+	if iterRange == nil {
+		return false
+	}
+	if identExpr := iterRange.GetIdentExpr(); identExpr != nil {
+		return con.isJSONVariable(identExpr.GetName())
+	}
+	if tableName, fieldName, ok := con.getTableAndFieldFromSelectChain(iterRange); ok {
+		return con.isJSONVariable(tableName) || con.fieldYieldsJSONElements(tableName, fieldName)
+	}
+	return false
+}
+
+// fieldYieldsJSONElements reports whether iterating this field produces JSON
+// documents. The element type decides it: a jsonb[] column unnests to jsonb
+// values, while an array of a composite type unnests to rows.
+func (con *converter) fieldYieldsJSONElements(tableName, fieldName string) bool {
+	if con.schemas == nil {
+		return false
+	}
+	tableSchema, ok := con.schemas[tableName]
+	if !ok {
+		return false
+	}
+	field, ok := tableSchema.FindField(fieldName)
+	if !ok {
+		return false
+	}
+	if field.ElementType != "" {
+		return isJSONSQLType(field.ElementType)
+	}
+	return field.IsJSON || isJSONSQLType(field.Type)
 }
 
 func (con *converter) visitMaybeNested(expr *exprpb.Expr, nested bool) error {

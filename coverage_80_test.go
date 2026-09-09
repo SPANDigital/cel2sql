@@ -511,9 +511,11 @@ func TestVisitFilterComprehension_EdgeCases(t *testing.T) {
 			expected: "ARRAY(SELECT x FROM UNNEST(data.numbers) AS x WHERE x > 10 AND x < 20 OR x > 30 AND x < 40 OR x = 50)",
 		},
 		{
+			// records is jsonb[], so r is bound to a document: field access on it
+			// extracts from JSON rather than naming a composite field.
 			name:     "filter with nested field access on JSON",
 			expr:     "data.records.filter(r, r.metadata.active == true)",
-			expected: "ARRAY(SELECT r FROM UNNEST(data.records) AS r WHERE r.metadata.active IS TRUE)",
+			expected: "ARRAY(SELECT r FROM UNNEST(data.records) AS r WHERE r->'metadata'->>'active' IS TRUE)",
 		},
 		{
 			name:     "filter with multiple string conditions",
