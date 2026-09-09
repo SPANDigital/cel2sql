@@ -165,10 +165,10 @@ func TestPlaceholderStyle_ConvertUnaffected(t *testing.T) {
 // from a placeholder to a consumer that scans for ?. Converting must fail rather
 // than hand back SQL that would bind a value to an operator.
 func TestPlaceholderStyle_QuestionRejectsPostgresJSONBExistence(t *testing.T) {
-	// The ? operator form is reached only for a direct field access on a column
-	// cel2sql recognises as JSON by name (isDirectJSONFieldAccess).
+	// A deliberately unremarkable column name: the ? operator form is reached
+	// because the schema says jsonb, not because of what the column is called.
 	recordSchema := pg.NewSchema([]schema.FieldSchema{
-		{Name: "metadata", Type: "jsonb", IsJSON: true, IsJSONB: true},
+		{Name: "payload", Type: "jsonb", IsJSON: true, IsJSONB: true},
 	})
 	provider := pg.NewTypeProvider(map[string]pg.Schema{"record": recordSchema})
 
@@ -178,7 +178,7 @@ func TestPlaceholderStyle_QuestionRejectsPostgresJSONBExistence(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	ast, issues := env.Compile(`has(record.metadata.active)`)
+	ast, issues := env.Compile(`has(record.payload.active)`)
 	require.NoError(t, issues.Err())
 
 	schemas := provider.GetSchemas()

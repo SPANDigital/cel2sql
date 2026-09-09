@@ -215,6 +215,11 @@ func (con *converter) isJSONArrayField(expr *exprpb.Expr) bool {
 
 // isJSONBField determines if the expression refers to a JSONB field (vs JSON field)
 func (con *converter) isJSONBField(expr *exprpb.Expr) bool {
+	// A variable declared through WithJSONVariables is itself a JSONB column.
+	if identExpr := expr.GetIdentExpr(); identExpr != nil {
+		return con.isJSONVariable(identExpr.GetName())
+	}
+
 	// Check if this is a field selection on a JSONB field
 	if selectExpr := expr.GetSelectExpr(); selectExpr != nil {
 		operand := selectExpr.GetOperand()

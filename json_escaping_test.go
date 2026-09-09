@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"cel.dev/cel-go/cel"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/spandigital/cel2sql/v3"
@@ -87,11 +88,13 @@ func TestJSONFieldNameEscaping_HasFunction(t *testing.T) {
 	tests := []struct {
 		name        string
 		celExpr     string
+		wantSQL     string
 		description string
 	}{
 		{
 			name:        "has() with JSON field",
-			celExpr:     `has(obj.settings.theme)`,
+			celExpr:     `has(rec.settings.theme)`,
+			wantSQL:     `rec.settings ? 'theme'`,
 			description: "Existence check on JSON field",
 		},
 	}
@@ -100,7 +103,7 @@ func TestJSONFieldNameEscaping_HasFunction(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			env, err := cel.NewEnv(
 				cel.CustomTypeProvider(provider),
-				cel.Variable("obj", cel.ObjectType("TestTable")),
+				cel.Variable("rec", cel.ObjectType("TestTable")),
 			)
 			require.NoError(t, err)
 
@@ -110,12 +113,11 @@ func TestJSONFieldNameEscaping_HasFunction(t *testing.T) {
 			}
 
 			schemas := map[string]pg.Schema{
-				"obj": testSchema,
+				"rec": testSchema,
 			}
 			sqlCondition, err := cel2sql.Convert(ast, cel2sql.WithSchemas(schemas))
 			require.NoError(t, err, "Should convert CEL to SQL: %s", tt.description)
-			require.NotEmpty(t, sqlCondition, "Should generate SQL")
-			t.Logf("Generated SQL: %s", sqlCondition)
+			assert.Equal(t, tt.wantSQL, sqlCondition, tt.description)
 		})
 	}
 }

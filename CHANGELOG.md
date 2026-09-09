@@ -2,6 +2,51 @@
 
 ## [Unreleased]
 
+### Fixed
+- **`has()` now detects JSON columns from the schema instead of a hardcoded name
+  list.** `isDirectJSONFieldAccess` and `isJSONColumn` recognised a column as JSON
+  only when it was named one of `metadata`, `properties`, `content`, `structure`,
+  `taxonomy`, `analytics` or `classification` — names that came from one
+  application's schema and were never documented. They were the two survivors of
+  the sweep in #62 (#61, #59), which converted every other JSON detection path to
+  use `WithSchemas`.
+
+  This produced **invalid SQL** for any JSONB column named something else.
+  `getJSONRootAndPath` used the list as its only stopping condition when locating
+  the JSON column boundary, so the column name was swallowed into the path and the
+  table alias was emitted as the JSON document:
+
+  ```sql
+  -- has(record.payload.active), payload declared jsonb via WithSchemas
+  -- before: PostgreSQL rejects this — 'record' is the row, not a jsonb value
+  jsonb_extract_path_text(record, 'payload', 'active') IS NOT NULL
+  -- after
+  record.payload ? 'active'
+  ```
+
+  Both helpers now use the existing `getTableAndFieldFromSelectChain` +
+  `isFieldJSON` lookups, matching `shouldUseJSONPath`. Deep paths are unchanged:
+  in `documents.content.metadata.corpus`, `metadata` is still a path segment
+  rather than a column, because a boundary requires the operand to be a table
+  identifier — the check `isTableReference` used to make by hand, which is now
+  redundant and has been removed.
+
+- **`has()` honours `WithJSONVariables`.** A variable declared through that option
+  is a JSONB column, so `has(tags.colour)` now produces `tags ? 'colour'` as
+  documented in `docs/operators-reference.md`, rather than the JSON arrow form.
+  The name-based implementation never consulted `jsonVars` at all.
+
+### Changed
+- **BREAKING: `has()` on a JSON column requires the column to be declared.**
+  Callers who relied on a column being treated as JSON purely because of its name,
+  without passing `WithSchemas` or `WithJSONVariables`, now get the ordinary
+  `column IS NOT NULL` form. Declare the column — `WithSchemas` with
+  `IsJSON`/`IsJSONB` set, or `WithJSONVariables` for a flat JSONB column — to
+  restore the previous SQL. Callers already passing schemas are unaffected, and
+  those with JSON columns outside the seven names get correct SQL for the first
+  time. This is the same class of change as the v3.7.0 removal of the name-based
+  numeric-cast heuristic.
+
 ### Added
 - **`WithPlaceholderStyle` option** — render `?` for every bind parameter instead
   of the dialect's native placeholder, for callers whose driver or query builder
