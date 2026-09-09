@@ -175,10 +175,13 @@ sql, err := cel2sql.Convert(ast, cel2sql.WithDialect(spark.New()))
 | Arrays | `ARRAY[...]` | JSON arrays | JSON arrays | `[...]` | `[...]` | `array(...)` |
 | Array index | 1-indexed | n/a | n/a | 1-indexed | 0-indexed (`OFFSET`) | 0-indexed |
 | UNNEST | `UNNEST(x)` | `JSON_TABLE(...)` | `json_each(x)` | `UNNEST(x)` | `UNNEST(x)` | `EXPLODE(x)` |
-| Param placeholder | `$1, $2` | `?, ?` | `?, ?` | `$1, $2` | `@p1, @p2` | `?, ?` |
+| Param placeholder&nbsp;[^ph] | `$1, $2` | `?, ?` | `?, ?` | `$1, $2` | `@p1, @p2` | `?, ?` |
 | Timestamp cast | `TIMESTAMP WITH TIME ZONE` | `DATETIME` | `datetime()` | `TIMESTAMPTZ` | `TIMESTAMP` | `TIMESTAMP` |
 | Contains | `POSITION()` | `LOCATE()` | `INSTR()` | `CONTAINS()` | `STRPOS()` | `LOCATE()` |
 | Index analysis | BTREE, GIN, GIN+trgm | BTREE, FULLTEXT | BTREE | ART | CLUSTERING, SEARCH_INDEX | not supported in v1 |
+
+[^ph]: The default. `WithPlaceholderStyle(PlaceholderQuestion)` emits `?` for any
+dialect — see [Placeholder Style](#placeholder-style).
 
 ### Per-Dialect Type Providers
 
@@ -311,6 +314,26 @@ rows, err := db.Query(
     result.Parameters...,
 )
 ```
+
+### Placeholder Style
+
+Each dialect renders its native placeholder by default (`$1` for PostgreSQL and
+DuckDB, `?` for MySQL/SQLite/Spark, `@p1` for BigQuery). Callers whose driver or
+query builder rebinds placeholders itself — GORM, `sqlx.Rebind`, squirrel — need
+`?` regardless of dialect, because they number placeholders from their own count
+across the whole statement and cannot renumber a fragment that arrives numbered:
+
+```go
+result, err := cel2sql.ConvertParameterized(ast,
+    cel2sql.WithPlaceholderStyle(cel2sql.PlaceholderQuestion))
+// result.SQL: "name = ? AND age > ?"
+
+db.Where(result.SQL, result.Parameters...).Find(&users)  // GORM
+```
+
+See [docs/parameterized-queries.md](docs/parameterized-queries.md#placeholder-style)
+for why rewriting `$n` yourself is unsafe, and for the one PostgreSQL expression
+(`has()` on a JSONB column) this style rejects.
 
 ### What Gets Parameterized?
 
