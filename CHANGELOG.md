@@ -2,6 +2,7 @@
 
 ## [Unreleased]
 
+## [3.10.0] - 2026-09-09
 ### Fixed
 - **Comprehension variables are JSON because of what they range over, not what
   they are called.** `isJSONObjectFieldAccess` decided that field access on a
