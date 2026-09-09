@@ -30,29 +30,31 @@ func TestJSONBFieldDetection(t *testing.T) {
 	require.NoError(t, err)
 
 	tests := []struct {
-		name        string
-		expression  string
-		description string
+		name       string
+		expression string
+		wantSQL    string
 	}{
 		{
-			name:        "jsonb_field_access",
-			expression:  `record.jsonb_data.name == "test"`,
-			description: "Access JSONB field - should use ->> operator",
+			name:       "jsonb_field_access",
+			expression: `record.jsonb_data.name == "test"`,
+			wantSQL:    `record.jsonb_data->>'name' = 'test'`,
 		},
 		{
-			name:        "jsonb_nested_access",
-			expression:  `record.jsonb_metadata.user.id > 0`,
-			description: "Nested JSONB field access",
+			name:       "jsonb_nested_access",
+			expression: `record.jsonb_metadata.user.id > 0`,
+			wantSQL:    `(record.jsonb_metadata->'user'->>'id')::numeric > 0`,
 		},
 		{
-			name:        "has_on_jsonb",
-			expression:  `has(record.jsonb_data.active)`,
-			description: "has() function on JSONB field",
+			// Detection is schema-driven: jsonb_data is not one of the column names
+			// the converter used to recognise, and must still reach the ? operator.
+			name:       "has_on_jsonb",
+			expression: `has(record.jsonb_data.active)`,
+			wantSQL:    `record.jsonb_data ? 'active'`,
 		},
 		{
-			name:        "json_field_access",
-			expression:  `record.json_data.status == "ok"`,
-			description: "Access JSON (not JSONB) field",
+			name:       "json_field_access",
+			expression: `record.json_data.status == "ok"`,
+			wantSQL:    `record.json_data->>'status' = 'ok'`,
 		},
 	}
 
@@ -63,13 +65,9 @@ func TestJSONBFieldDetection(t *testing.T) {
 
 			schemas := provider.GetSchemas()
 			sql, err := cel2sql.Convert(ast, cel2sql.WithSchemas(schemas))
+			require.NoError(t, err)
 
-			if err != nil {
-				t.Logf("Conversion for %s resulted in error: %v", tt.description, err)
-			} else {
-				t.Logf("Generated SQL for %s: %s", tt.description, sql)
-				assert.NotEmpty(t, sql, "SQL should not be empty")
-			}
+			assert.Equal(t, tt.wantSQL, sql)
 		})
 	}
 }

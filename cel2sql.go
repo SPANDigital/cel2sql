@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"log/slog"
 	"math"
-	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -2605,19 +2604,15 @@ func (con *converter) visitHasFunction(expr *exprpb.Expr) error {
 	return nil
 }
 
-// isDirectJSONFieldAccess checks if this represents a direct JSON field access (table.json_column.key)
+// isDirectJSONFieldAccess reports whether operand is a JSON column being accessed
+// directly, as in table.json_column.key.
 func (con *converter) isDirectJSONFieldAccess(operand *exprpb.Expr, _ string) bool {
-	// Check if operand is a select expression that refers to a JSON column
-	if selectExpr := operand.GetSelectExpr(); selectExpr != nil {
-		parentField := selectExpr.GetField()
-
-		// Check if the parent field is a known JSON column
-		jsonFields := []string{"metadata", "properties", "content", "structure", "taxonomy", "analytics", "classification"}
-		if slices.Contains(jsonFields, parentField) {
-			return true
-		}
+	if tableName, fieldName, ok := con.getTableAndFieldFromSelectChain(operand); ok {
+		return con.isFieldJSON(tableName, fieldName) || con.isJSONVariable(tableName)
 	}
-
+	if identExpr := operand.GetIdentExpr(); identExpr != nil {
+		return con.isJSONVariable(identExpr.GetName())
+	}
 	return false
 }
 
@@ -2690,30 +2685,17 @@ func (con *converter) getJSONRootAndPath(expr *exprpb.Expr) (*exprpb.Expr, []str
 	return current, pathSegments
 }
 
-// isJSONColumn checks if the operand refers to a JSON column
+// isJSONColumn reports whether operand.field names a JSON column, marking the
+// boundary between the SQL column and the JSON path within it.
+//
+// Requiring operand to be an identifier is what keeps the boundary correct for
+// deep paths: in documents.content.metadata.corpus, "metadata" is a path segment
+// rather than a column because its operand is a select, not a table.
 func (con *converter) isJSONColumn(operand *exprpb.Expr, field string) bool {
-	// Check if the field name is a known JSON column
-	jsonColumns := []string{"metadata", "properties", "content", "structure", "taxonomy", "analytics", "classification"}
-	for _, jsonCol := range jsonColumns {
-		if field == jsonCol {
-			// Additional check: make sure the operand is a table reference, not another JSON field
-			if con.isTableReference(operand) {
-				return true
-			}
-		}
+	if identExpr := operand.GetIdentExpr(); identExpr != nil {
+		tableName := identExpr.GetName()
+		return con.isFieldJSON(tableName, field) || con.isJSONVariable(tableName)
 	}
-	return false
-}
-
-// isTableReference checks if an expression refers to a table (not a JSON field)
-func (con *converter) isTableReference(expr *exprpb.Expr) bool {
-	if identExpr := expr.GetIdentExpr(); identExpr != nil {
-		// Direct table reference (e.g., "information_assets")
-		return true
-	}
-
-	// For now, assume SelectExpr that doesn't have JSON field characteristics is also a table reference
-	// This is a simplification but should work for our use cases
 	return false
 }
 

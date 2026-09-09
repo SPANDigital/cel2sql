@@ -393,6 +393,7 @@ func TestJSONColumnReferenceEdgeCases(t *testing.T) {
 		{Name: "taxonomy", Type: "jsonb", IsJSON: true, IsJSONB: true},
 		{Name: "analytics", Type: "jsonb", IsJSON: true, IsJSONB: true},
 		{Name: "classification", Type: "jsonb", IsJSON: true, IsJSONB: true},
+		{Name: "provenance", Type: "jsonb", IsJSON: true, IsJSONB: true},
 	})
 
 	provider := pg.NewTypeProvider(map[string]pg.Schema{"asset": schema})
@@ -412,7 +413,7 @@ func TestJSONColumnReferenceEdgeCases(t *testing.T) {
 		{
 			name:        "has_on_structure_column",
 			expression:  `has(asset.structure.level.parent)`,
-			description: "has() on 'structure' JSON column (known column name)",
+			description: "has() on a 'structure' JSON column",
 			checkSQL: func(t *testing.T, sql string) {
 				assert.Contains(t, sql, "asset.structure")
 				assert.Contains(t, sql, "'level'")
@@ -435,6 +436,18 @@ func TestJSONColumnReferenceEdgeCases(t *testing.T) {
 			checkSQL: func(t *testing.T, sql string) {
 				assert.Contains(t, sql, "asset.analytics")
 				assert.Contains(t, sql, "'views'")
+			},
+		},
+		{
+			// Detection comes from the schema, so a column outside the set the
+			// converter once hardcoded behaves identically.
+			name:        "has_on_arbitrarily_named_column",
+			expression:  `has(asset.provenance.source.system)`,
+			description: "has() on a JSON column with an arbitrary name",
+			checkSQL: func(t *testing.T, sql string) {
+				assert.Contains(t, sql, "asset.provenance")
+				assert.Contains(t, sql, "'source'")
+				assert.Contains(t, sql, "'system'")
 			},
 		},
 		{
