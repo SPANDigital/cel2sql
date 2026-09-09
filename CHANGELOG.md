@@ -2,6 +2,35 @@
 
 ## [Unreleased]
 
+## [3.9.3] - 2026-09-09
+### Changed
+- **Dependencies**: 22 grouped minor/patch Go module bumps (#190) —
+  `cloud.google.com/go/bigquery` 1.81.0 → 1.83.0,
+  `github.com/go-sql-driver/mysql` 1.10.0 → 1.10.1,
+  `google.golang.org/api` 0.293.0 → 0.297.0,
+  `google.golang.org/grpc` 1.83.1 → 1.83.2 and
+  `modernc.org/sqlite` 1.57.0 → 1.58.0 among the direct updates, plus
+  `golang.org/x/crypto` 0.55.0 → 0.56.0,
+  `github.com/klauspost/compress` 1.19.2 → 1.20.0 and the
+  OpenTelemetry 1.45.0 → 1.46.0 set among the indirect ones. The `go`
+  directive stays on 1.26.7. No cel2sql API or behavior changes.
+
+## [3.9.2] - 2026-08-28
+### Changed
+- **Dependencies**: 8 grouped minor/patch Go module bumps (#187), all
+  indirect — `cloud.google.com/go/auth` 0.23.1 → 0.23.2,
+  `github.com/docker/go-connections` 0.7.0 → 0.8.1,
+  `github.com/ebitengine/purego` 0.10.1 → 0.10.2,
+  `github.com/moby/moby/client` 0.5.0 → 0.5.1,
+  `github.com/shirou/gopsutil/v4` 4.26.6 → 4.26.7,
+  `go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp`
+  0.69.0 → 0.70.0, `modernc.org/libc` 1.75.3 → 1.75.4 and
+  `modernc.org/memory` 1.12.0 → 1.12.1.
+- **CI**: `github/codeql-action` 3 → 4 in the security workflow (#188).
+
+  This section was backfilled during the v3.9.3 release: v3.9.2 was tagged
+  and published on 2026-08-28 without a CHANGELOG entry.
+
 ## [3.9.1] - 2026-08-23
 ### Changed
 - **CI**: retired the scheduled Dependency Update workflow (#176). Its PRs
