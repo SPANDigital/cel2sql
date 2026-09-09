@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
-	"slices"
 
 	exprpb "google.golang.org/genproto/googleapis/api/expr/v1alpha1"
 )
@@ -62,7 +61,12 @@ func (con *converter) shouldUseJSONPath(operand *exprpb.Expr, _ string) bool {
 
 // isJSONVariable checks if a variable name was declared as JSONB via WithJSONVariables.
 func (con *converter) isJSONVariable(name string) bool {
-	return con.jsonVars != nil && con.jsonVars[name]
+	if con.jsonVars != nil && con.jsonVars[name] {
+		return true
+	}
+	// A comprehension variable bound to JSON documents behaves exactly like one
+	// declared through WithJSONVariables, for as long as its body is written.
+	return con.jsonIterVars[name]
 }
 
 // hasJSONFieldInChain checks if there's a JSON field anywhere in the select expression chain
@@ -104,13 +108,6 @@ func (con *converter) isJSONTextExtraction(expr *exprpb.Expr) bool {
 	}
 
 	return false
-}
-
-// isNumericJSONField checks if a JSON field name typically contains numeric values
-func (con *converter) isNumericJSONField(fieldName string) bool {
-	numericFields := []string{"level", "score", "value", "count", "amount", "price", "rating", "age", "size", "capacity", "megapixels", "cores", "threads", "ram", "storage", "vram", "weight", "frequency", "helpful"}
-
-	return slices.Contains(numericFields, fieldName)
 }
 
 // isNestedJSONAccess checks if this is nested JSON field access like settings.permissions
@@ -169,25 +166,6 @@ func (con *converter) buildJSONPathForArray(expr *exprpb.Expr) error {
 	return con.dialect.WriteJSONFieldAccess(&con.str, func() error {
 		return con.visit(operand)
 	}, field, false)
-}
-
-// isJSONObjectFieldAccess determines if this is a JSON object field access in comprehensions
-func (con *converter) isJSONObjectFieldAccess(expr *exprpb.Expr) bool {
-	if selectExpr := expr.GetSelectExpr(); selectExpr != nil {
-		operand := selectExpr.GetOperand()
-
-		// Check if the operand is an identifier that could be a comprehension variable
-		if identExpr := operand.GetIdentExpr(); identExpr != nil {
-			// Common comprehension variable names that access JSON objects
-			jsonObjectVars := []string{"attr", "item", "element", "obj", "feature", "review"}
-			identName := identExpr.GetName()
-
-			if slices.Contains(jsonObjectVars, identName) {
-				return true
-			}
-		}
-	}
-	return false
 }
 
 // isJSONArrayField determines if the expression refers to a JSON/JSONB array field

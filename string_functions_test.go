@@ -88,8 +88,9 @@ func TestIssue85_SizeOutsideComprehension(t *testing.T) {
 
 	sql, err := cel2sql.Convert(ast, cel2sql.WithSchemas(schemas))
 	require.NoError(t, err)
-	// Note: item.name will be treated as a struct field, generating item->>'name' for JSON
-	assert.Equal(t, "LENGTH(item->>'name') > 10", sql)
+	// name is a text column, so it is addressed as a column. The variable being
+	// called "item" no longer implies JSON.
+	assert.Equal(t, "LENGTH(item.name) > 10", sql)
 }
 
 // Comprehensive tests for all string extension functions

@@ -3,6 +3,35 @@
 ## [Unreleased]
 
 ### Fixed
+- **Comprehension variables are JSON because of what they range over, not what
+  they are called.** `isJSONObjectFieldAccess` decided that field access on a
+  comprehension variable should extract from a JSON document whenever the
+  variable was named `attr`, `item`, `element`, `obj`, `feature` or `review`.
+  Both directions were wrong: a `jsonb[]` column iterated as `row` was treated as
+  a composite and produced `row.status`, while an array of a composite type
+  iterated as `item` produced `item->>'name'` for a real column. The name even
+  leaked outside comprehensions — with a schema declaring `name` as `text`,
+  `item.name.size()` rendered as `LENGTH(item->>'name')`.
+
+  A comprehension variable bound to JSON documents is now treated exactly like
+  one declared through `WithJSONVariables`, scoped to the comprehension body, so
+  the existing JSON path machinery handles it. Nested access benefits in
+  particular: `r.metadata.active` over a `jsonb[]` now routes through the path
+  builder to `r->'metadata'->>'active'`, where the name-based branch would have
+  extracted the first segment as text and then dotted into it.
+
+- **Numeric casts on JSON values no longer depend on the field's name.**
+  `isNumericJSONField` carried a list of nineteen field names — `level`, `score`,
+  `price`, `rating`, `megapixels`, `vram`, `helpful` and so on — that decided
+  whether an extracted JSON value was wrapped in `::numeric`. The cast is already
+  driven by the compared type in `visitCall`, which is where v3.7.0 left it when
+  it removed the matching heuristic from `visitIdent`; the list was redundant.
+  `(item->>'price')::numeric > 10` is unchanged, now because 10 is numeric rather
+  than because the field is called `price`.
+
+  With these two gone, no hardcoded column- or variable-name list remains in the
+  converter.
+
 - **`has()` now detects JSON columns from the schema instead of a hardcoded name
   list.** `isDirectJSONFieldAccess` and `isJSONColumn` recognised a column as JSON
   only when it was named one of `metadata`, `properties`, `content`, `structure`,
@@ -37,6 +66,14 @@
   The name-based implementation never consulted `jsonVars` at all.
 
 ### Changed
+- **BREAKING: field access on a comprehension variable follows the schema.**
+  Iterating an array of a composite type now yields column access (`e.name`) and
+  iterating a `jsonb`/`jsonb[]` range yields extraction (`e->>'name'`), whichever
+  the variable is called. Callers who relied on a variable name to force JSON
+  treatment should declare the range as JSON in `WithSchemas`; callers who
+  happened to name a plain variable `item` or `obj` get column access, which is
+  what the schema already said.
+
 - **BREAKING: `has()` on a JSON column requires the column to be declared.**
   Callers who relied on a column being treated as JSON purely because of its name,
   without passing `WithSchemas` or `WithJSONVariables`, now get the ordinary
