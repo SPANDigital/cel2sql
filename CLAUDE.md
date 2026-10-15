@@ -8,7 +8,7 @@ cel2sql converts CEL (Common Expression Language) expressions to SQL conditions.
 
 **Module**: `github.com/spandigital/cel2sql/v3`
 **Go Version**: 1.26+
-**Current Version**: v3.8.10
+**Current Version**: v3.11.0
 
 ## Common Development Commands
 
