@@ -5,7 +5,7 @@ description: Adds a new SQL dialect to cel2sql by registering its name, implemen
 
 # Add SQL Dialect
 
-Adding a SQL dialect is the largest contribution shape in this repo (~1000-line PR, ~25 file touches in lockstep). The pattern is well-established — six dialects already follow it. This skill captures the procedure so the engineer can follow the template instead of reverse-engineering the layout from existing dialects.
+Adding a SQL dialect is the largest contribution shape in this repo (~1000-line PR, ~25 file touches in lockstep). The pattern is well-established — seven dialects already follow it. This skill captures the procedure so the engineer can follow the template instead of reverse-engineering the layout from existing dialects.
 
 ## Quick start
 
@@ -74,7 +74,7 @@ The full file-by-file checklist is in [references/touchpoints.md](references/tou
 
 ## Resources
 
-- [references/dialect-method-matrix.md](references/dialect-method-matrix.md) — the most-divergent `Dialect` methods across the existing six dialects, side by side.
+- [references/dialect-method-matrix.md](references/dialect-method-matrix.md) — the most-divergent `Dialect` methods across the existing seven dialects, side by side.
 - [references/touchpoints.md](references/touchpoints.md) — exhaustive file-by-file checklist for a new dialect.
 - [templates/gen_expected_sql.go.tmpl](templates/gen_expected_sql.go.tmpl) — build-tagged Go test template that prints actual SQL output for every shared test case.
 - **Run** `python scripts/check_testcase_coverage.py <name>` — verifies `WantSQL`/`SkipDialect` coverage for the dialect across all testcases files.

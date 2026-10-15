@@ -1,6 +1,32 @@
 # Changelog
 
 ## [Unreleased]
+### Added
+- **OpenSearch SQL dialect** (`dialect/opensearch`) and type provider
+  (`opensearch`). The dialect targets the OpenSearch SQL plugin
+  (`POST _plugins/_sql`): MySQL-flavoured syntax with `REGEXP`, `CONCAT()`,
+  `LOCATE()`, `DATE_ADD`/`DATE_SUB`, `?` placeholders, dot-path access to
+  `object` fields and PartiQL-style `EXISTS (SELECT * FROM p.nested AS v …)`
+  for `exists`/`all` over `nested` fields. Features the engine cannot express
+  (array values, list indexing, `size()` of a list, `split`/`join`, bytes
+  literals, `filter`/`map`/`exists_one`/`all`, time-zone extraction) are
+  rejected at conversion time. Verified against OpenSearch 3.5 with the
+  default (V2) engine. The provider loads index mappings with
+  `GET /<index>/_mapping` through `*opensearchapi.Client`
+  (`github.com/opensearch-project/opensearch-go/v4`), turning `object`
+  properties into nested schemas and `nested` properties into lists of them.
+  An integration test runs the generated SQL against a testcontainers
+  OpenSearch node.
+- `Dialect.WriteBooleanFieldPredicate()` — a new method for a boolean column
+  used directly as a predicate (the whole condition, an AND/OR/NOT operand, a
+  CASE WHEN condition, a comprehension predicate). Every existing dialect
+  writes the column unchanged; OpenSearch writes `col = true`, since its SQL
+  plugin silently matches every document for a bare boolean column.
+- `Dialect.SupportsSubqueryExpressions()` — a new capability method. Every
+  existing dialect returns `true`; the converter now rejects `filter`, `map`,
+  `exists_one` and `transformList` comprehensions for dialects that return
+  `false` instead of emitting a value-position subquery they cannot run.
+
 
 ## [3.10.0] - 2026-09-09
 ### Fixed

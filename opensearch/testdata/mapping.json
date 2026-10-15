@@ -1,0 +1,29 @@
+{
+  "dynamic": "strict",
+  "properties": {
+    "name": {"type": "keyword"},
+    "description": {
+      "type": "text",
+      "fields": {"keyword": {"type": "keyword", "ignore_above": 256}}
+    },
+    "price": {"type": "double"},
+    "stock": {"type": "long"},
+    "active": {"type": "boolean"},
+    "created_at": {"type": "date"},
+    "dims": {
+      "properties": {
+        "width": {"type": "double"},
+        "height": {"type": "double"}
+      }
+    },
+    "variants": {
+      "type": "nested",
+      "properties": {
+        "sku": {"type": "keyword"},
+        "qty": {"type": "long"},
+        "attrs": {"properties": {"color": {"type": "keyword"}}}
+      }
+    },
+    "extra": {"type": "flat_object"}
+  }
+}

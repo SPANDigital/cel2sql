@@ -1,6 +1,6 @@
 # cel2sql
 
-> Convert [CEL (Common Expression Language)](https://cel.dev/) expressions to SQL for PostgreSQL, MySQL, SQLite, DuckDB, BigQuery, and Apache Spark SQL
+> Convert [CEL (Common Expression Language)](https://cel.dev/) expressions to SQL for PostgreSQL, MySQL, SQLite, DuckDB, BigQuery, Apache Spark SQL, and OpenSearch SQL
 
 [![Go Version](https://img.shields.io/badge/Go-1.26%2B-blue)](https://golang.org)
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-17-336791)](https://www.postgresql.org)
@@ -9,6 +9,7 @@
 [![DuckDB](https://img.shields.io/badge/DuckDB-1.x-FFF000)](https://duckdb.org)
 [![BigQuery](https://img.shields.io/badge/BigQuery-GCP-4285F4)](https://cloud.google.com/bigquery)
 [![Spark](https://img.shields.io/badge/Spark-3.x-E25A1C)](https://spark.apache.org)
+[![OpenSearch](https://img.shields.io/badge/OpenSearch-2.x-005EB8)](https://opensearch.org)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 [![Benchmarks](https://img.shields.io/badge/benchmarks-performance%20tracking-green)](https://spandigital.github.io/cel2sql/dev/bench/)
 
@@ -66,7 +67,7 @@ func main() {
 
 ## Why cel2sql?
 
-✅ **Multi-Dialect**: PostgreSQL, MySQL, SQLite, DuckDB, BigQuery, and Apache Spark SQL from a single API
+✅ **Multi-Dialect**: PostgreSQL, MySQL, SQLite, DuckDB, BigQuery, Apache Spark SQL, and OpenSearch SQL from a single API
 ✅ **Type-Safe**: Catch errors at compile time, not runtime
 ✅ **Rich Features**: JSON/JSONB, arrays, regex, timestamps, and more
 ✅ **Well-Tested**: 100+ tests including integration tests with real databases
@@ -134,7 +135,7 @@ sql, err := cel2sql.Convert(ast,
 
 ## Multi-Dialect Support
 
-cel2sql supports 6 SQL dialects. PostgreSQL is the default; select other dialects with `WithDialect()`:
+cel2sql supports 7 SQL dialects. PostgreSQL is the default; select other dialects with `WithDialect()`:
 
 ```go
 import (
@@ -144,6 +145,7 @@ import (
     "github.com/spandigital/cel2sql/v3/dialect/duckdb"
     "github.com/spandigital/cel2sql/v3/dialect/bigquery"
     "github.com/spandigital/cel2sql/v3/dialect/spark"
+    "github.com/spandigital/cel2sql/v3/dialect/opensearch"
 )
 
 // PostgreSQL (default - no option needed)
@@ -163,25 +165,59 @@ sql, err := cel2sql.Convert(ast, cel2sql.WithDialect(bigquery.New()))
 
 // Apache Spark SQL
 sql, err := cel2sql.Convert(ast, cel2sql.WithDialect(spark.New()))
+
+// OpenSearch SQL (the OpenSearch SQL plugin, POST _plugins/_sql)
+sql, err := cel2sql.Convert(ast, cel2sql.WithDialect(opensearch.New()))
 ```
 
 ### Dialect Comparison
 
-| Feature | PostgreSQL | MySQL | SQLite | DuckDB | BigQuery | Spark |
-|---------|-----------|-------|--------|--------|----------|-------|
-| String concat | `\|\|` | `CONCAT()` | `\|\|` | `\|\|` | `\|\|` | `concat()` |
-| Regex | `~ / ~*` | `REGEXP` | unsupported | `~ / ~*` | `REGEXP_CONTAINS()` | `RLIKE` |
-| JSON access | `->>'f'` | `->>'$.f'` | `json_extract()` | `->>'f'` | `JSON_VALUE()` | `get_json_object()` |
-| Arrays | `ARRAY[...]` | JSON arrays | JSON arrays | `[...]` | `[...]` | `array(...)` |
-| Array index | 1-indexed | n/a | n/a | 1-indexed | 0-indexed (`OFFSET`) | 0-indexed |
-| UNNEST | `UNNEST(x)` | `JSON_TABLE(...)` | `json_each(x)` | `UNNEST(x)` | `UNNEST(x)` | `EXPLODE(x)` |
-| Param placeholder&nbsp;[^ph] | `$1, $2` | `?, ?` | `?, ?` | `$1, $2` | `@p1, @p2` | `?, ?` |
-| Timestamp cast | `TIMESTAMP WITH TIME ZONE` | `DATETIME` | `datetime()` | `TIMESTAMPTZ` | `TIMESTAMP` | `TIMESTAMP` |
-| Contains | `POSITION()` | `LOCATE()` | `INSTR()` | `CONTAINS()` | `STRPOS()` | `LOCATE()` |
-| Index analysis | BTREE, GIN, GIN+trgm | BTREE, FULLTEXT | BTREE | ART | CLUSTERING, SEARCH_INDEX | not supported in v1 |
+| Feature | PostgreSQL | MySQL | SQLite | DuckDB | BigQuery | Spark | OpenSearch |
+|---------|-----------|-------|--------|--------|----------|-------|------------|
+| String concat | `\|\|` | `CONCAT()` | `\|\|` | `\|\|` | `\|\|` | `concat()` | `CONCAT()` |
+| Regex | `~ / ~*` | `REGEXP` | unsupported | `~ / ~*` | `REGEXP_CONTAINS()` | `RLIKE` | `(x REGEXP) = 1` |
+| JSON access | `->>'f'` | `->>'$.f'` | `json_extract()` | `->>'f'` | `JSON_VALUE()` | `get_json_object()` | dot path `a.b.f` |
+| Arrays | `ARRAY[...]` | JSON arrays | JSON arrays | `[...]` | `[...]` | `array(...)` | `IN (...)` lists only |
+| Array index | 1-indexed | n/a | n/a | 1-indexed | 0-indexed (`OFFSET`) | 0-indexed | n/a |
+| UNNEST | `UNNEST(x)` | `JSON_TABLE(...)` | `json_each(x)` | `UNNEST(x)` | `UNNEST(x)` | `EXPLODE(x)` | nested `EXISTS (SELECT * FROM p.x AS v …)` |
+| Param placeholder&nbsp;[^ph] | `$1, $2` | `?, ?` | `?, ?` | `$1, $2` | `@p1, @p2` | `?, ?` | `?, ?` |
+| Timestamp cast | `TIMESTAMP WITH TIME ZONE` | `DATETIME` | `datetime()` | `TIMESTAMPTZ` | `TIMESTAMP` | `TIMESTAMP` | `TIMESTAMP` |
+| Contains | `POSITION()` | `LOCATE()` | `INSTR()` | `CONTAINS()` | `STRPOS()` | `LOCATE()` | `LOCATE()` |
+| Index analysis | BTREE, GIN, GIN+trgm | BTREE, FULLTEXT | BTREE | ART | CLUSTERING, SEARCH_INDEX | not supported in v1 | not supported |
 
 [^ph]: The default. `WithPlaceholderStyle(PlaceholderQuestion)` emits `?` for any
 dialect — see [Placeholder Style](#placeholder-style).
+
+#### OpenSearch SQL notes
+
+OpenSearch is a search engine, so its SQL plugin has no array values, no JSON
+functions and no array-building subqueries. The dialect maps what the engine
+can express and returns `ErrUnsupportedDialectFeature` for the rest:
+
+- `object` fields are plain dot paths: `p.dims.width > 5` → `p.dims.width > 5`;
+  `has(p.dims.height)` → `p.dims.height IS NOT NULL`.
+- `nested` fields are iterated with `exists`, which becomes the plugin's
+  PartiQL form: `p.variants.exists(v, v.sku == "A")` →
+  `EXISTS (SELECT * FROM p.variants AS v WHERE v.sku = 'A')`. The outer index
+  must be aliased to the CEL variable name (`SELECT … FROM products AS p WHERE …`).
+  The plugin's nested-query handler only accepts `=`, `<>`, `<`, `>`, `LIKE`,
+  `IS NULL`, `AND` and `OR` inside that subquery, so `!`, `!=`, `in` and
+  `matches()` on the nested variable fail at query time; `all()` is rejected at
+  conversion time because it always needs `NOT` in the subquery.
+- A boolean column used as a predicate is written `col = true`: the plugin
+  silently matches every document for a bare `col` and rejects `NOT col`.
+- `matches()` becomes `(col REGEXP 'p') = 1`, because the plugin's `REGEXP`
+  returns an integer.
+- String functions (`contains`, `size`, `startsWith` on a function result) need
+  a `keyword` field or `fielddata=true`; a plain `text` field raises an error.
+- `exists_one`, `filter`, `map`, `all`, list indexing, `size()` of a list,
+  `split`, `join`, bytes literals and `in` against anything but a literal list
+  are rejected at conversion time.
+- Timestamp arithmetic uses `DATE_ADD` / `DATE_SUB`; day-of-week follows the
+  Monday=0 convention of the other dialects; time-zone arguments to `getHours()`
+  and friends are rejected (no `AT TIME ZONE`).
+- Regex patterns pass through unchanged (Java regex is a superset of the safe
+  RE2 subset), including an inline `(?i)`.
 
 ### Per-Dialect Type Providers
 
@@ -194,6 +230,7 @@ import "github.com/spandigital/cel2sql/v3/sqlite"    // SQLite (*sql.DB)
 import "github.com/spandigital/cel2sql/v3/duckdb"    // DuckDB (*sql.DB)
 import "github.com/spandigital/cel2sql/v3/bigquery"  // BigQuery (*bigquery.Client)
 import "github.com/spandigital/cel2sql/v3/spark"     // Spark SQL (*sql.DB; uses DESCRIBE TABLE)
+import "github.com/spandigital/cel2sql/v3/opensearch" // OpenSearch (*opensearchapi.Client; uses GET /<index>/_mapping)
 ```
 
 ## Query Analysis and Index Recommendations
@@ -239,15 +276,15 @@ for _, rec := range recommendations {
 
 ### Per-Dialect Index Types
 
-| Pattern | PostgreSQL | MySQL | SQLite | DuckDB | BigQuery | Spark |
-|---------|-----------|-------|--------|--------|----------|-------|
-| Comparison | BTREE | BTREE | BTREE | ART | CLUSTERING | _(skip)_ |
-| JSON access | GIN | BTREE (functional) | _(skip)_ | ART | SEARCH_INDEX | _(skip)_ |
-| Regex | GIN + pg_trgm | FULLTEXT | _(skip)_ | _(skip)_ | _(skip)_ | _(skip)_ |
-| Array membership | GIN | _(skip)_ | _(skip)_ | ART | _(skip)_ | _(skip)_ |
-| Comprehension | GIN | _(skip)_ | _(skip)_ | ART | _(skip)_ | _(skip)_ |
+| Pattern | PostgreSQL | MySQL | SQLite | DuckDB | BigQuery | Spark | OpenSearch |
+|---------|-----------|-------|--------|--------|----------|-------|------------|
+| Comparison | BTREE | BTREE | BTREE | ART | CLUSTERING | _(skip)_ | _(skip)_ |
+| JSON access | GIN | BTREE (functional) | _(skip)_ | ART | SEARCH_INDEX | _(skip)_ | _(skip)_ |
+| Regex | GIN + pg_trgm | FULLTEXT | _(skip)_ | _(skip)_ | _(skip)_ | _(skip)_ | _(skip)_ |
+| Array membership | GIN | _(skip)_ | _(skip)_ | ART | _(skip)_ | _(skip)_ | _(skip)_ |
+| Comprehension | GIN | _(skip)_ | _(skip)_ | ART | _(skip)_ | _(skip)_ | _(skip)_ |
 
-Spark indexing depends on the storage layer (Delta Z-order, Iceberg sort, plain Parquet) and is out of scope for v1; index analysis is disabled for the Spark dialect. Unsupported patterns in other dialects are silently skipped.
+Spark indexing depends on the storage layer (Delta Z-order, Iceberg sort, plain Parquet) and is out of scope for v1; index analysis is disabled for the Spark dialect. OpenSearch indexes every mapped field itself and has no user-managed SQL indexes, so index analysis is disabled there too. Unsupported patterns in other dialects are silently skipped.
 
 ### Example
 
@@ -318,7 +355,7 @@ rows, err := db.Query(
 ### Placeholder Style
 
 Each dialect renders its native placeholder by default (`$1` for PostgreSQL and
-DuckDB, `?` for MySQL/SQLite/Spark, `@p1` for BigQuery). Callers whose driver or
+DuckDB, `?` for MySQL/SQLite/Spark/OpenSearch, `@p1` for BigQuery). Callers whose driver or
 query builder rebinds placeholders itself — GORM, `sqlx.Rebind`, squirrel — need
 `?` regardless of dialect, because they number placeholders from their own count
 across the whole statement and cannot renumber a fragment that arrives numbered:

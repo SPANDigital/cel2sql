@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-cel2sql converts CEL (Common Expression Language) expressions to SQL conditions. It supports six SQL dialects: PostgreSQL (default), MySQL, SQLite, DuckDB, BigQuery, and Apache Spark SQL.
+cel2sql converts CEL (Common Expression Language) expressions to SQL conditions. It supports seven SQL dialects: PostgreSQL (default), MySQL, SQLite, DuckDB, BigQuery, Apache Spark SQL, and OpenSearch SQL.
 
 **Module**: `github.com/spandigital/cel2sql/v3`
 **Go Version**: 1.26+
@@ -100,7 +100,13 @@ go test -v -run TestFunctionName ./...
     - Accepts `*sql.DB` (caller owns connection); works with any database/sql driver such as gohive
     - Skips trailing partition-info rows from `DESCRIBE TABLE` output
 
-12. **`sqltypes/types.go`** - Custom SQL type definitions for CEL (DATE, TIME, DATETIME, INTERVAL)
+12. **`opensearch/provider.go`** - OpenSearch type provider
+    - Maps OpenSearch mapping types (keyword/text/ip → string, long/integer → int, date → timestamp, …) to CEL types
+    - `object` fields become nested schemas addressed by dot path; `nested` fields become lists of nested schemas
+    - `LoadTableSchema` uses `GET /<index>/_mapping` via `*opensearchapi.Client` (index name validated against OpenSearch naming rules)
+    - Accepts `*opensearchapi.Client` (caller owns client); `parseMapping` is a pure function over the mapping JSON
+
+13. **`sqltypes/types.go`** - Custom SQL type definitions for CEL (DATE, TIME, DATETIME, INTERVAL)
 
 ### Type System Integration
 
@@ -226,12 +232,13 @@ These validations prevent PostgreSQL syntax errors and ensure predictable behavi
 
 ### Testing Guidelines
 - Use the dialect-specific schema/provider for each dialect's tests
-- Use `pg.NewTypeProvider()` for PostgreSQL, `mysql.NewTypeProvider()` for MySQL, `spark.NewTypeProvider()` for Spark, etc.
+- Use `pg.NewTypeProvider()` for PostgreSQL, `mysql.NewTypeProvider()` for MySQL, `spark.NewTypeProvider()` for Spark, `opensearch.NewTypeProvider()` for OpenSearch, etc.
 - Include tests for nested types, arrays, and JSON fields
 - Verify SQL output matches the target dialect's syntax
 - Use testcontainers for integration tests (PostgreSQL, MySQL, BigQuery)
 - Use in-memory databases for SQLite integration tests (no Docker needed)
 - DuckDB integration tests require CGO; use unit tests for type mapping validation
+- OpenSearch integration test (`opensearch_integration_test.go`) runs generated SQL through `_plugins/_sql` on a testcontainers OpenSearch node; it skips when no container runtime is reachable
 - Provider tests live in `{dialect}/provider_test.go`
 
 ### Performance Benchmarks
@@ -393,6 +400,14 @@ schema := spark.NewSchema([]spark.FieldSchema{
     {Name: "tags", Type: "string", Repeated: true, ElementType: "string"},
 })
 provider := spark.NewTypeProvider(map[string]spark.Schema{"TableName": schema})
+
+// OpenSearch (object → nested Schema, nested → Repeated + Schema)
+schema := opensearch.NewSchema([]opensearch.FieldSchema{
+    {Name: "name", Type: "keyword"},
+    {Name: "dims", Type: "object", Schema: []opensearch.FieldSchema{{Name: "width", Type: "double"}}},
+    {Name: "variants", Type: "nested", Repeated: true, Schema: []opensearch.FieldSchema{{Name: "sku", Type: "keyword"}}},
+})
+provider := opensearch.NewTypeProvider(map[string]opensearch.Schema{"products": schema})
 ```
 
 ### Dynamic Schema Loading
@@ -433,12 +448,18 @@ err = provider.LoadTableSchema(ctx, "tableName")
 db, _ := sql.Open("hive", "user@host:10000/default")
 provider, err := spark.NewTypeProviderWithConnection(ctx, db)
 err = provider.LoadTableSchema(ctx, "catalog.schema.tablename")
+
+// OpenSearch — accepts *opensearchapi.Client, uses GET /<index>/_mapping (validates index name)
+client, _ := opensearchapi.NewClient(opensearchapi.Config{Client: opensearch.Config{Addresses: []string{"http://localhost:9200"}}})
+provider, err := osprovider.NewTypeProviderWithClient(ctx, client)
+err = provider.LoadTableSchema(ctx, "products")
 ```
 
 **Key differences per dialect:**
 - **PostgreSQL**: `NewTypeProviderWithConnection(ctx, connString)` — owns its pgxpool, `Close()` releases it
 - **MySQL/SQLite/DuckDB/Spark**: `NewTypeProviderWithConnection(ctx, *sql.DB)` — caller owns DB, `Close()` is no-op
 - **BigQuery**: `NewTypeProviderWithClient(ctx, *bigquery.Client, datasetID)` — caller owns client, `Close()` is no-op
+- **OpenSearch**: `NewTypeProviderWithClient(ctx, *opensearchapi.Client)` — caller owns client, `Close()` is no-op; index name validated against OpenSearch naming rules
 - **SQLite/Spark**: Table name validated via regex (Spark allows dots for `catalog.schema.table`) since `PRAGMA`/`DESCRIBE TABLE` don't accept parameterized queries
 
 ### CEL Environment Setup
@@ -899,6 +920,7 @@ This project was originally BigQuery-only, migrated to PostgreSQL in v2.0, and e
 - Do NOT ignore context cancellation in database operations
 - Do NOT use `PRAGMA` with user-controlled table names without validation (SQLite)
 - Do NOT assume a specific dialect — use the dialect interface for dialect-specific behavior
+- Do NOT emit a value-position subquery (filter/map/exists_one) without checking `SupportsSubqueryExpressions()` — OpenSearch only allows subqueries inside EXISTS/IN
 
 ### When Adding Features
 1. Consider all supported SQL dialects, not just PostgreSQL
@@ -932,15 +954,18 @@ cel2sql/
 │   └── provider.go         # LoadTableSchema via BigQuery client API
 ├── spark/                  # Apache Spark SQL type provider
 │   └── provider.go         # LoadTableSchema via DESCRIBE TABLE + *sql.DB
+├── opensearch/             # OpenSearch type provider
+│   └── provider.go         # LoadTableSchema via GET /<index>/_mapping + *opensearchapi.Client
 ├── dialect/                # Dialect interface and implementations
-│   ├── dialect.go          # Core Dialect interface (~47 methods)
+│   ├── dialect.go          # Core Dialect interface (~51 methods)
 │   ├── index_advisor.go    # IndexAdvisor interface, PatternType, IndexPattern
 │   ├── postgres/           # PostgreSQL dialect + IndexAdvisor (BTREE, GIN, GIN+trgm)
 │   ├── mysql/              # MySQL dialect + IndexAdvisor (BTREE, FULLTEXT)
 │   ├── sqlite/             # SQLite dialect + IndexAdvisor (BTREE only)
 │   ├── duckdb/             # DuckDB dialect + IndexAdvisor (ART)
 │   ├── bigquery/           # BigQuery dialect + IndexAdvisor (CLUSTERING, SEARCH_INDEX)
-│   └── spark/              # Spark SQL dialect (no IndexAdvisor in v1)
+│   ├── spark/              # Spark SQL dialect (no IndexAdvisor in v1)
+│   └── opensearch/         # OpenSearch SQL dialect (no IndexAdvisor; no arrays/subquery expressions)
 ├── sqltypes/               # Custom SQL types for CEL
 │   └── types.go
 ├── testcases/              # Shared test cases with per-dialect expected SQL

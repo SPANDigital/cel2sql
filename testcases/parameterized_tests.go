@@ -15,6 +15,7 @@ func ParameterizedTests() []ParameterizedTestCase {
 				dialect.DuckDB:     "name = $1",
 				dialect.BigQuery:   "name = @p1",
 				dialect.Spark:      "name = ?",
+				dialect.OpenSearch: "name = ?",
 			},
 			WantParams: map[dialect.Name][]any{
 				dialect.PostgreSQL: {"John"},
@@ -34,6 +35,7 @@ func ParameterizedTests() []ParameterizedTestCase {
 				dialect.DuckDB:     "name = $1 AND name != $2",
 				dialect.BigQuery:   "name = @p1 AND name != @p2",
 				dialect.Spark:      "name = ? AND name != ?",
+				dialect.OpenSearch: "name = ? AND name != ?",
 			},
 			WantParams: map[dialect.Name][]any{
 				dialect.PostgreSQL: {"John", "Jane"},
@@ -53,6 +55,7 @@ func ParameterizedTests() []ParameterizedTestCase {
 				dialect.DuckDB:     "age = $1",
 				dialect.BigQuery:   "age = @p1",
 				dialect.Spark:      "age = ?",
+				dialect.OpenSearch: "age = ?",
 			},
 			WantParams: map[dialect.Name][]any{
 				dialect.PostgreSQL: {int64(18)},
@@ -72,6 +75,7 @@ func ParameterizedTests() []ParameterizedTestCase {
 				dialect.DuckDB:     "age > $1 AND age < $2",
 				dialect.BigQuery:   "age > @p1 AND age < @p2",
 				dialect.Spark:      "age > ? AND age < ?",
+				dialect.OpenSearch: "age > ? AND age < ?",
 			},
 			WantParams: map[dialect.Name][]any{
 				dialect.PostgreSQL: {int64(21), int64(65)},
@@ -91,6 +95,7 @@ func ParameterizedTests() []ParameterizedTestCase {
 				dialect.DuckDB:     "salary = $1",
 				dialect.BigQuery:   "salary = @p1",
 				dialect.Spark:      "salary = ?",
+				dialect.OpenSearch: "salary = ?",
 			},
 			WantParams: map[dialect.Name][]any{
 				dialect.PostgreSQL: {50000.50},
@@ -110,6 +115,7 @@ func ParameterizedTests() []ParameterizedTestCase {
 				dialect.DuckDB:     "active IS TRUE",
 				dialect.BigQuery:   "active IS TRUE",
 				dialect.Spark:      "active IS TRUE",
+				dialect.OpenSearch: "active IS TRUE",
 			},
 			WantParams: map[dialect.Name][]any{
 				dialect.PostgreSQL: {},

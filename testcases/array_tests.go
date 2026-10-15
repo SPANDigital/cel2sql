@@ -15,6 +15,9 @@ func ArrayTests() []ConvertTestCase {
 				dialect.BigQuery:   "[1, 2, 3][OFFSET(0)] = 1",
 				dialect.Spark:      "array(1, 2, 3)[0] = 1",
 			},
+			WantErr: map[dialect.Name]bool{
+				dialect.OpenSearch: true,
+			},
 		},
 		{
 			Name:     "list_var_index",
@@ -25,6 +28,9 @@ func ArrayTests() []ConvertTestCase {
 				dialect.DuckDB:     "string_list[1] = 'a'",
 				dialect.BigQuery:   "string_list[OFFSET(0)] = 'a'",
 				dialect.Spark:      "string_list[0] = 'a'",
+			},
+			WantErr: map[dialect.Name]bool{
+				dialect.OpenSearch: true,
 			},
 		},
 		{
@@ -37,6 +43,9 @@ func ArrayTests() []ConvertTestCase {
 				dialect.BigQuery:   "ARRAY_LENGTH(string_list)",
 				dialect.Spark:      "COALESCE(size(string_list), 0)",
 			},
+			WantErr: map[dialect.Name]bool{
+				dialect.OpenSearch: true,
+			},
 		},
 		{
 			Name:     "size_list_comparison",
@@ -48,6 +57,9 @@ func ArrayTests() []ConvertTestCase {
 				dialect.BigQuery:   "ARRAY_LENGTH(string_list) > 0",
 				dialect.Spark:      "COALESCE(size(string_list), 0) > 0",
 			},
+			WantErr: map[dialect.Name]bool{
+				dialect.OpenSearch: true,
+			},
 		},
 		{
 			Name:     "array_index_overflow",
@@ -58,6 +70,7 @@ func ArrayTests() []ConvertTestCase {
 				dialect.DuckDB:     true,
 				dialect.BigQuery:   true,
 				dialect.Spark:      true,
+				dialect.OpenSearch: true,
 			},
 		},
 		{
@@ -69,6 +82,7 @@ func ArrayTests() []ConvertTestCase {
 				dialect.DuckDB:     true,
 				dialect.BigQuery:   true,
 				dialect.Spark:      true,
+				dialect.OpenSearch: true,
 			},
 		},
 	}

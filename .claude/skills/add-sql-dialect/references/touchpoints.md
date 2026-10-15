@@ -45,7 +45,7 @@ func (d *Dialect) Name() dialect.Name { return dialect.<Name> }
 // … all other methods
 ```
 
-The compile-time `var _ dialect.Dialect = (*Dialect)(nil)` line catches any missing methods. The `init()` registration makes the dialect findable via `dialect.Get(dialect.<Name>)`.
+The compile-time `var _ dialect.Dialect = (*Dialect)(nil)` line catches any missing methods. Decide `SupportsSubqueryExpressions()` early: return `false` when the engine cannot run a subquery in value position (then `filter`/`map`/`exists_one` are rejected by the converter and `WriteArraySubqueryOpen` is never reached). The `init()` registration makes the dialect findable via `dialect.Get(dialect.<Name>)`.
 
 ### 3. Regex conversion
 

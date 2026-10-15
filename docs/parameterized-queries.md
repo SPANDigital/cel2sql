@@ -223,7 +223,7 @@ By default each dialect renders its native placeholder syntax:
 | Dialect | Placeholder |
 |---------|-------------|
 | PostgreSQL, DuckDB | `$1, $2` |
-| MySQL, SQLite, Spark | `?, ?` |
+| MySQL, SQLite, Spark, OpenSearch | `?, ?` |
 | BigQuery | `@p1, @p2` |
 
 Some callers cannot accept pre-numbered placeholders. GORM, `sqlx.Rebind` and
@@ -242,7 +242,7 @@ result, err := cel2sql.ConvertParameterized(ast,
 ```
 
 The style is orthogonal to the dialect — it changes only the placeholder syntax,
-never the SQL around it. For MySQL, SQLite and Spark, whose native placeholder is
+never the SQL around it. For MySQL, SQLite, Spark and OpenSearch, whose native placeholder is
 already `?`, it produces identical output.
 
 ### With GORM

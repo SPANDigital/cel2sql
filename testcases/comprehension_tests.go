@@ -17,6 +17,9 @@ func ComprehensionTests() []ConvertTestCase {
 				dialect.BigQuery:   "NOT EXISTS (SELECT 1 FROM UNNEST(string_list) AS x WHERE NOT (x != 'bad'))",
 				dialect.Spark:      "NOT EXISTS (SELECT 1 FROM EXPLODE(string_list) AS x WHERE NOT (x != 'bad'))",
 			},
+			WantErr: map[dialect.Name]bool{
+				dialect.OpenSearch: true,
+			},
 		},
 		{
 			Name:     "exists",
@@ -29,6 +32,7 @@ func ComprehensionTests() []ConvertTestCase {
 				dialect.DuckDB:     "EXISTS (SELECT 1 FROM UNNEST(string_list) AS x WHERE x = 'good')",
 				dialect.BigQuery:   "EXISTS (SELECT 1 FROM UNNEST(string_list) AS x WHERE x = 'good')",
 				dialect.Spark:      "EXISTS (SELECT 1 FROM EXPLODE(string_list) AS x WHERE x = 'good')",
+				dialect.OpenSearch: "EXISTS (SELECT * FROM string_list AS x WHERE x = 'good')",
 			},
 		},
 		{
@@ -43,6 +47,9 @@ func ComprehensionTests() []ConvertTestCase {
 				dialect.BigQuery:   "(SELECT COUNT(*) FROM UNNEST(string_list) AS x WHERE x = 'unique') = 1",
 				dialect.Spark:      "(SELECT COUNT(*) FROM EXPLODE(string_list) AS x WHERE x = 'unique') = 1",
 			},
+			WantErr: map[dialect.Name]bool{
+				dialect.OpenSearch: true,
+			},
 		},
 		{
 			Name:     "filter",
@@ -55,6 +62,9 @@ func ComprehensionTests() []ConvertTestCase {
 				dialect.BigQuery:   "ARRAY(SELECT x FROM UNNEST(string_list) AS x WHERE x != 'bad')",
 				dialect.Spark:      "(SELECT collect_list(x) FROM EXPLODE(string_list) AS x WHERE x != 'bad')",
 			},
+			WantErr: map[dialect.Name]bool{
+				dialect.OpenSearch: true,
+			},
 		},
 		{
 			Name:     "map_transform",
@@ -66,6 +76,9 @@ func ComprehensionTests() []ConvertTestCase {
 				dialect.DuckDB:     "ARRAY(SELECT x || '_suffix' FROM UNNEST(string_list) AS x)",
 				dialect.BigQuery:   "ARRAY(SELECT x || '_suffix' FROM UNNEST(string_list) AS x)",
 				dialect.Spark:      "(SELECT collect_list(concat(x, '_suffix')) FROM EXPLODE(string_list) AS x)",
+			},
+			WantErr: map[dialect.Name]bool{
+				dialect.OpenSearch: true,
 			},
 		},
 	}
