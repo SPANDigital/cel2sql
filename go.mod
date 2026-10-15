@@ -8,10 +8,12 @@ require (
 	github.com/go-sql-driver/mysql v1.10.1
 	github.com/jackc/pgx/v5 v5.11.0
 	github.com/lib/pq v1.12.3
+	github.com/opensearch-project/opensearch-go/v4 v4.8.1
 	github.com/stretchr/testify v1.12.1
 	github.com/testcontainers/testcontainers-go v0.44.0
 	github.com/testcontainers/testcontainers-go/modules/gcloud v0.44.0
 	github.com/testcontainers/testcontainers-go/modules/mysql v0.44.0
+	github.com/testcontainers/testcontainers-go/modules/opensearch v0.44.0
 	github.com/testcontainers/testcontainers-go/modules/postgres v0.44.0
 	google.golang.org/api v0.301.0
 	google.golang.org/genproto/googleapis/api v0.0.0-20260715232425-e75dac1f907d

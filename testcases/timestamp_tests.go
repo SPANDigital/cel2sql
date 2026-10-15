@@ -16,6 +16,7 @@ func TimestampTests() []ConvertTestCase {
 				dialect.DuckDB:     "INTERVAL 10 SECOND",
 				dialect.BigQuery:   "INTERVAL 10 SECOND",
 				dialect.Spark:      "INTERVAL 10 SECOND",
+				dialect.OpenSearch: "INTERVAL 10 SECOND",
 			},
 		},
 		{
@@ -29,6 +30,7 @@ func TimestampTests() []ConvertTestCase {
 				dialect.DuckDB:     "INTERVAL 61 MINUTE",
 				dialect.BigQuery:   "INTERVAL 61 MINUTE",
 				dialect.Spark:      "INTERVAL 61 MINUTE",
+				dialect.OpenSearch: "INTERVAL 61 MINUTE",
 			},
 		},
 		{
@@ -42,6 +44,7 @@ func TimestampTests() []ConvertTestCase {
 				dialect.DuckDB:     "INTERVAL 1 HOUR",
 				dialect.BigQuery:   "INTERVAL 1 HOUR",
 				dialect.Spark:      "INTERVAL 1 HOUR",
+				dialect.OpenSearch: "INTERVAL 1 HOUR",
 			},
 		},
 		{
@@ -55,6 +58,7 @@ func TimestampTests() []ConvertTestCase {
 				dialect.DuckDB:     "EXTRACT(SECOND FROM created_at)",
 				dialect.BigQuery:   "EXTRACT(SECOND FROM created_at)",
 				dialect.Spark:      "EXTRACT(SECOND FROM created_at)",
+				dialect.OpenSearch: "EXTRACT(SECOND FROM created_at)",
 			},
 		},
 		{
@@ -69,6 +73,9 @@ func TimestampTests() []ConvertTestCase {
 				dialect.BigQuery:   "EXTRACT(HOUR FROM created_at AT TIME ZONE 'Asia/Tokyo')",
 				dialect.Spark:      "EXTRACT(HOUR FROM created_at AT TIME ZONE 'Asia/Tokyo')",
 			},
+			WantErr: map[dialect.Name]bool{
+				dialect.OpenSearch: true,
+			},
 		},
 		{
 			Name:     "timestamp_sub_duration",
@@ -81,6 +88,7 @@ func TimestampTests() []ConvertTestCase {
 				dialect.DuckDB:     "created_at - INTERVAL 1 HOUR <= CAST('2021-09-01T18:00:00Z' AS TIMESTAMPTZ)",
 				dialect.BigQuery:   "TIMESTAMP_SUB(created_at, INTERVAL 1 HOUR) <= CAST('2021-09-01T18:00:00Z' AS TIMESTAMP)",
 				dialect.Spark:      "created_at - INTERVAL 1 HOUR <= CAST('2021-09-01T18:00:00Z' AS TIMESTAMP)",
+				dialect.OpenSearch: "DATE_SUB(created_at, INTERVAL 1 HOUR) <= CAST('2021-09-01T18:00:00Z' AS TIMESTAMP)",
 			},
 		},
 		{
@@ -95,6 +103,7 @@ func TimestampTests() []ConvertTestCase {
 				dialect.DuckDB:     "INTERVAL 1 MONTH",
 				dialect.BigQuery:   "INTERVAL 1 MONTH",
 				dialect.Spark:      "INTERVAL 1 MONTH",
+				dialect.OpenSearch: "INTERVAL 1 MONTH",
 			},
 		},
 		{
@@ -109,6 +118,7 @@ func TimestampTests() []ConvertTestCase {
 				dialect.DuckDB:     "EXTRACT(YEAR FROM birthday)",
 				dialect.BigQuery:   "EXTRACT(YEAR FROM birthday)",
 				dialect.Spark:      "EXTRACT(YEAR FROM birthday)",
+				dialect.OpenSearch: "EXTRACT(YEAR FROM birthday)",
 			},
 		},
 		{
@@ -123,6 +133,7 @@ func TimestampTests() []ConvertTestCase {
 				dialect.DuckDB:     "EXTRACT(MONTH FROM scheduled_at) - 1",
 				dialect.BigQuery:   "EXTRACT(MONTH FROM scheduled_at) - 1",
 				dialect.Spark:      "EXTRACT(MONTH FROM scheduled_at) - 1",
+				dialect.OpenSearch: "EXTRACT(MONTH FROM scheduled_at) - 1",
 			},
 		},
 	}

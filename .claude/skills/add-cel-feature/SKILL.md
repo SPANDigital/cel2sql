@@ -12,7 +12,7 @@ Adding a new CEL surface area (function, operator, macro, comprehension) is the 
 1. **Classify the feature** — function call, operator, macro (like `has()`), or comprehension form (like `all`/`exists`/`filter`/`map`).
 2. **Identify the converter file** that owns the surface area — see [references/converter-file-map.md](references/converter-file-map.md).
 3. **Decide whether a new `dialect.Dialect` method is needed** — see "New method or inline?" below.
-4. **If a new method is needed**, walk [references/dialect-method-checklist.md](references/dialect-method-checklist.md) — the new method must land in `dialect/dialect.go` plus all six dialect packages.
+4. **If a new method is needed**, walk [references/dialect-method-checklist.md](references/dialect-method-checklist.md) — the new method must land in `dialect/dialect.go` plus all seven dialect packages.
 5. **Add a test case** to the appropriate `testcases/<category>_tests.go` with a `WantSQL` entry for every dialect (use the gen-script from `add-sql-dialect` if outputs diverge significantly).
 6. **Run** `python .claude/skills/add-sql-dialect/scripts/check_testcase_coverage.py <each-dialect>` to confirm coverage is still complete.
 
@@ -22,12 +22,12 @@ The `dialect.Dialect` interface is already large (~47 methods). Add a new method
 
 | Situation | Verdict |
 |---|---|
-| The SQL is identical across all six dialects | Inline in the visitor (e.g., `con.str.WriteString("MOD(")` for `%`). |
+| The SQL is identical across all seven dialects | Inline in the visitor (e.g., `con.str.WriteString("MOD(")` for `%`). |
 | Any dialect needs a different syntax | New `dialect.Dialect` method. |
 | A subset of dialects don't support the feature at all | New method + each unsupported dialect returns `dialect.ErrUnsupportedFeature`. |
 | The feature is JSON-related, regex-related, or array-related | Look for an existing `Write…` method first — JSON/array/regex method coverage is broad. |
 
-If you add a method, the compile-time `var _ dialect.Dialect = (*Dialect)(nil)` assertion at the top of every dialect file will catch missing implementations. The build won't pass until all six dialects are updated.
+If you add a method, the compile-time `var _ dialect.Dialect = (*Dialect)(nil)` assertion at the top of every dialect file will catch missing implementations. The build won't pass until all seven dialects are updated.
 
 ## Where features live
 
@@ -57,7 +57,7 @@ If the SQL output diverges significantly across dialects, use the `gen_expected_
 After the test case is in place, **run** the coverage check for every dialect:
 
 ```
-for d in postgresql mysql sqlite duckdb bigquery spark; do
+for d in postgresql mysql sqlite duckdb bigquery spark opensearch; do
   python .claude/skills/add-sql-dialect/scripts/check_testcase_coverage.py "$d"
 done
 ```

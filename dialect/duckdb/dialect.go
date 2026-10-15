@@ -475,6 +475,15 @@ func (d *Dialect) SupportsJSONB() bool { return false }
 // SupportsIndexAnalysis returns true as DuckDB index analysis is supported.
 func (d *Dialect) SupportsIndexAnalysis() bool { return true }
 
+// SupportsSubqueryExpressions returns true: subqueries may be used as values.
+func (d *Dialect) SupportsSubqueryExpressions() bool { return true }
+
+// WriteBooleanFieldPredicate writes the boolean column unchanged: it is a
+// valid predicate on its own.
+func (d *Dialect) WriteBooleanFieldPredicate(_ *strings.Builder, writeField func() error) error {
+	return writeField()
+}
+
 // --- Internal helpers ---
 
 // escapeJSONFieldName escapes special characters in JSON field names for DuckDB.

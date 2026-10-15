@@ -10,6 +10,7 @@ import (
 	bigqueryDialect "github.com/spandigital/cel2sql/v3/dialect/bigquery"
 	duckdbDialect "github.com/spandigital/cel2sql/v3/dialect/duckdb"
 	mysqlDialect "github.com/spandigital/cel2sql/v3/dialect/mysql"
+	opensearchDialect "github.com/spandigital/cel2sql/v3/dialect/opensearch"
 	sparkDialect "github.com/spandigital/cel2sql/v3/dialect/spark"
 	sqliteDialect "github.com/spandigital/cel2sql/v3/dialect/sqlite"
 	"github.com/spandigital/cel2sql/v3/pg"
@@ -322,6 +323,31 @@ func SparkEnvFactory() func(envSetup string) (*EnvResult, error) {
 	}
 }
 
+// OpenSearchEnvFactory returns an environment factory for OpenSearch SQL tests.
+// It uses the same CEL environments as PostgreSQL (CEL compilation is dialect-independent)
+// but sets the OpenSearch dialect for SQL generation.
+func OpenSearchEnvFactory() func(envSetup string) (*EnvResult, error) {
+	return func(envSetup string) (*EnvResult, error) {
+		var result *EnvResult
+		var err error
+		switch envSetup {
+		case testcases.EnvDefault:
+			result, err = NewDefaultEnv()
+		case testcases.EnvWithTimestamp:
+			result, err = NewTimestampEnv()
+		case testcases.EnvWithJSON:
+			result, err = NewJSONSchemaEnv()
+		default:
+			return nil, fmt.Errorf("unknown environment setup: %s", envSetup)
+		}
+		if err != nil {
+			return nil, err
+		}
+		result.Opts = append(result.Opts, cel2sql.WithDialect(opensearchDialect.New()))
+		return result, nil
+	}
+}
+
 // DialectEnvFactory returns an environment factory for the given dialect.
 // This is a convenience function that maps dialect names to their env factories.
 func DialectEnvFactory(d dialectpkg.Name) func(envSetup string) (*EnvResult, error) {
@@ -338,6 +364,8 @@ func DialectEnvFactory(d dialectpkg.Name) func(envSetup string) (*EnvResult, err
 		return BigQueryEnvFactory()
 	case dialectpkg.Spark:
 		return SparkEnvFactory()
+	case dialectpkg.OpenSearch:
+		return OpenSearchEnvFactory()
 	default:
 		return func(_ string) (*EnvResult, error) {
 			return nil, fmt.Errorf("no environment factory for dialect %s", d)

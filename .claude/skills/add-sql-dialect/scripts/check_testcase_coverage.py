@@ -121,6 +121,8 @@ def has_dialect_entry(block: str, dialect: str) -> bool:
         pascal = "BigQuery"
     elif dialect == "spark":
         pascal = "Spark"
+    elif dialect == "opensearch":
+        pascal = "OpenSearch"
 
     token = re.compile(rf"\bdialect\.{pascal}\b")
     return bool(token.search(block))

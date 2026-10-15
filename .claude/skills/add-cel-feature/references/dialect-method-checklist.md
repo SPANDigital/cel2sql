@@ -1,6 +1,6 @@
 # Dialect Method Checklist
 
-Steps when adding a new method to the `dialect.Dialect` interface. Skip the new-method route entirely if the SQL output is identical across all six dialects (just inline in the converter).
+Steps when adding a new method to the `dialect.Dialect` interface. Skip the new-method route entirely if the SQL output is identical across all seven dialects (just inline in the converter).
 
 ## Contents
 
@@ -13,19 +13,20 @@ Steps when adding a new method to the `dialect.Dialect` interface. Skip the new-
 ## Step-by-step
 
 1. **Declare the method on the interface** in `dialect/dialect.go`. Group it with related methods (Literals / Operators / Type Casting / Arrays / JSON / Timestamps / String Functions / Comprehensions / Struct / Validation / Regex / Capabilities). Add a one-line doc comment naming the canonical PostgreSQL form ("For PostgreSQL: …") to anchor reviewers.
-2. **Implement in all six dialect packages.** The canonical six are:
+2. **Implement in all seven dialect packages.** The canonical seven are:
    - `dialect/postgres/dialect.go`
    - `dialect/mysql/dialect.go`
    - `dialect/sqlite/dialect.go`
    - `dialect/duckdb/dialect.go`
    - `dialect/bigquery/dialect.go`
    - `dialect/spark/dialect.go`
+   - `dialect/opensearch/dialect.go`
 3. **Verify the compile-time assertion fires.** Each dialect file ends with `var _ dialect.Dialect = (*Dialect)(nil)` — running `go build ./...` will fail if any dialect is missing the new method.
 4. **Wire the method into the converter** in `cel2sql.go` (or whichever visitor file owns the surface area — see the converter-file-map reference). The converter calls `con.dialect.<NewMethod>(...)`.
 5. **Add a representative test case** to `testcases/<category>_tests.go`. Set `WantSQL[dialect.<Name>]` for every dialect or document a `SkipDialect[dialect.<Name>]` reason.
 6. **Run the testcase coverage check** for every dialect:
    ```
-   for d in postgresql mysql sqlite duckdb bigquery spark; do
+   for d in postgresql mysql sqlite duckdb bigquery spark opensearch; do
      python .claude/skills/add-sql-dialect/scripts/check_testcase_coverage.py "$d"
    done
    ```
@@ -73,7 +74,7 @@ Suppose CEL's `int(timestamp)` should emit a per-dialect Unix-seconds expression
 6. **BigQuery**: `UNIX_SECONDS(<expr>)`.
 7. **Spark**: `UNIX_TIMESTAMP(<expr>)`.
 
-(All six already implement this method — it's a real example from the codebase.)
+(All seven already implement this method — it's a real example from the codebase.)
 
 8. **Test case** in `testcases/cast_tests.go`:
    ```go

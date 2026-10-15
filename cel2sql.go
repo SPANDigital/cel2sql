@@ -339,7 +339,7 @@ func Convert(ast *cel.Ast, opts ...ConvertOption) (string, error) {
 		maxOutputLen: options.maxOutputLen,
 	}
 
-	if err := un.visit(checkedExpr.Expr); err != nil {
+	if err := un.visitPredicate(checkedExpr.Expr); err != nil {
 		options.logger.Error("conversion failed", slog.Any("error", err))
 		return "", err
 	}
@@ -424,7 +424,7 @@ func ConvertParameterized(ast *cel.Ast, opts ...ConvertOption) (*Result, error) 
 		placeholderStyle: options.placeholderStyle,
 	}
 
-	if err := un.visit(checkedExpr.Expr); err != nil {
+	if err := un.visitPredicate(checkedExpr.Expr); err != nil {
 		options.logger.Error("conversion failed", slog.Any("error", err))
 		return nil, err
 	}
@@ -837,7 +837,7 @@ func (con *converter) visitCallBinary(expr *exprpb.Expr) error {
 		con.str.WriteString("(")
 	}
 
-	if err := con.visitMaybeNested(lhs, lhsParen); err != nil {
+	if err := con.visitOperand(fun, lhs, lhsParen); err != nil {
 		return err
 	}
 
@@ -891,7 +891,7 @@ func (con *converter) visitCallBinary(expr *exprpb.Expr) error {
 	if fun == operators.In && isFieldAccessExpression(rhs) {
 		con.str.WriteString("ANY(")
 	}
-	if err := con.visitMaybeNested(rhs, rhsParen); err != nil {
+	if err := con.visitOperand(fun, rhs, rhsParen); err != nil {
 		return err
 	}
 	if fun == operators.In && isFieldAccessExpression(rhs) {
@@ -904,7 +904,7 @@ func (con *converter) visitCallConditional(expr *exprpb.Expr) error {
 	c := expr.GetCallExpr()
 	args := c.GetArgs()
 	con.str.WriteString("CASE WHEN ")
-	if err := con.visit(args[0]); err != nil {
+	if err := con.visitPredicate(args[0]); err != nil {
 		return err
 	}
 	con.str.WriteString(" THEN ")
@@ -2109,7 +2109,7 @@ func (con *converter) visitCallUnary(expr *exprpb.Expr) error {
 	}
 	con.str.WriteString(operator)
 	nested := isComplexOperator(args[0])
-	return con.visitMaybeNested(args[0], nested)
+	return con.visitOperand(fun, args[0], nested)
 }
 
 func (con *converter) visitComprehension(expr *exprpb.Expr) error {
@@ -2183,7 +2183,7 @@ func (con *converter) visitAllComprehension(expr *exprpb.Expr, info *Comprehensi
 
 		if info.Predicate != nil {
 			con.str.WriteString(" WHERE NOT (")
-			if err := con.visit(info.Predicate); err != nil {
+			if err := con.visitPredicate(info.Predicate); err != nil {
 				return wrapConversionError(err, "visiting predicate in ALL comprehension")
 			}
 			con.str.WriteString(")")
@@ -2218,7 +2218,7 @@ func (con *converter) visitExistsComprehension(expr *exprpb.Expr, info *Comprehe
 
 		if info.Predicate != nil {
 			con.str.WriteString(" WHERE ")
-			if err := con.visit(info.Predicate); err != nil {
+			if err := con.visitPredicate(info.Predicate); err != nil {
 				return wrapConversionError(err, "visiting predicate in EXISTS comprehension")
 			}
 		}
@@ -2227,6 +2227,9 @@ func (con *converter) visitExistsComprehension(expr *exprpb.Expr, info *Comprehe
 }
 
 func (con *converter) visitExistsOneComprehension(expr *exprpb.Expr, info *ComprehensionInfo) error {
+	if !con.dialect.SupportsSubqueryExpressions() {
+		return fmt.Errorf("%w: exists_one comprehension requires a subquery expression, which the %s dialect does not support", ErrUnsupportedDialectFeature, con.dialect.Name())
+	}
 	comprehension := expr.GetComprehensionExpr()
 	if comprehension == nil {
 		return newConversionError(errMsgUnsupportedComprehension, "expression is not a comprehension (EXISTS_ONE)")
@@ -2252,7 +2255,7 @@ func (con *converter) visitExistsOneComprehension(expr *exprpb.Expr, info *Compr
 
 	if info.Predicate != nil {
 		con.str.WriteString(" WHERE ")
-		if err := con.visit(info.Predicate); err != nil {
+		if err := con.visitPredicate(info.Predicate); err != nil {
 			return wrapConversionError(err, "visiting predicate in EXISTS_ONE comprehension")
 		}
 	}
@@ -2262,6 +2265,9 @@ func (con *converter) visitExistsOneComprehension(expr *exprpb.Expr, info *Compr
 }
 
 func (con *converter) visitMapComprehension(expr *exprpb.Expr, info *ComprehensionInfo) error {
+	if !con.dialect.SupportsSubqueryExpressions() {
+		return fmt.Errorf("%w: map comprehension requires a subquery expression, which the %s dialect does not support", ErrUnsupportedDialectFeature, con.dialect.Name())
+	}
 	comprehension := expr.GetComprehensionExpr()
 	if comprehension == nil {
 		return newConversionError(errMsgUnsupportedComprehension, "expression is not a comprehension (MAP)")
@@ -2296,7 +2302,7 @@ func (con *converter) visitMapComprehension(expr *exprpb.Expr, info *Comprehensi
 
 	if info.Filter != nil {
 		con.str.WriteString(" WHERE ")
-		if err := con.visit(info.Filter); err != nil {
+		if err := con.visitPredicate(info.Filter); err != nil {
 			return wrapConversionError(err, "visiting filter in MAP comprehension")
 		}
 	}
@@ -2306,6 +2312,9 @@ func (con *converter) visitMapComprehension(expr *exprpb.Expr, info *Comprehensi
 }
 
 func (con *converter) visitFilterComprehension(expr *exprpb.Expr, info *ComprehensionInfo) error {
+	if !con.dialect.SupportsSubqueryExpressions() {
+		return fmt.Errorf("%w: filter comprehension requires a subquery expression, which the %s dialect does not support", ErrUnsupportedDialectFeature, con.dialect.Name())
+	}
 	comprehension := expr.GetComprehensionExpr()
 	if comprehension == nil {
 		return newConversionError(errMsgUnsupportedComprehension, "expression is not a comprehension (FILTER)")
@@ -2338,7 +2347,7 @@ func (con *converter) visitFilterComprehension(expr *exprpb.Expr, info *Comprehe
 
 	if info.Predicate != nil {
 		con.str.WriteString(" WHERE ")
-		if err := con.visit(info.Predicate); err != nil {
+		if err := con.visitPredicate(info.Predicate); err != nil {
 			return wrapConversionError(err, "visiting predicate in FILTER comprehension")
 		}
 	}
@@ -2348,6 +2357,9 @@ func (con *converter) visitFilterComprehension(expr *exprpb.Expr, info *Comprehe
 }
 
 func (con *converter) visitTransformListComprehension(expr *exprpb.Expr, info *ComprehensionInfo) error {
+	if !con.dialect.SupportsSubqueryExpressions() {
+		return fmt.Errorf("%w: transformList comprehension requires a subquery expression, which the %s dialect does not support", ErrUnsupportedDialectFeature, con.dialect.Name())
+	}
 	comprehension := expr.GetComprehensionExpr()
 	if comprehension == nil {
 		return newConversionError(errMsgUnsupportedComprehension, "expression is not a comprehension (TRANSFORM_LIST)")
@@ -2371,7 +2383,7 @@ func (con *converter) visitTransformListComprehension(expr *exprpb.Expr, info *C
 
 	if info.Filter != nil {
 		con.str.WriteString(" WHERE ")
-		if err := con.visit(info.Filter); err != nil {
+		if err := con.visitPredicate(info.Filter); err != nil {
 			return wrapConversionError(err, "visiting filter in TRANSFORM_LIST comprehension")
 		}
 	}
@@ -2812,6 +2824,52 @@ func (con *converter) fieldYieldsJSONElements(tableName, fieldName string) bool 
 		return isJSONSQLType(field.ElementType)
 	}
 	return field.IsJSON || isJSONSQLType(field.Type)
+}
+
+// visitPredicate visits an expression that is used as a boolean predicate:
+// the whole condition, an operand of AND/OR/NOT, a CASE WHEN condition or a
+// comprehension's predicate. A bare boolean column is handed to the dialect,
+// which may have to spell it out as a comparison.
+func (con *converter) visitPredicate(expr *exprpb.Expr) error {
+	if !con.isBooleanField(expr) {
+		return con.visit(expr)
+	}
+	return con.dialect.WriteBooleanFieldPredicate(&con.str, func() error {
+		return con.visit(expr)
+	})
+}
+
+// visitOperand visits one operand of an operator, as a predicate when the
+// operator is a logical one.
+func (con *converter) visitOperand(fun string, expr *exprpb.Expr, nested bool) error {
+	if fun != operators.LogicalAnd && fun != operators.LogicalOr && fun != operators.LogicalNot {
+		return con.visitMaybeNested(expr, nested)
+	}
+	if nested {
+		con.str.WriteString("(")
+	}
+	if err := con.visitPredicate(expr); err != nil {
+		return err
+	}
+	if nested {
+		con.str.WriteString(")")
+	}
+	return nil
+}
+
+// isBooleanField reports whether expr is a boolean-typed column reference: an
+// identifier or a field selection (but not a has() test).
+func (con *converter) isBooleanField(expr *exprpb.Expr) bool {
+	switch e := expr.GetExprKind().(type) {
+	case *exprpb.Expr_IdentExpr:
+	case *exprpb.Expr_SelectExpr:
+		if e.SelectExpr.GetTestOnly() {
+			return false
+		}
+	default:
+		return false
+	}
+	return con.getType(expr).GetPrimitive() == exprpb.Type_BOOL
 }
 
 func (con *converter) visitMaybeNested(expr *exprpb.Expr, nested bool) error {

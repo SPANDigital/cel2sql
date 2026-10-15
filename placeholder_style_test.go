@@ -14,6 +14,7 @@ import (
 	"github.com/spandigital/cel2sql/v3/dialect/bigquery"
 	"github.com/spandigital/cel2sql/v3/dialect/duckdb"
 	"github.com/spandigital/cel2sql/v3/dialect/mysql"
+	"github.com/spandigital/cel2sql/v3/dialect/opensearch"
 	"github.com/spandigital/cel2sql/v3/dialect/postgres"
 	"github.com/spandigital/cel2sql/v3/dialect/spark"
 	"github.com/spandigital/cel2sql/v3/dialect/sqlite"
@@ -50,6 +51,7 @@ var placeholderDialects = []struct {
 	{dialect.MySQL, mysql.New(), `name = ? AND age > ?`},
 	{dialect.SQLite, sqlite.New(), `name = ? AND age > ?`},
 	{dialect.Spark, spark.New(), `name = ? AND age > ?`},
+	{dialect.OpenSearch, opensearch.New(), `name = ? AND age > ?`},
 }
 
 // The default must stay byte-identical for every dialect — this is the
@@ -96,7 +98,7 @@ func TestPlaceholderStyle_Question(t *testing.T) {
 func TestPlaceholderStyle_NoOpForQuestionMarkDialects(t *testing.T) {
 	ast := placeholderTestAST(t)
 
-	for _, d := range []dialect.Dialect{mysql.New(), sqlite.New(), spark.New()} {
+	for _, d := range []dialect.Dialect{mysql.New(), sqlite.New(), spark.New(), opensearch.New()} {
 		t.Run(string(d.Name()), func(t *testing.T) {
 			def, err := cel2sql.ConvertParameterized(ast, cel2sql.WithDialect(d))
 			require.NoError(t, err)

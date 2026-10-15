@@ -18,6 +18,7 @@ func JSONTests() []ConvertTestCase {
 				dialect.DuckDB:     "product.metadata->>'brand' = 'Acme'",
 				dialect.BigQuery:   "JSON_VALUE(product.metadata, '$.brand') = 'Acme'",
 				dialect.Spark:      "get_json_object(product.metadata, '$.brand') = 'Acme'",
+				dialect.OpenSearch: "product.metadata.brand = 'Acme'",
 			},
 		},
 		{
@@ -32,6 +33,7 @@ func JSONTests() []ConvertTestCase {
 				dialect.DuckDB:     "product.metadata->'specs'->>'color' = 'red'",
 				dialect.BigQuery:   "JSON_VALUE(JSON_QUERY(product.metadata, '$.specs'), '$.color') = 'red'",
 				dialect.Spark:      "get_json_object(get_json_object(product.metadata, '$.specs'), '$.color') = 'red'",
+				dialect.OpenSearch: "product.metadata.specs.color = 'red'",
 			},
 		},
 		{
@@ -47,6 +49,9 @@ func JSONTests() []ConvertTestCase {
 				dialect.BigQuery:   "'electronics' IN UNNEST(JSON_VALUE_ARRAY(product.tags))",
 				dialect.Spark:      "array_contains(from_json(product.tags, 'ARRAY<STRING>'), 'electronics')",
 			},
+			WantErr: map[dialect.Name]bool{
+				dialect.OpenSearch: true,
+			},
 		},
 		{
 			Name:     "json_has_field",
@@ -60,6 +65,7 @@ func JSONTests() []ConvertTestCase {
 				dialect.DuckDB:     "json_exists(product.metadata, '$.brand')",
 				dialect.BigQuery:   "JSON_VALUE(product.metadata, '$.brand') IS NOT NULL",
 				dialect.Spark:      "get_json_object(product.metadata, '$.brand') IS NOT NULL",
+				dialect.OpenSearch: "product.metadata.brand IS NOT NULL",
 			},
 		},
 	}

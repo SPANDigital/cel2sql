@@ -16,6 +16,7 @@ func OperatorTests() []ConvertTestCase {
 				dialect.DuckDB:     "name = 'a' AND age > 20",
 				dialect.BigQuery:   "name = 'a' AND age > 20",
 				dialect.Spark:      "name = 'a' AND age > 20",
+				dialect.OpenSearch: "name = 'a' AND age > 20",
 			},
 		},
 		{
@@ -29,6 +30,7 @@ func OperatorTests() []ConvertTestCase {
 				dialect.DuckDB:     "name = 'a' OR age > 20",
 				dialect.BigQuery:   "name = 'a' OR age > 20",
 				dialect.Spark:      "name = 'a' OR age > 20",
+				dialect.OpenSearch: "name = 'a' OR age > 20",
 			},
 		},
 		{
@@ -42,6 +44,7 @@ func OperatorTests() []ConvertTestCase {
 				dialect.DuckDB:     "age >= 10 AND (name = 'a' OR name = 'b')",
 				dialect.BigQuery:   "age >= 10 AND (name = 'a' OR name = 'b')",
 				dialect.Spark:      "age >= 10 AND (name = 'a' OR name = 'b')",
+				dialect.OpenSearch: "age >= 10 AND (name = 'a' OR name = 'b')",
 			},
 		},
 		{
@@ -55,6 +58,7 @@ func OperatorTests() []ConvertTestCase {
 				dialect.DuckDB:     "1 + 2 = 3",
 				dialect.BigQuery:   "1 + 2 = 3",
 				dialect.Spark:      "1 + 2 = 3",
+				dialect.OpenSearch: "1 + 2 = 3",
 			},
 		},
 		{
@@ -68,6 +72,7 @@ func OperatorTests() []ConvertTestCase {
 				dialect.DuckDB:     "MOD(5, 3) = 2",
 				dialect.BigQuery:   "MOD(5, 3) = 2",
 				dialect.Spark:      "MOD(5, 3) = 2",
+				dialect.OpenSearch: "MOD(5, 3) = 2",
 			},
 		},
 		{
@@ -81,6 +86,7 @@ func OperatorTests() []ConvertTestCase {
 				dialect.DuckDB:     "'a' || 'b' = 'ab'",
 				dialect.BigQuery:   "'a' || 'b' = 'ab'",
 				dialect.Spark:      "concat('a', 'b') = 'ab'",
+				dialect.OpenSearch: "CONCAT('a', 'b') = 'ab'",
 			},
 		},
 		{
@@ -92,6 +98,9 @@ func OperatorTests() []ConvertTestCase {
 				dialect.DuckDB:     "1 = ANY([1] || [2, 3])",
 				dialect.BigQuery:   "1 IN UNNEST([1] || [2, 3])",
 				dialect.Spark:      "array_contains(array(1) || array(2, 3), 1)",
+			},
+			WantErr: map[dialect.Name]bool{
+				dialect.OpenSearch: true,
 			},
 		},
 	}

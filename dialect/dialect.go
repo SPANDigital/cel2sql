@@ -18,6 +18,7 @@ const (
 	DuckDB     Name = "duckdb"
 	BigQuery   Name = "bigquery"
 	Spark      Name = "spark"
+	OpenSearch Name = "opensearch"
 )
 
 // ErrUnsupportedFeature indicates that the requested feature is not supported by this dialect.
@@ -58,6 +59,12 @@ type Dialect interface {
 	// WriteLikeEscape writes the LIKE escape clause.
 	// For PostgreSQL: ESCAPE E'\\'. For MySQL: ESCAPE '\\'.
 	WriteLikeEscape(w *strings.Builder)
+
+	// WriteBooleanFieldPredicate writes a boolean column that is used directly
+	// as a predicate: the whole WHERE condition, an operand of AND/OR/NOT or a
+	// CASE WHEN condition. Most engines accept the bare column; OpenSearch
+	// ignores one, so it spells the comparison out as column = true.
+	WriteBooleanFieldPredicate(w *strings.Builder, writeField func() error) error
 
 	// WriteArrayMembership writes an array membership test.
 	// For PostgreSQL: elem = ANY(array). For MySQL: JSON_CONTAINS(array, elem).
@@ -266,4 +273,11 @@ type Dialect interface {
 
 	// SupportsIndexAnalysis indicates whether index analysis is supported.
 	SupportsIndexAnalysis() bool
+
+	// SupportsSubqueryExpressions indicates whether a subquery may appear as a
+	// value expression: ARRAY(SELECT …), (SELECT collect_list(…)) or
+	// (SELECT COUNT(*) …) = 1. The filter, map and exists_one comprehensions
+	// are written in that form, so the converter rejects them for dialects
+	// that only allow a subquery inside an EXISTS or IN predicate.
+	SupportsSubqueryExpressions() bool
 }
