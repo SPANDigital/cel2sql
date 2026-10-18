@@ -3,6 +3,18 @@
 ## [Unreleased]
 
 ### Fixed
+- **List- and map-valued JSON variables (PostgreSQL)**
+  - A `WithJSONVariables` variable whose values are lists or maps, such as `map<string, list<string>>` object tags, now converts to SQL that runs and answers the question asked. Every value was read with `->>`, as text, so `"prod" in tags.env` became `$1 = ANY(tags->>'env')` ("op ANY/ALL (array) requires array on right side"), `tags.env.exists(...)` an `UNNEST` of text, `tags.exists(k, ...)` an `UNNEST` of jsonb, `"env" in tags` the unparseable `$1 IN tags`, and `has(tags.env)` a column reference, `tags.env IS NOT NULL`. The forms are now chosen by the value's CEL type:
+    - `"k" in v` and `has(v.k)`: `v ? 'k'`
+    - `x in v.k`, for a list of strings: `(v->'k') ? (x)`
+    - `v.k.exists(e, ...)`, `.all`, `.exists_one`, for a list of strings: over `jsonb_array_elements_text(v->'k')`
+    - `v.exists(k, ...)`, `v.all(k, ...)`: over `jsonb_object_keys(v)`
+    - `size(v.k)`: `jsonb_array_length(v->'k')`; `size(v)`: a count of `jsonb_object_keys(v)`
+  - Each read of a list value is wrapped in `CASE WHEN jsonb_typeof(v->'k') = 'array' THEN ... END`, so an absent key, or a value that is not an array, is NULL. CEL raises an error on such a read, and NULL is its SQL counterpart: NOT leaves it NULL, and AND and OR absorb it exactly as CEL absorbs an error, so `!("prod" in tags.env)` does not match a row with no `env` at all. The guard also keeps a non-array value away from `jsonb_array_elements_text` and `jsonb_array_length`, which raise an error on one.
+  - Any other use of a list or map value (comparing it, indexing into it, a list of a non-string type) is now a conversion error instead of text-reading SQL. A key test needs a literal key: `name in v` is refused with `ErrInvalidFieldName`.
+  - **Scalar values are unchanged** in every dialect: `context.host == "web-1"` is still `context->>'host' = $1`.
+  - **Other dialects refuse the new forms** with `ErrUnsupportedDialectFeature`, where they previously emitted the same broken SQL. A dialect opts in by implementing the new `dialect.JSONContainerWriter` interface.
+  - Verified against PostgreSQL 17 through both `Convert` and `ConvertParameterized`: for each of 28 filters over object-tag documents with absent keys, empty lists, repeated values and non-identifier keys, PostgreSQL selects exactly the rows cel-go evaluates to true. A document holding a string where a list belongs is seeded beside them, and every query runs over it without error.
 - **Membership in a list literal on non-text columns (PostgreSQL)**
   - With the PostgreSQL dialect, `x in [a, b]` is now written `x IN (a, b)` instead of `x = ANY(ARRAY[a, b])`. PostgreSQL types the elements of an ARRAY constructor with no reference to `x`, so an untyped placeholder or quoted literal resolved as text: `bigint_col in [1, 2]` failed under `ConvertParameterized` with "operator does not exist: bigint = text", and `uuid_col in ["…", "…"]` failed the same way in both modes. In a value list each element is resolved against `x`, and NULL semantics match `= ANY`. Parameters stay one per element, so no driver needs to encode a slice.
   - Only a non-empty list literal changes. Membership in an array column, a JSON array or an empty list is written as before. Other dialects are unchanged; a dialect opts in by implementing `dialect.ListLiteralMembershipWriter`.

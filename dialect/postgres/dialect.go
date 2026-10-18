@@ -23,6 +23,7 @@ func init() {
 
 // Ensure Dialect implements dialect.Dialect at compile time.
 var _ dialect.Dialect = (*Dialect)(nil)
+var _ dialect.JSONContainerWriter = (*Dialect)(nil)
 
 // Name returns the dialect name.
 func (d *Dialect) Name() dialect.Name { return dialect.PostgreSQL }
@@ -236,6 +237,51 @@ func (d *Dialect) ValidateJSONKey(key string) error {
 	if strings.IndexByte(key, 0) >= 0 {
 		return fmt.Errorf("JSON object key %q holds a NUL byte", key)
 	}
+	return nil
+}
+
+// WriteJSONObjectKeys implements dialect.JSONContainerWriter with
+// jsonb_object_keys, which yields one text row per key of the object.
+func (d *Dialect) WriteJSONObjectKeys(w *strings.Builder, writeObject func() error) error {
+	w.WriteString("jsonb_object_keys(")
+	if err := writeObject(); err != nil {
+		return err
+	}
+	w.WriteString(")")
+	return nil
+}
+
+// WriteJSONArrayContainsText implements dialect.JSONContainerWriter with the jsonb
+// ? operator, which on an array tests its string elements. Both operands are
+// parenthesized: ? shares its precedence with every other operator PostgreSQL
+// does not name, so an unparenthesized operand could bind to it differently.
+func (d *Dialect) WriteJSONArrayContainsText(w *strings.Builder, writeArray, writeElem func() error) error {
+	w.WriteString("(")
+	if err := writeArray(); err != nil {
+		return err
+	}
+	w.WriteString(") ? (")
+	if err := writeElem(); err != nil {
+		return err
+	}
+	w.WriteString(")")
+	return nil
+}
+
+// WriteJSONArrayGuard implements dialect.JSONContainerWriter. jsonb_typeof is NULL
+// for an absent key, so the CASE has no matching branch and yields NULL; it also
+// keeps a value that is not an array away from functions such as
+// jsonb_array_elements_text, which raise an error on one.
+func (d *Dialect) WriteJSONArrayGuard(w *strings.Builder, writeArray, writeBody func() error) error {
+	w.WriteString("CASE WHEN jsonb_typeof(")
+	if err := writeArray(); err != nil {
+		return err
+	}
+	w.WriteString(") = 'array' THEN ")
+	if err := writeBody(); err != nil {
+		return err
+	}
+	w.WriteString(" END")
 	return nil
 }
 

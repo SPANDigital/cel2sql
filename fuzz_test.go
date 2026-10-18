@@ -68,6 +68,13 @@ func FuzzConvert(f *testing.F) {
 		`meta["*"] == "x"`,
 		`meta[""] == "x"`,
 		`meta["a b"].contains(meta["c d"])`,
+		// A flat JSON variable whose values are lists. PostgreSQL renders the key
+		// tests, membership, iteration and size; the other dialects refuse them.
+		`"k8s.pod" in tags`,
+		`has(tags.env) && !("prod" in tags.env)`,
+		`tags["it's"].exists(v, v.startsWith("o'"))`,
+		`tags.exists(k, k.matches("^te")) || size(tags["a b"]) > 1`,
+		`tags.env == ["prod"]`,
 	}
 
 	for _, seed := range seeds {
@@ -145,14 +152,15 @@ func FuzzConvert(f *testing.F) {
 		cel.Variable("b", cel.BoolType),
 		cel.Variable("c", cel.BoolType),
 		cel.Variable("meta", cel.MapType(cel.StringType, cel.StringType)),
+		cel.Variable("tags", cel.MapType(cel.StringType, cel.ListType(cel.StringType))),
 	)
 	if err != nil {
 		f.Fatalf("Failed to create CEL environment: %v", err)
 	}
 
-	// meta is also converted as a flat JSONB variable in every dialect, which is
-	// the path a bracket key takes with WithJSONVariables. The default Convert
-	// call below never reaches it.
+	// meta and tags are also converted as flat JSONB variables in every dialect,
+	// which is the path a bracket key and a list value take with
+	// WithJSONVariables. The default Convert call below never reaches it.
 	jsonDialects := []dialect.Dialect{
 		postgresDialect.New(), mysqlDialect.New(), sqliteDialect.New(),
 		duckdbDialect.New(), bigqueryDialect.New(),
@@ -178,7 +186,7 @@ func FuzzConvert(f *testing.F) {
 		}
 
 		for _, d := range jsonDialects {
-			out, err := cel2sql.Convert(ast, cel2sql.WithDialect(d), cel2sql.WithJSONVariables("meta"))
+			out, err := cel2sql.Convert(ast, cel2sql.WithDialect(d), cel2sql.WithJSONVariables("meta", "tags"))
 			if err != nil {
 				continue
 			}

@@ -105,6 +105,17 @@ func WithSchemas(schemas map[string]schema.Schema) ConvertOption {
 // path with its own quoting rules, and that rendering has not been built or
 // verified for them. See dialect.JSONKeyValidator.
 //
+// A variable's values may be lists or maps as well as scalars, as declared to the
+// CEL checker -- map<string, list<string>> object tags, say. With the PostgreSQL
+// dialect such a variable supports a key test ("k" in v, has(v.k)), iteration
+// over its keys (v.exists(k, ...), v.all(...)), its key count (size(v)), and, for
+// a value that is a list of strings, membership (x in v.k), iteration
+// (v.k.exists(e, ...)) and size(v.k). A read of an absent key, or of a value that
+// is not the list it was declared as, is NULL: the SQL counterpart of the error
+// CEL raises for it. Any other use of a list or map value is refused with a
+// conversion error, and the other dialects refuse all of these with
+// ErrUnsupportedDialectFeature. See dialect.JSONContainerWriter.
+//
 // Example:
 //
 //	result, err := cel2sql.ConvertParameterized(ast,
@@ -707,6 +718,12 @@ func (con *converter) visitCallBinary(expr *exprpb.Expr) error {
 	}
 	if !rhsParen && isLeftRecursive(fun) {
 		rhsParen = isSamePrecedence(fun, rhs)
+	}
+
+	if fun == operators.In {
+		if handled, err := con.visitJSONVariableIn(lhs, rhs); handled || err != nil {
+			return err
+		}
 	}
 
 	// Handle string concatenation via dialect before writing LHS.
@@ -1912,6 +1929,10 @@ func (con *converter) visitCallFunc(expr *exprpb.Expr) error {
 				return fmt.Errorf("%w: size() requires a target or argument", ErrInvalidArguments)
 			}
 
+			if handled, err := con.visitJSONVariableSize(argExpr); handled || err != nil {
+				return err
+			}
+
 			argType := con.getType(argExpr)
 			switch {
 			case argType.GetPrimitive() == exprpb.Type_STRING, argType.GetPrimitive() == exprpb.Type_BYTES:
@@ -1987,6 +2008,9 @@ func (con *converter) visitCallMapIndex(expr *exprpb.Expr) error {
 	}
 	m := args[0]
 	if identExpr := m.GetIdentExpr(); identExpr != nil && con.isJSONVariable(identExpr.GetName()) {
+		if err := con.checkJSONVariableScalarRead(expr); err != nil {
+			return err
+		}
 		key, err := con.extractJSONVariableKey(args[1])
 		if err != nil {
 			return err
@@ -2103,6 +2127,16 @@ func (con *converter) visitComprehension(expr *exprpb.Expr) error {
 		return fmt.Errorf("%w: failed to identify comprehension: %w", ErrInvalidComprehension, err)
 	}
 
+	if handled, err := con.visitJSONVariableComprehension(expr.GetComprehensionExpr().GetIterRange(), func() error {
+		return con.visitComprehensionOfType(expr, info)
+	}); handled || err != nil {
+		return err
+	}
+	return con.visitComprehensionOfType(expr, info)
+}
+
+// visitComprehensionOfType writes an identified comprehension.
+func (con *converter) visitComprehensionOfType(expr *exprpb.Expr, info *ComprehensionInfo) error {
 	switch info.Type {
 	case ComprehensionAll:
 		return con.visitAllComprehension(expr, info)
@@ -2480,6 +2514,10 @@ func (con *converter) visitSelect(expr *exprpb.Expr) error {
 		return con.writeColumn(name)
 	}
 
+	if err := con.checkJSONVariableScalarRead(expr); err != nil {
+		return err
+	}
+
 	// Check if we should use JSON path operators
 	// We need to determine if the operand is a JSON/JSONB field
 	useJSONPath := con.shouldUseJSONPath(sel.GetOperand(), fieldName)
@@ -2534,6 +2572,10 @@ func (con *converter) visitHasFunction(expr *exprpb.Expr) error {
 	sel := expr.GetSelectExpr()
 	operand := sel.GetOperand()
 	field := sel.GetField()
+
+	if handled, err := con.visitJSONVariableHas(operand, field); handled || err != nil {
+		return err
+	}
 
 	// Check if this is a direct JSON field access (e.g., table.json_column.key)
 	if con.isDirectJSONFieldAccess(operand, field) {
@@ -2723,6 +2765,9 @@ func (con *converter) visitStructMap(expr *exprpb.Expr) error {
 
 // writeComprehensionSource writes the source expression for a comprehension (UNNEST or JSON function).
 func (con *converter) writeComprehensionSource(iterRange *exprpb.Expr) error {
+	if handled, err := con.writeJSONVariableComprehensionSource(iterRange); handled || err != nil {
+		return err
+	}
 	isJSONArray := con.isJSONArrayField(iterRange)
 	if isJSONArray {
 		jsonFunc := con.getJSONArrayFunction(iterRange)
